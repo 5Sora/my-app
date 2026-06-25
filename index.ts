@@ -28,8 +28,12 @@ app.get("/", async (req, res) => {
 // フォームから名前が送られてきたときの処理
 app.post("/users", async (req, res) => {
   const name = req.body.name;
+  const age = req.body.age ? parseInt(req.body.age) : null;
+
   if (name) {
-    await prisma.user.create({ data: { name } });
+    await prisma.user.create({
+      data: { name, age },
+    });
   }
   res.redirect("/");
 });
