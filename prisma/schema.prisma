@@ -49,14 +49,14 @@ model GroupMember {
 model Transaction {
   id        Int      @id @default(autoincrement())
   userId    Int      @map("user_id")
-  groupId   Int      @map("group_id")
+  groupId   Int?     @map("group_id")
   amount    Int
   category  String
   rawText   String   @map("raw_text")
   createdAt DateTime @default(now()) @map("created_at")
 
-  user  User         @relation(fields: [userId], references: [id])
-  group ExpenseGroup @relation(fields: [groupId], references: [id])
+  user  User          @relation(fields: [userId], references: [id])
+  group ExpenseGroup? @relation(fields: [groupId], references: [id])
 
   @@map("transactions")
 }
