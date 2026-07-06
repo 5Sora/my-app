@@ -13,7 +13,50 @@ datasource db {
 }
 
 model User {
-  id Int @id @default(autoincrement())
-  name String
-  age Int?
+  id        Int      @id @default(autoincrement())
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  transactions Transaction[]
+  memberships  GroupMember[]
+
+  @@map("users")
+}
+
+model ExpenseGroup {
+  id        Int      @id @default(autoincrement())
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  members      GroupMember[]
+  transactions Transaction[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  userId  Int   @map("user_id")
+  groupId Int   @map("group_id")
+  weight  Float @default(1.0)
+
+  user  User         @relation(fields: [userId], references: [id])
+  group ExpenseGroup @relation(fields: [groupId], references: [id])
+
+  @@id([userId, groupId])
+  @@map("group_members")
+}
+
+model Transaction {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  groupId   Int      @map("group_id")
+  amount    Int
+  category  String
+  rawText   String   @map("raw_text")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User         @relation(fields: [userId], references: [id])
+  group ExpenseGroup @relation(fields: [groupId], references: [id])
+
+  @@map("transactions")
 }

@@ -2,24 +2,39 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>ユーザー一覧（年齢付き）</title>
+  <title>AI分類・傾斜割り勘 家計簿</title>
 </head>
 <body>
-  <h1>ユーザー一覧</h1>
+  <h1>AI分類・傾斜割り勘 家計簿</h1>
+
+  <h2>ユーザー作成</h2>
+  <form action="/users" method="post">
+    <input type="text" name="name" placeholder="ユーザー名" required>
+    <button type="submit">追加</button>
+  </form>
+
+  <h2>ユーザー一覧</h2>
   <ul>
     <% users.forEach(user => { %>
-      <li>
-        <%= user.name %> 
-        (<%= user.age ? user.age + '歳' : '年齢未設定' %>)
-      </li>
+      <li><%= user.name %></li>
     <% }) %>
   </ul>
 
-  <h2>ユーザー追加</h2>
-  <form action="/users" method="POST">
-    <input type="text" name="name" placeholder="名前を入力" required>
-    <input type="number" name="age" placeholder="年齢を入力">
-    <button type="submit">追加</button>
+  <hr>
+
+  <h2>グループ作成</h2>
+  <form action="/groups" method="post">
+    <input type="text" name="name" placeholder="グループ名" required>
+    <button type="submit">作成</button>
   </form>
+
+  <h2>グループ一覧</h2>
+  <ul>
+    <% groups.forEach(group => { %>
+      <li>
+        <a href="/groups/<%= group.id %>"><%= group.name %></a>
+      </li>
+    <% }) %>
+  </ul>
 </body>
 </html>

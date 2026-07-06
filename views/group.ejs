@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title><%= group.name %></title>
+</head>
+<body>
+  <p><a href="/">トップへ戻る</a></p>
+
+  <h1><%= group.name %></h1>
+
+  <h2>メンバー追加</h2>
+  <form action="/groups/<%= group.id %>/members" method="post">
+    <select name="userId" required>
+      <% users.forEach(user => { %>
+        <option value="<%= user.id %>"><%= user.name %></option>
+      <% }) %>
+    </select>
+
+    <input type="number" step="0.1" name="weight" value="1.0" placeholder="負担率">
+    <button type="submit">追加</button>
+  </form>
+
+  <h2>メンバー</h2>
+  <ul>
+    <% group.members.forEach(member => { %>
+      <li>
+        <%= member.user.name %>
+        / 負担率: <%= member.weight %>
+      </li>
+    <% }) %>
+  </ul>
+
+  <hr>
+
+  <h2>支出入力</h2>
+  <form action="/groups/<%= group.id %>/transactions" method="post">
+    <select name="userId" required>
+      <% group.members.forEach(member => { %>
+        <option value="<%= member.user.id %>"><%= member.user.name %></option>
+      <% }) %>
+    </select>
+
+    <input
+      type="text"
+      name="rawText"
+      placeholder="例: コンビニで800円"
+      required
+    >
+
+    <button type="submit">登録</button>
+  </form>
+
+  <h2>支出一覧</h2>
+  <p>合計: <%= total %> 円</p>
+
+  <ul>
+    <% group.transactions.forEach(tx => { %>
+      <li>
+        <%= tx.user.name %> /
+        <%= tx.amount %>円 /
+        <%= tx.category %> /
+        <%= tx.rawText %>
+      </li>
+    <% }) %>
+  </ul>
+
+  <hr>
+
+  <h2>精算結果</h2>
+  <table border="1" cellpadding="6">
+    <tr>
+      <th>名前</th>
+      <th>負担率</th>
+      <th>支払済み</th>
+      <th>本来の負担額</th>
+      <th>差額</th>
+    </tr>
+
+    <% settlement.forEach(row => { %>
+      <tr>
+        <td><%= row.name %></td>
+        <td><%= row.weight %></td>
+        <td><%= row.paid %>円</td>
+        <td><%= row.expected %>円</td>
+        <td><%= row.balance %>円</td>
+      </tr>
+    <% }) %>
+  </table>
+
+  <p>
+    差額がプラスの人は「多く払っている人」、マイナスの人は「追加で払うべき人」です。
+  </p>
+</body>
+</html>
