@@ -19,7 +19,23 @@ app.set("view engine", "ejs");
 app.set("views", "./views");
 app.use(express.urlencoded({ extended: true }));
 
-function classify(rawText: string): string {
+function classify(rawText: string, kind: string): string {
+  if (kind === "income") {
+    if (
+      rawText.includes("給料") ||
+      rawText.includes("給与") ||
+      rawText.includes("バイト")
+    ) {
+      return "給与";
+    }
+
+    if (rawText.includes("仕送り") || rawText.includes("振込")) {
+      return "仕送り・振込";
+    }
+
+    return "その他収入";
+  }
+
   if (
     rawText.includes("ご飯") ||
     rawText.includes("コンビニ") ||
@@ -45,7 +61,7 @@ function classify(rawText: string): string {
     return "学習・文具";
   }
 
-  return "その他";
+  return "その他支出";
 }
 
 function extractAmount(rawText: string): number {
@@ -95,37 +111,45 @@ app.get("/users/:userId", async (req, res) => {
     orderBy: { createdAt: "desc" },
   });
 
-  const personalTotal = transactions
-    .filter((tx) => tx.groupId === null)
+  const personalIncomeTotal = transactions
+    .filter((tx) => tx.groupId === null && tx.kind === "income")
     .reduce((sum, tx) => sum + tx.amount, 0);
 
-  const groupTotal = transactions
-    .filter((tx) => tx.groupId !== null)
+  const personalExpenseTotal = transactions
+    .filter((tx) => tx.groupId === null && tx.kind === "expense")
     .reduce((sum, tx) => sum + tx.amount, 0);
 
-  const total = personalTotal + groupTotal;
+  const groupAdvanceTotal = transactions
+    .filter((tx) => tx.groupId !== null && tx.kind === "expense")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  const balance =
+    personalIncomeTotal - personalExpenseTotal - groupAdvanceTotal;
 
   res.render("user", {
     user,
     transactions,
-    personalTotal,
-    groupTotal,
-    total,
+    personalIncomeTotal,
+    personalExpenseTotal,
+    groupAdvanceTotal,
+    balance,
   });
 });
 
 app.post("/users/:userId/transactions", async (req, res) => {
   const userId = Number(req.params.userId);
+  const kind = String(req.body.kind || "expense");
   const rawText = String(req.body.rawText || "").trim();
 
   const amount = extractAmount(rawText);
-  const category = classify(rawText);
+  const category = classify(rawText, kind);
 
   if (userId && rawText && amount > 0) {
     await prisma.transaction.create({
       data: {
         userId,
         groupId: null,
+        kind,
         rawText,
         amount,
         category,
@@ -240,7 +264,7 @@ app.post("/groups/:groupId/transactions", async (req, res) => {
   const rawText = String(req.body.rawText || "").trim();
 
   const amount = extractAmount(rawText);
-  const category = classify(rawText);
+  const category = classify(rawText, "expense");
 
   const member = await prisma.groupMember.findUnique({
     where: {
@@ -256,6 +280,7 @@ app.post("/groups/:groupId/transactions", async (req, res) => {
       data: {
         userId,
         groupId,
+        kind: "expense",
         rawText,
         amount,
         category,

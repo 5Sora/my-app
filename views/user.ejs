@@ -9,28 +9,57 @@
 
   <h1><%= user.name %> の家計簿</h1>
 
-  <h2>個人支出入力</h2>
+  <h2>収入・支出入力</h2>
   <form action="/users/<%= user.id %>/transactions" method="post">
+    <select name="kind" required>
+      <option value="expense">支出</option>
+      <option value="income">収入</option>
+    </select>
+
     <input
       type="text"
       name="rawText"
-      placeholder="例: コンビニで800円"
+      placeholder="例: コンビニで800円 / バイト代50000円"
       required
     >
+
     <button type="submit">登録</button>
   </form>
 
-  <h2>集計</h2>
-  <ul>
-    <li>個人支出合計: <%= personalTotal %> 円</li>
-    <li>グループ関連支出合計: <%= groupTotal %> 円</li>
-    <li>全支出合計: <%= total %> 円</li>
-  </ul>
+  <h2>損益計算書</h2>
+  <table border="1" cellpadding="6">
+    <tr>
+      <th>項目</th>
+      <th>金額</th>
+    </tr>
+    <tr>
+      <td>個人収入</td>
+      <td><%= personalIncomeTotal %> 円</td>
+    </tr>
+    <tr>
+      <td>個人支出</td>
+      <td><%= personalExpenseTotal %> 円</td>
+    </tr>
+    <tr>
+      <td>グループ関連支出</td>
+      <td><%= groupAdvanceTotal %> 円</td>
+    </tr>
+    <tr>
+      <th>差引残高</th>
+      <th><%= balance %> 円</th>
+    </tr>
+  </table>
 
-  <h2>支出一覧</h2>
+  <h2>取引一覧</h2>
   <ul>
     <% transactions.forEach(tx => { %>
       <li>
+        <% if (tx.kind === "income") { %>
+          収入
+        <% } else { %>
+          支出
+        <% } %>
+        /
         <%= tx.amount %>円 /
         <%= tx.category %> /
         <%= tx.rawText %> /
@@ -38,7 +67,7 @@
           グループ:
           <a href="/groups/<%= tx.group.id %>"><%= tx.group.name %></a>
         <% } else { %>
-          個人支出
+          個人
         <% } %>
       </li>
     <% }) %>
