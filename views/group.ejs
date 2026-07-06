@@ -2,12 +2,12 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title><%= group.name %></title>
+  <title><%= group.name %> の精算</title>
 </head>
 <body>
   <p><a href="/">トップへ戻る</a></p>
 
-  <h1><%= group.name %></h1>
+  <h1><%= group.name %> の精算</h1>
 
   <h2>メンバー追加</h2>
   <form action="/groups/<%= group.id %>/members" method="post">
@@ -33,31 +33,36 @@
 
   <hr>
 
-  <h2>支出入力</h2>
-  <form action="/groups/<%= group.id %>/transactions" method="post">
-    <select name="userId" required>
-      <% group.members.forEach(member => { %>
-        <option value="<%= member.user.id %>"><%= member.user.name %></option>
-      <% }) %>
-    </select>
+  <h2>グループ支出入力</h2>
 
-    <input
-      type="text"
-      name="rawText"
-      placeholder="例: コンビニで800円"
-      required
-    >
+  <% if (group.members.length === 0) { %>
+    <p>先にメンバーを追加してください。</p>
+  <% } else { %>
+    <form action="/groups/<%= group.id %>/transactions" method="post">
+      <select name="userId" required>
+        <% group.members.forEach(member => { %>
+          <option value="<%= member.user.id %>"><%= member.user.name %></option>
+        <% }) %>
+      </select>
 
-    <button type="submit">登録</button>
-  </form>
+      <input
+        type="text"
+        name="rawText"
+        placeholder="例: コンビニで800円"
+        required
+      >
 
-  <h2>支出一覧</h2>
+      <button type="submit">登録</button>
+    </form>
+  <% } %>
+
+  <h2>グループ支出一覧</h2>
   <p>合計: <%= total %> 円</p>
 
   <ul>
     <% group.transactions.forEach(tx => { %>
       <li>
-        <%= tx.user.name %> /
+        <%= tx.user.name %> が支払い /
         <%= tx.amount %>円 /
         <%= tx.category %> /
         <%= tx.rawText %>
@@ -67,7 +72,7 @@
 
   <hr>
 
-  <h2>精算結果</h2>
+  <h2>傾斜割り勘の精算結果</h2>
   <table border="1" cellpadding="6">
     <tr>
       <th>名前</th>
@@ -89,7 +94,7 @@
   </table>
 
   <p>
-    差額がプラスの人は「多く払っている人」、マイナスの人は「追加で払うべき人」です。
+    差額がプラスの人は「多く立て替えている人」、マイナスの人は「追加で払うべき人」です。
   </p>
 </body>
 </html>

@@ -21,12 +21,14 @@ app.use(express.urlencoded({ extended: true }));
 
 function classify(rawText: string): string {
   if (
-    rawText.includes("コンビニ") ||
     rawText.includes("ご飯") ||
-    rawText.includes("ランチ")
+    rawText.includes("コンビニ") ||
+    rawText.includes("ランチ") ||
+    rawText.includes("カフェ")
   ) {
     return "食費";
   }
+
   if (
     rawText.includes("電車") ||
     rawText.includes("バス") ||
@@ -34,20 +36,31 @@ function classify(rawText: string): string {
   ) {
     return "交通費";
   }
-  if (rawText.includes("本") || rawText.includes("文具")) {
+
+  if (
+    rawText.includes("本") ||
+    rawText.includes("文具") ||
+    rawText.includes("参考書")
+  ) {
     return "学習・文具";
   }
+
   return "その他";
 }
 
 function extractAmount(rawText: string): number {
-  const match = rawText.match(/\d+/);
-  return match ? Number(match[0]) : 0;
+  const match = rawText.match(/[0-9,]+/);
+  return match ? Number(match[0].replaceAll(",", "")) : 0;
 }
 
 app.get("/", async (req, res) => {
-  const users = await prisma.user.findMany({ orderBy: { id: "asc" } });
-  const groups = await prisma.expenseGroup.findMany({ orderBy: { id: "asc" } });
+  const users = await prisma.user.findMany({
+    orderBy: { id: "asc" },
+  });
+
+  const groups = await prisma.expenseGroup.findMany({
+    orderBy: { id: "asc" },
+  });
 
   res.render("index", { users, groups });
 });
@@ -56,38 +69,83 @@ app.post("/users", async (req, res) => {
   const name = String(req.body.name || "").trim();
 
   if (name) {
-    await prisma.user.create({ data: { name } });
+    await prisma.user.create({
+      data: { name },
+    });
   }
 
   res.redirect("/");
+});
+
+app.get("/users/:userId", async (req, res) => {
+  const userId = Number(req.params.userId);
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    res.status(404).send("ユーザーが見つかりません");
+    return;
+  }
+
+  const transactions = await prisma.transaction.findMany({
+    where: { userId },
+    include: { group: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const personalTotal = transactions
+    .filter((tx) => tx.groupId === null)
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  const groupTotal = transactions
+    .filter((tx) => tx.groupId !== null)
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  const total = personalTotal + groupTotal;
+
+  res.render("user", {
+    user,
+    transactions,
+    personalTotal,
+    groupTotal,
+    total,
+  });
+});
+
+app.post("/users/:userId/transactions", async (req, res) => {
+  const userId = Number(req.params.userId);
+  const rawText = String(req.body.rawText || "").trim();
+
+  const amount = extractAmount(rawText);
+  const category = classify(rawText);
+
+  if (userId && rawText && amount > 0) {
+    await prisma.transaction.create({
+      data: {
+        userId,
+        groupId: null,
+        rawText,
+        amount,
+        category,
+      },
+    });
+  }
+
+  res.redirect(`/users/${userId}`);
 });
 
 app.post("/groups", async (req, res) => {
   const name = String(req.body.name || "").trim();
 
   if (name) {
-    await prisma.expenseGroup.create({ data: { name } });
-  }
-
-  res.redirect("/");
-});
-
-app.post("/groups/:groupId/members", async (req, res) => {
-  const groupId = Number(req.params.groupId);
-  const userId = Number(req.body.userId);
-  const weight = Number(req.body.weight || 1);
-
-  if (groupId && userId) {
-    await prisma.groupMember.upsert({
-      where: {
-        userId_groupId: { userId, groupId },
-      },
-      update: { weight },
-      create: { userId, groupId, weight },
+    await prisma.expenseGroup.create({
+      data: { name },
     });
   }
 
-  res.redirect(`/groups/${groupId}`);
+  res.redirect("/");
 });
 
 app.get("/groups/:groupId", async (req, res) => {
@@ -107,18 +165,22 @@ app.get("/groups/:groupId", async (req, res) => {
     },
   });
 
-  const users = await prisma.user.findMany({ orderBy: { id: "asc" } });
+  const users = await prisma.user.findMany({
+    orderBy: { id: "asc" },
+  });
 
   if (!group) {
     res.status(404).send("グループが見つかりません");
     return;
   }
 
-  const total = group.transactions.reduce((sum, tx) => sum + tx.amount, 0);
-  const totalWeight = group.members.reduce(
-    (sum, member) => sum + member.weight,
-    0,
-  );
+  const total = group.transactions.reduce((sum, tx) => {
+    return sum + tx.amount;
+  }, 0);
+
+  const totalWeight = group.members.reduce((sum, member) => {
+    return sum + member.weight;
+  }, 0);
 
   const settlement = group.members.map((member) => {
     const paid = group.transactions
@@ -137,7 +199,39 @@ app.get("/groups/:groupId", async (req, res) => {
     };
   });
 
-  res.render("group", { group, users, total, settlement });
+  res.render("group", {
+    group,
+    users,
+    total,
+    settlement,
+  });
+});
+
+app.post("/groups/:groupId/members", async (req, res) => {
+  const groupId = Number(req.params.groupId);
+  const userId = Number(req.body.userId);
+  const weight = Number(req.body.weight || 1);
+
+  if (groupId && userId) {
+    await prisma.groupMember.upsert({
+      where: {
+        userId_groupId: {
+          userId,
+          groupId,
+        },
+      },
+      update: {
+        weight,
+      },
+      create: {
+        userId,
+        groupId,
+        weight,
+      },
+    });
+  }
+
+  res.redirect(`/groups/${groupId}`);
 });
 
 app.post("/groups/:groupId/transactions", async (req, res) => {
@@ -148,11 +242,20 @@ app.post("/groups/:groupId/transactions", async (req, res) => {
   const amount = extractAmount(rawText);
   const category = classify(rawText);
 
-  if (groupId && userId && rawText && amount > 0) {
+  const member = await prisma.groupMember.findUnique({
+    where: {
+      userId_groupId: {
+        userId,
+        groupId,
+      },
+    },
+  });
+
+  if (groupId && userId && member && rawText && amount > 0) {
     await prisma.transaction.create({
       data: {
-        groupId,
         userId,
+        groupId,
         rawText,
         amount,
         category,

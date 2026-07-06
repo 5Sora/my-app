@@ -2,10 +2,10 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>AI分類・傾斜割り勘 家計簿</title>
+  <title>AI家計簿＋傾斜割り勘</title>
 </head>
 <body>
-  <h1>AI分類・傾斜割り勘 家計簿</h1>
+  <h1>AI家計簿＋傾斜割り勘</h1>
 
   <h2>ユーザー作成</h2>
   <form action="/users" method="post">
@@ -16,7 +16,9 @@
   <h2>ユーザー一覧</h2>
   <ul>
     <% users.forEach(user => { %>
-      <li><%= user.name %></li>
+      <li>
+        <a href="/users/<%= user.id %>"><%= user.name %> の家計簿</a>
+      </li>
     <% }) %>
   </ul>
 
@@ -32,7 +34,7 @@
   <ul>
     <% groups.forEach(group => { %>
       <li>
-        <a href="/groups/<%= group.id %>"><%= group.name %></a>
+        <a href="/groups/<%= group.id %>"><%= group.name %> の精算</a>
       </li>
     <% }) %>
   </ul>
