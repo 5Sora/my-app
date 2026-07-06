@@ -70,28 +70,41 @@
   </table>
 
   <h2>取引一覧</h2>
-  <ul>
+
+  <table border="1" cellpadding="6">
+    <tr>
+      <th>種類</th>
+      <th>金額</th>
+      <th>カテゴリ</th>
+      <th>内容</th>
+      <th>対象</th>
+    </tr>
+
     <% transactions.forEach(tx => { %>
-      <li>
-        <% if (tx.kind === "income") { %>
-          収入
-        <% } else if (tx.group) { %>
-          グループ立替支出
-        <% } else { %>
-          個人支出
-        <% } %>
-        /
-        <%= tx.amount %>円 /
-        <%= tx.category %> /
-        <%= tx.rawText %> /
-        <% if (tx.group) { %>
-          グループ:
-          <a href="/groups/<%= tx.group.id %>"><%= tx.group.name %></a>
-        <% } else { %>
-          個人
-        <% } %>
-      </li>
+      <tr>
+        <td>
+          <% if (tx.kind === "income") { %>
+            収入
+          <% } else if (tx.group) { %>
+            グループ立替支出
+          <% } else { %>
+            個人支出
+          <% } %>
+        </td>
+
+        <td><%= tx.amount %> 円</td>
+        <td><%= tx.category %></td>
+        <td><%= tx.rawText %></td>
+
+        <td>
+          <% if (tx.group) { %>
+            <a href="/groups/<%= tx.group.id %>"><%= tx.group.name %></a>
+          <% } else { %>
+            個人
+          <% } %>
+        </td>
+      </tr>
     <% }) %>
-  </ul>
+  </table>
 </body>
 </html>

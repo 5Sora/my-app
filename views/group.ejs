@@ -56,19 +56,26 @@
     </form>
   <% } %>
 
-  <h2>グループ支出一覧</h2>
+  <h2>グループ立替支出一覧</h2>
   <p>合計: <%= total %> 円</p>
 
-  <ul>
+  <table border="1" cellpadding="6">
+    <tr>
+      <th>支払者</th>
+      <th>金額</th>
+      <th>カテゴリ</th>
+      <th>内容</th>
+    </tr>
+
     <% group.transactions.forEach(tx => { %>
-      <li>
-        <%= tx.user.name %> が支払い /
-        <%= tx.amount %>円 /
-        <%= tx.category %> /
-        <%= tx.rawText %>
-      </li>
+      <tr>
+        <td><%= tx.user.name %></td>
+        <td><%= tx.amount %> 円</td>
+        <td><%= tx.category %></td>
+        <td><%= tx.rawText %></td>
+      </tr>
     <% }) %>
-  </ul>
+  </table>
 
   <hr>
 
