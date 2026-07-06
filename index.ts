@@ -111,6 +111,12 @@ app.get("/users/:userId", async (req, res) => {
     orderBy: { createdAt: "desc" },
   });
 
+  const memberships = await prisma.groupMember.findMany({
+    where: { userId },
+    include: { group: true },
+    orderBy: { groupId: "asc" },
+  });
+
   const personalIncomeTotal = transactions
     .filter((tx) => tx.groupId === null && tx.kind === "income")
     .reduce((sum, tx) => sum + tx.amount, 0);
@@ -129,6 +135,7 @@ app.get("/users/:userId", async (req, res) => {
   res.render("user", {
     user,
     transactions,
+    memberships,
     personalIncomeTotal,
     personalExpenseTotal,
     groupAdvanceTotal,
@@ -141,21 +148,43 @@ app.post("/users/:userId/transactions", async (req, res) => {
   const kind = String(req.body.kind || "expense");
   const rawText = String(req.body.rawText || "").trim();
 
+  const selectedGroupId = req.body.groupId ? Number(req.body.groupId) : null;
+  const groupId = kind === "expense" ? selectedGroupId : null;
+
   const amount = extractAmount(rawText);
   const category = classify(rawText, kind);
 
-  if (userId && rawText && amount > 0) {
-    await prisma.transaction.create({
-      data: {
-        userId,
-        groupId: null,
-        kind,
-        rawText,
-        amount,
-        category,
+  if (!userId || !rawText || amount <= 0) {
+    res.redirect(`/users/${userId}`);
+    return;
+  }
+
+  if (groupId !== null) {
+    const member = await prisma.groupMember.findUnique({
+      where: {
+        userId_groupId: {
+          userId,
+          groupId,
+        },
       },
     });
+
+    if (!member) {
+      res.redirect(`/users/${userId}`);
+      return;
+    }
   }
+
+  await prisma.transaction.create({
+    data: {
+      userId,
+      groupId,
+      kind,
+      rawText,
+      amount,
+      category,
+    },
+  });
 
   res.redirect(`/users/${userId}`);
 });

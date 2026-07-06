@@ -11,20 +11,39 @@
 
   <h2>収入・支出入力</h2>
   <form action="/users/<%= user.id %>/transactions" method="post">
-    <select name="kind" required>
-      <option value="expense">支出</option>
-      <option value="income">収入</option>
-    </select>
+    <label>
+      種類:
+      <select name="kind" required>
+        <option value="expense">支出</option>
+        <option value="income">収入</option>
+      </select>
+    </label>
+
+    <label>
+      対象:
+      <select name="groupId">
+        <option value="">個人</option>
+        <% memberships.forEach(membership => { %>
+          <option value="<%= membership.group.id %>">
+            <%= membership.group.name %> の立替
+          </option>
+        <% }) %>
+      </select>
+    </label>
 
     <input
       type="text"
       name="rawText"
-      placeholder="例: コンビニで800円 / バイト代50000円"
+      placeholder="例: コンビニで800円 / バイト代50000円 / 旅行ランチ1200円"
       required
     >
 
     <button type="submit">登録</button>
   </form>
+
+  <p>
+    ※ 収入を選んだ場合、対象にグループを選んでも個人収入として保存されます。
+  </p>
 
   <h2>損益計算書</h2>
   <table border="1" cellpadding="6">
@@ -41,7 +60,7 @@
       <td><%= personalExpenseTotal %> 円</td>
     </tr>
     <tr>
-      <td>グループ関連支出</td>
+      <td>グループ立替支出</td>
       <td><%= groupAdvanceTotal %> 円</td>
     </tr>
     <tr>
@@ -56,8 +75,10 @@
       <li>
         <% if (tx.kind === "income") { %>
           収入
+        <% } else if (tx.group) { %>
+          グループ立替支出
         <% } else { %>
-          支出
+          個人支出
         <% } %>
         /
         <%= tx.amount %>円 /
