@@ -50,6 +50,7 @@ model Transaction {
   id        Int      @id @default(autoincrement())
   userId    Int      @map("user_id")
   groupId   Int?     @map("group_id")
+  kind      String   @default("expense")
   amount    Int
   category  String
   rawText   String   @map("raw_text")
