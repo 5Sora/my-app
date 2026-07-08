@@ -18,12 +18,33 @@
       </p>
     </div>
 
-    <div class="header-actions">
-      <a href="/app" class="secondary-button button-link">個人家計簿へ戻る</a>
-      <form action="/logout" method="post">
-        <button type="submit" class="secondary-button">ログアウト</button>
+    <nav class="header-actions group-header-nav" aria-label="グループ画面ナビゲーション">
+      <a href="/app" class="secondary-button button-link group-nav-item">自分の家計簿</a>
+      <a
+        href="/groups/<%= group.id %>"
+        class="secondary-button button-link group-nav-item is-active"
+        aria-current="page"
+      >
+        概要
+      </a>
+      <span
+        class="secondary-button button-link group-nav-item is-disabled"
+        aria-disabled="true"
+        title="グループ基金は未実装です"
+      >
+        基金
+      </span>
+      <span
+        class="secondary-button button-link group-nav-item is-disabled"
+        aria-disabled="true"
+        title="関連支払いは未実装です"
+      >
+        関連支払い
+      </span>
+      <form action="/logout" method="post" class="group-nav-logout">
+        <button type="submit" class="secondary-button group-nav-item">ログアウト</button>
       </form>
-    </div>
+    </nav>
   </header>
 
   <% if (error || success) { %>

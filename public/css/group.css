@@ -54,6 +54,36 @@
   text-decoration: none;
 }
 
+.group-header-nav {
+  align-items: stretch;
+}
+
+.group-nav-item {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.group-nav-item.is-active {
+  color: #fff;
+  background: var(--text);
+}
+
+.group-nav-item.is-disabled {
+  border-color: var(--border);
+  color: #aaa39c;
+  background: #f4f1ed;
+  cursor: not-allowed;
+  user-select: none;
+}
+
+.group-nav-logout {
+  display: flex;
+}
+
+.group-nav-logout .group-nav-item {
+  width: 100%;
+}
+
 .group-overview-layout {
   width: min(1400px, 100%);
   margin: 0 auto;
@@ -152,6 +182,10 @@
 
   .header-actions .secondary-button,
   .header-actions .button-link {
+    width: 100%;
+  }
+
+  .group-nav-logout {
     width: 100%;
   }
 
