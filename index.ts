@@ -1,325 +1,288 @@
 import "dotenv/config";
-import express from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
+import session from "express-session";
+import bcrypt from "bcryptjs";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "./generated/prisma/client";
 
+declare module "express-session" {
+  interface SessionData {
+    userId?: number;
+  }
+}
+
+const databaseUrl = process.env.DATABASE_URL;
+const sessionSecret = process.env.SESSION_SECRET;
+
+if (!databaseUrl) throw new Error("DATABASE_URL is not defined.");
+if (!sessionSecret) throw new Error("SESSION_SECRET is not defined.");
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: databaseUrl,
   ssl: { rejectUnauthorized: false },
 });
 
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter, log: ["query"] });
+const prisma = new PrismaClient({ adapter });
 
 const app = express();
-const PORT = process.env.PORT || 8888;
+const port = Number(process.env.PORT || 8888);
+const isProduction = process.env.NODE_ENV === "production";
+const sessionCookieName = "my_app_sid";
+
+if (isProduction) app.set("trust proxy", 1);
 
 app.set("view engine", "ejs");
 app.set("views", "./views");
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: false }));
+app.use(express.static("public"));
+app.use(
+  session({
+    name: sessionCookieName,
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: isProduction,
+    },
+  }),
+);
 
-function classify(rawText: string, kind: string): string {
-  if (kind === "income") {
-    if (
-      rawText.includes("給料") ||
-      rawText.includes("給与") ||
-      rawText.includes("バイト")
-    ) {
-      return "給与";
-    }
-
-    if (rawText.includes("仕送り") || rawText.includes("振込")) {
-      return "仕送り・振込";
-    }
-
-    return "その他収入";
-  }
-
-  if (
-    rawText.includes("ご飯") ||
-    rawText.includes("コンビニ") ||
-    rawText.includes("ランチ") ||
-    rawText.includes("カフェ")
-  ) {
-    return "食費";
-  }
-
-  if (
-    rawText.includes("電車") ||
-    rawText.includes("バス") ||
-    rawText.includes("タクシー")
-  ) {
-    return "交通費";
-  }
-
-  if (
-    rawText.includes("本") ||
-    rawText.includes("文具") ||
-    rawText.includes("参考書")
-  ) {
-    return "学習・文具";
-  }
-
-  return "その他支出";
+function normalizeLoginId(value: unknown): string {
+  return String(value ?? "").trim();
 }
 
-function extractAmount(rawText: string): number {
-  const match = rawText.match(/[0-9,]+/);
-  return match ? Number(match[0].replaceAll(",", "")) : 0;
+function normalizeDisplayName(value: unknown): string {
+  return String(value ?? "").trim();
 }
 
-app.get("/", async (req, res) => {
-  const users = await prisma.user.findMany({
-    orderBy: { id: "asc" },
-  });
+function readPassword(value: unknown): string {
+  return String(value ?? "");
+}
 
-  const groups = await prisma.expenseGroup.findMany({
-    orderBy: { id: "asc" },
-  });
+function validateRegistration(input: {
+  loginId: string;
+  displayName: string;
+  password: string;
+}): string | null {
+  if (!input.loginId || !input.displayName || !input.password) {
+    return "すべての項目を入力してください。";
+  }
+  if (input.loginId.length > 50) {
+    return "ログインIDは50文字以内で入力してください。";
+  }
+  if (input.displayName.length > 100) {
+    return "表示名は100文字以内で入力してください。";
+  }
+  if (input.password.length < 8) {
+    return "Passwordは8文字以上で入力してください。";
+  }
+  return null;
+}
 
-  res.render("index", { users, groups });
+function regenerateSession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((error) => (error ? reject(error) : resolve()));
+  });
+}
+
+function saveSession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.save((error) => (error ? reject(error) : resolve()));
+  });
+}
+
+function destroySession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.destroy((error) => (error ? reject(error) : resolve()));
+  });
+}
+
+function requireAuthentication(req: Request, res: Response, next: NextFunction): void {
+  if (!req.session.userId) {
+    res.redirect("/?error=ログインしてください。");
+    return;
+  }
+  next();
+}
+
+app.get("/", (req, res) => {
+  if (req.session.userId) {
+    res.redirect("/app");
+    return;
+  }
+  const mode = req.query.mode === "register" ? "register" : "login";
+  const error = typeof req.query.error === "string" ? req.query.error : null;
+  res.render("index", {
+    mode,
+    error,
+    values: { loginId: "", displayName: "" },
+  });
 });
 
-app.post("/users", async (req, res) => {
-  const name = String(req.body.name || "").trim();
+app.post("/register", async (req, res, next) => {
+  const loginId = normalizeLoginId(req.body.loginId);
+  const displayName = normalizeDisplayName(req.body.displayName);
+  const password = readPassword(req.body.password);
+  const validationError = validateRegistration({ loginId, displayName, password });
 
-  if (name) {
-    await prisma.user.create({
-      data: { name },
+  if (validationError) {
+    res.status(400).render("index", {
+      mode: "register",
+      error: validationError,
+      values: { loginId, displayName },
     });
-  }
-
-  res.redirect("/");
-});
-
-app.get("/users/:userId", async (req, res) => {
-  const userId = Number(req.params.userId);
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-  });
-
-  if (!user) {
-    res.status(404).send("ユーザーが見つかりません");
     return;
   }
 
-  const transactions = await prisma.transaction.findMany({
-    where: { userId },
-    include: { group: true },
-    orderBy: { createdAt: "desc" },
-  });
-
-  const memberships = await prisma.groupMember.findMany({
-    where: { userId },
-    include: { group: true },
-    orderBy: { groupId: "asc" },
-  });
-
-  const personalIncomeTotal = transactions
-    .filter((tx) => tx.groupId === null && tx.kind === "income")
-    .reduce((sum, tx) => sum + tx.amount, 0);
-
-  const personalExpenseTotal = transactions
-    .filter((tx) => tx.groupId === null && tx.kind === "expense")
-    .reduce((sum, tx) => sum + tx.amount, 0);
-
-  const groupAdvanceTotal = transactions
-    .filter((tx) => tx.groupId !== null && tx.kind === "expense")
-    .reduce((sum, tx) => sum + tx.amount, 0);
-
-  const balance =
-    personalIncomeTotal - personalExpenseTotal - groupAdvanceTotal;
-
-  res.render("user", {
-    user,
-    transactions,
-    memberships,
-    personalIncomeTotal,
-    personalExpenseTotal,
-    groupAdvanceTotal,
-    balance,
-  });
-});
-
-app.post("/users/:userId/transactions", async (req, res) => {
-  const userId = Number(req.params.userId);
-  const kind = String(req.body.kind || "expense");
-  const rawText = String(req.body.rawText || "").trim();
-
-  const selectedGroupId = req.body.groupId ? Number(req.body.groupId) : null;
-  const groupId = kind === "expense" ? selectedGroupId : null;
-
-  const amount = extractAmount(rawText);
-  const category = classify(rawText, kind);
-
-  if (!userId || !rawText || amount <= 0) {
-    res.redirect(`/users/${userId}`);
-    return;
-  }
-
-  if (groupId !== null) {
-    const member = await prisma.groupMember.findUnique({
-      where: {
-        userId_groupId: {
-          userId,
-          groupId,
-        },
-      },
+  try {
+    const existingUser = await prisma.user.findUnique({
+      where: { loginId },
+      select: { id: true },
     });
 
-    if (!member) {
-      res.redirect(`/users/${userId}`);
+    if (existingUser) {
+      res.status(409).render("index", {
+        mode: "register",
+        error: "そのログインIDはすでに使用されています。",
+        values: { loginId, displayName },
+      });
       return;
     }
-  }
 
-  await prisma.transaction.create({
-    data: {
-      userId,
-      groupId,
-      kind,
-      rawText,
-      amount,
-      category,
-    },
-  });
-
-  res.redirect(`/users/${userId}`);
-});
-
-app.post("/groups", async (req, res) => {
-  const name = String(req.body.name || "").trim();
-
-  if (name) {
-    await prisma.expenseGroup.create({
-      data: { name },
+    const passwordHash = await bcrypt.hash(password, 12);
+    const user = await prisma.$transaction(async (tx) => {
+      const createdUser = await tx.user.create({
+        data: { loginId, displayName, passwordHash },
+      });
+      await tx.ledgerPage.create({
+        data: {
+          pageType: "PERSONAL",
+          userId: createdUser.id,
+          name: "全期間",
+          isInitial: true,
+          sortOrder: 0,
+        },
+      });
+      return createdUser;
     });
-  }
 
-  res.redirect("/");
+    await regenerateSession(req);
+    req.session.userId = user.id;
+    await saveSession(req);
+    res.redirect("/app");
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "P2002"
+    ) {
+      res.status(409).render("index", {
+        mode: "register",
+        error: "そのログインIDはすでに使用されています。",
+        values: { loginId, displayName },
+      });
+      return;
+    }
+    next(error);
+  }
 });
 
-app.get("/groups/:groupId", async (req, res) => {
-  const groupId = Number(req.params.groupId);
+app.post("/login", async (req, res, next) => {
+  const loginId = normalizeLoginId(req.body.loginId);
+  const password = readPassword(req.body.password);
 
-  const group = await prisma.expenseGroup.findUnique({
-    where: { id: groupId },
-    include: {
-      members: {
-        include: { user: true },
-        orderBy: { userId: "asc" },
-      },
-      transactions: {
-        include: { user: true },
-        orderBy: { createdAt: "desc" },
-      },
-    },
-  });
-
-  const users = await prisma.user.findMany({
-    orderBy: { id: "asc" },
-  });
-
-  if (!group) {
-    res.status(404).send("グループが見つかりません");
+  if (!loginId || !password) {
+    res.status(400).render("index", {
+      mode: "login",
+      error: "ログインIDとPasswordを入力してください。",
+      values: { loginId, displayName: "" },
+    });
     return;
   }
 
-  const total = group.transactions.reduce((sum, tx) => {
-    return sum + tx.amount;
-  }, 0);
+  try {
+    const user = await prisma.user.findUnique({ where: { loginId } });
+    const passwordMatches =
+      user !== null && (await bcrypt.compare(password, user.passwordHash));
 
-  const totalWeight = group.members.reduce((sum, member) => {
-    return sum + member.weight;
-  }, 0);
+    if (!user || !user.isActive || !passwordMatches) {
+      res.status(401).render("index", {
+        mode: "login",
+        error: "ログインIDまたはPasswordが正しくありません。",
+        values: { loginId, displayName: "" },
+      });
+      return;
+    }
 
-  const settlement = group.members.map((member) => {
-    const paid = group.transactions
-      .filter((tx) => tx.userId === member.userId)
-      .reduce((sum, tx) => sum + tx.amount, 0);
-
-    const expected =
-      totalWeight > 0 ? Math.round((total * member.weight) / totalWeight) : 0;
-
-    return {
-      name: member.user.name,
-      weight: member.weight,
-      paid,
-      expected,
-      balance: paid - expected,
-    };
-  });
-
-  res.render("group", {
-    group,
-    users,
-    total,
-    settlement,
-  });
+    await regenerateSession(req);
+    req.session.userId = user.id;
+    await saveSession(req);
+    res.redirect("/app");
+  } catch (error) {
+    next(error);
+  }
 });
 
-app.post("/groups/:groupId/members", async (req, res) => {
-  const groupId = Number(req.params.groupId);
-  const userId = Number(req.body.userId);
-  const weight = Number(req.body.weight || 1);
-
-  if (groupId && userId) {
-    await prisma.groupMember.upsert({
-      where: {
-        userId_groupId: {
-          userId,
-          groupId,
+app.get("/app", requireAuthentication, async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.session.userId },
+      include: {
+        ledgerPages: {
+          where: { pageType: "PERSONAL" },
+          orderBy: [{ isInitial: "desc" }, { sortOrder: "asc" }],
         },
       },
-      update: {
-        weight,
-      },
-      create: {
-        userId,
-        groupId,
-        weight,
-      },
     });
-  }
 
-  res.redirect(`/groups/${groupId}`);
+    if (!user || !user.isActive) {
+      await destroySession(req);
+      res.clearCookie(sessionCookieName);
+      res.redirect("/?error=このアカウントは利用できません。");
+      return;
+    }
+
+    res.render("dashboard", {
+      user,
+      initialPage: user.ledgerPages[0] ?? null,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
-app.post("/groups/:groupId/transactions", async (req, res) => {
-  const groupId = Number(req.params.groupId);
-  const userId = Number(req.body.userId);
-  const rawText = String(req.body.rawText || "").trim();
+app.post("/logout", async (req, res, next) => {
+  try {
+    await destroySession(req);
+    res.clearCookie(sessionCookieName);
+    res.redirect("/");
+  } catch (error) {
+    next(error);
+  }
+});
 
-  const amount = extractAmount(rawText);
-  const category = classify(rawText, "expense");
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  console.error(error);
+  res.status(500).send("サーバー内部でエラーが発生しました。");
+});
 
-  const member = await prisma.groupMember.findUnique({
-    where: {
-      userId_groupId: {
-        userId,
-        groupId,
-      },
-    },
+const server = app.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`);
+});
+
+async function shutdown(signal: string): Promise<void> {
+  console.log(`${signal} received. Shutting down.`);
+  server.close(async () => {
+    await prisma.$disconnect();
+    await pool.end();
+    process.exit(0);
   });
+}
 
-  if (groupId && userId && member && rawText && amount > 0) {
-    await prisma.transaction.create({
-      data: {
-        userId,
-        groupId,
-        kind: "expense",
-        rawText,
-        amount,
-        category,
-      },
-    });
-  }
-
-  res.redirect(`/groups/${groupId}`);
-});
-
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));

@@ -2,41 +2,42 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>AI家計簿＋傾斜割り勘</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>家計簿・割り勘アプリ</title>
+  <link rel="stylesheet" href="/css/auth.css">
 </head>
 <body>
-  <h1>AI家計簿＋傾斜割り勘</h1>
+  <main class="auth-layout">
+    <div class="auth-side" aria-hidden="true"></div>
+    <section class="auth-panel">
+      <div class="auth-card">
+        <h1>家計簿・割り勘アプリ</h1>
+        <nav class="auth-tabs" aria-label="認証方法">
+          <a href="/" class="<%= mode === 'login' ? 'is-active' : '' %>">ログイン</a>
+          <a href="/?mode=register" class="<%= mode === 'register' ? 'is-active' : '' %>">新規登録</a>
+        </nav>
 
-  <h2>ユーザー作成</h2>
-  <form action="/users" method="post">
-    <input type="text" name="name" placeholder="ユーザー名" required>
-    <button type="submit">追加</button>
-  </form>
+        <% if (error) { %>
+          <p class="error-message" role="alert"><%= error %></p>
+        <% } %>
 
-  <h2>ユーザー一覧</h2>
-  <ul>
-    <% users.forEach(user => { %>
-      <li>
-        <a href="/users/<%= user.id %>"><%= user.name %> の家計簿</a>
-      </li>
-    <% }) %>
-  </ul>
-
-  <hr>
-
-  <h2>グループ作成</h2>
-  <form action="/groups" method="post">
-    <input type="text" name="name" placeholder="グループ名" required>
-    <button type="submit">作成</button>
-  </form>
-
-  <h2>グループ一覧</h2>
-  <ul>
-    <% groups.forEach(group => { %>
-      <li>
-        <a href="/groups/<%= group.id %>"><%= group.name %> の精算</a>
-      </li>
-    <% }) %>
-  </ul>
+        <% if (mode === "register") { %>
+          <form action="/register" method="post" class="auth-form">
+            <label><span>ログインID</span><input type="text" name="loginId" value="<%= values.loginId %>" autocomplete="username" maxlength="50" required></label>
+            <label><span>表示名</span><input type="text" name="displayName" value="<%= values.displayName %>" autocomplete="name" maxlength="100" required></label>
+            <label><span>Password</span><input type="password" name="password" autocomplete="new-password" minlength="8" required></label>
+            <button type="submit" class="submit-button" aria-label="新規登録">→</button>
+          </form>
+        <% } else { %>
+          <form action="/login" method="post" class="auth-form">
+            <label><span>ログインID</span><input type="text" name="loginId" value="<%= values.loginId %>" autocomplete="username" maxlength="50" required></label>
+            <label><span>Password</span><input type="password" name="password" autocomplete="current-password" required></label>
+            <button type="submit" class="submit-button" aria-label="ログイン">→</button>
+          </form>
+        <% } %>
+      </div>
+    </section>
+    <div class="auth-side" aria-hidden="true"></div>
+  </main>
 </body>
 </html>
