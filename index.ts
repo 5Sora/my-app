@@ -337,6 +337,16 @@ async function findActiveGroupMembership(userId: number, groupId: number) {
   return membership;
 }
 
+async function findActiveGroupAdminMembership(userId: number, groupId: number) {
+  const membership = await findActiveGroupMembership(userId, groupId);
+
+  if (!membership || membership.role !== "ADMIN") {
+    return null;
+  }
+
+  return membership;
+}
+
 app.get("/", (req, res) => {
   if (req.session.userId) {
     res.redirect("/app");
@@ -928,7 +938,7 @@ app.get("/groups/:groupId", requireAuthentication, async (req, res, next) => {
       return;
     }
 
-    const [fund, ledgerPages] = await Promise.all([
+    const [fund, ledgerPages, activeMemberCount] = await Promise.all([
       prisma.groupFund.findUnique({
         where: { groupId },
       }),
@@ -939,7 +949,21 @@ app.get("/groups/:groupId", requireAuthentication, async (req, res, next) => {
             in: ["GROUP_FUND", "GROUP_PAYMENT"],
           },
         },
-        orderBy: [{ pageType: "asc" }, { isInitial: "desc" }, { sortOrder: "asc" }, { id: "asc" }],
+        orderBy: [
+          { pageType: "asc" },
+          { isInitial: "desc" },
+          { sortOrder: "asc" },
+          { id: "asc" },
+        ],
+      }),
+      prisma.groupMember.count({
+        where: {
+          groupId,
+          isActive: true,
+          user: {
+            isActive: true,
+          },
+        },
       }),
     ]);
 
@@ -949,8 +973,10 @@ app.get("/groups/:groupId", requireAuthentication, async (req, res, next) => {
     res.render("group", {
       group: membership.group,
       membership,
+      isAdmin: membership.role === "ADMIN",
       fund,
       ledgerPages,
+      activeMemberCount,
       error,
       success,
     });
@@ -958,6 +984,125 @@ app.get("/groups/:groupId", requireAuthentication, async (req, res, next) => {
     next(error);
   }
 });
+
+
+app.post(
+  "/groups/:groupId/members",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const targetLoginId = normalizeLoginId(req.body.loginId);
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    if (!targetLoginId) {
+      res.redirect(
+        buildGroupUrl(groupId, {
+          error: "追加するユーザーID（ログインID）を入力してください。",
+        }),
+      );
+      return;
+    }
+
+    if (targetLoginId.length > 50) {
+      res.redirect(
+        buildGroupUrl(groupId, {
+          error: "ユーザーID（ログインID）は50文字以内で入力してください。",
+        }),
+      );
+      return;
+    }
+
+    try {
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true },
+      });
+
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const adminMembership = await findActiveGroupAdminMembership(
+        operatorUserId,
+        groupId,
+      );
+
+      if (!adminMembership) {
+        res.status(403).send("メンバーを追加する権限がありません。");
+        return;
+      }
+
+      const targetUser = await prisma.user.findUnique({
+        where: { loginId: targetLoginId },
+        select: {
+          id: true,
+          displayName: true,
+          isActive: true,
+        },
+      });
+
+      if (!targetUser?.isActive) {
+        res.redirect(
+          buildGroupUrl(groupId, {
+            error: "利用可能なユーザーが見つかりません。",
+          }),
+        );
+        return;
+      }
+
+      if (targetUser.id === operatorUserId) {
+        res.redirect(
+          buildGroupUrl(groupId, {
+            error: "自分自身はすでにこのグループへ所属しています。",
+          }),
+        );
+        return;
+      }
+
+      await activateGroupMembership(prisma, {
+        groupId,
+        userId: targetUser.id,
+        role: "MEMBER",
+      });
+
+      res.redirect(
+        buildGroupUrl(groupId, {
+          success: `${targetUser.displayName}さんをメンバーとして追加しました。`,
+        }),
+      );
+    } catch (error) {
+      if (
+        error instanceof ActiveGroupMembershipError ||
+        (typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "P2002")
+      ) {
+        res.redirect(
+          buildGroupUrl(groupId, {
+            error: "そのユーザーはすでにグループへ所属しています。",
+          }),
+        );
+        return;
+      }
+
+      next(error);
+    }
+  },
+);
 
 app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
   const userId = req.session.userId;

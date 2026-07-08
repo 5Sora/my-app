@@ -58,69 +58,139 @@
     </section>
   <% } %>
 
-  <main class="group-overview-layout">
-    <section class="panel">
-      <p class="eyebrow">基金</p>
-      <h2>グループ基金</h2>
-
-      <% if (fund) { %>
-        <dl class="group-definition-list">
-          <div>
-            <dt>基金名</dt>
-            <dd><%= fund.name %></dd>
-          </div>
-          <div>
-            <dt>状態</dt>
-            <dd><%= fund.isActive ? "有効" : "無効" %></dd>
-          </div>
-        </dl>
-      <% } else { %>
-        <p class="error-message" role="alert">このグループの基金が見つかりません。</p>
-      <% } %>
-    </section>
-
-    <section class="panel group-pages-panel">
+  <main class="group-overview-stack">
+    <section class="panel group-basic-panel">
       <div class="panel-heading">
         <div>
-          <p class="eyebrow">会計ページ</p>
-          <h2>初期ページ</h2>
+          <p class="eyebrow">基本情報</p>
+          <h2>グループ情報</h2>
         </div>
-        <span><%= ledgerPages.length %> 件</span>
+        <span><%= group.isActive ? "有効" : "無効" %></span>
       </div>
 
-      <% if (ledgerPages.length === 0) { %>
-        <p class="empty-state compact-empty-state">グループ用ページがありません。</p>
-      <% } else { %>
-        <ul class="group-page-list">
-          <% ledgerPages.forEach(page => { %>
-            <li>
-              <div>
-                <strong>
-                  <%= page.pageType === "GROUP_FUND" ? "基金ページ" : "グループ支払いページ" %>
-                </strong>
-                <span><%= page.name %></span>
-              </div>
-              <div class="group-page-meta">
-                <% if (page.isInitial) { %><small>初期</small><% } %>
-                <small>
-                  <% if (page.startDate || page.endDate) { %>
-                    <%= page.startDate ? new Date(page.startDate).toLocaleDateString("ja-JP") : "指定なし" %>
-                    〜
-                    <%= page.endDate ? new Date(page.endDate).toLocaleDateString("ja-JP") : "指定なし" %>
-                  <% } else { %>
-                    全期間
-                  <% } %>
-                </small>
-              </div>
-            </li>
-          <% }) %>
-        </ul>
-      <% } %>
+      <dl class="group-definition-list">
+        <div>
+          <dt>グループ名</dt>
+          <dd><%= group.name %></dd>
+        </div>
+        <div>
+          <dt>自分の権限</dt>
+          <dd><%= membership.role === "ADMIN" ? "グループ管理者" : "メンバー" %></dd>
+        </div>
+        <div>
+          <dt>有効メンバー</dt>
+          <dd><%= activeMemberCount %> 人</dd>
+        </div>
+      </dl>
+    </section>
+
+    <div class="group-feature-grid">
+      <section class="panel group-feature-card group-fund-card">
+        <div class="panel-heading compact">
+          <div>
+            <p class="eyebrow">基金</p>
+            <h2>グループ基金</h2>
+          </div>
+          <span>未実装</span>
+        </div>
+
+        <% if (fund) { %>
+          <dl class="group-definition-list">
+            <div>
+              <dt>基金名</dt>
+              <dd><%= fund.name %></dd>
+            </div>
+            <div>
+              <dt>状態</dt>
+              <dd><%= fund.isActive ? "有効" : "無効" %></dd>
+            </div>
+          </dl>
+        <% } else { %>
+          <p class="error-message" role="alert">このグループの基金が見つかりません。</p>
+        <% } %>
+
+        <% const fundPage = ledgerPages.find(page => page.pageType === "GROUP_FUND"); %>
+        <p class="group-feature-page">
+          初期ページ：
+          <strong><%= fundPage ? fundPage.name : "未作成" %></strong>
+        </p>
+        <span class="secondary-button button-link group-feature-disabled" aria-disabled="true">
+          基金画面は後続段階で実装
+        </span>
+      </section>
+
+      <section class="panel group-feature-card group-payment-card">
+        <div class="panel-heading compact">
+          <div>
+            <p class="eyebrow">支払い</p>
+            <h2>関連支払い・割り勘</h2>
+          </div>
+          <span>未実装</span>
+        </div>
+
+        <p class="group-feature-description">
+          各メンバーが個人の財布から支払ったグループ関連支出を、
+          基金とは分けて集計します。
+        </p>
+
+        <% const paymentPage = ledgerPages.find(page => page.pageType === "GROUP_PAYMENT"); %>
+        <p class="group-feature-page">
+          初期ページ：
+          <strong><%= paymentPage ? paymentPage.name : "未作成" %></strong>
+        </p>
+        <span class="secondary-button button-link group-feature-disabled" aria-disabled="true">
+          関連支払い画面は後続段階で実装
+        </span>
+      </section>
+    </div>
+
+    <section class="panel group-member-summary-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">所属</p>
+          <h2>メンバー</h2>
+        </div>
+        <span><%= activeMemberCount %> 人</span>
+      </div>
 
       <p class="form-help">
-        基金取引、メンバー追加、支払い管理は後続段階で実装します。
+        メンバー一覧、論理脱退、ADMIN権限変更は第3段階で追加します。
       </p>
     </section>
+
+    <% if (isAdmin) { %>
+      <section class="panel group-admin-member-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">管理者操作</p>
+            <h2>ユーザーIDでメンバーを追加</h2>
+          </div>
+          <span>直接追加</span>
+        </div>
+
+        <form action="/groups/<%= group.id %>/members" method="post" class="page-form group-member-form">
+          <label>
+            <span>ユーザーID（ログインID）</span>
+            <input
+              type="text"
+              name="loginId"
+              maxlength="50"
+              autocomplete="off"
+              autocapitalize="none"
+              spellcheck="false"
+              required
+            >
+          </label>
+
+          <p class="form-help">
+            完全一致で検索します。ユーザー一覧や候補は表示しません。
+            追加後は本人の承認を挟まず、正式なメンバーとして所属します。
+          </p>
+
+          <button type="submit" class="primary-button">メンバーを追加</button>
+        </form>
+      </section>
+    <% } %>
   </main>
 </body>
 </html>
