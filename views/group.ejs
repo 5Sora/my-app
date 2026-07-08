@@ -2,106 +2,104 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title><%= group.name %> の精算</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= group.name %> - グループ概要</title>
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/ledger.css">
+  <link rel="stylesheet" href="/css/group.css">
 </head>
-<body>
-  <p><a href="/">トップへ戻る</a></p>
+<body class="ledger-body">
+  <header class="ledger-header">
+    <div>
+      <p class="eyebrow">グループ概要</p>
+      <h1><%= group.name %></h1>
+      <p class="period-label">
+        あなたの権限：<%= membership.role === "ADMIN" ? "グループ管理者" : "メンバー" %>
+      </p>
+    </div>
 
-  <h1><%= group.name %> の精算</h1>
+    <div class="header-actions">
+      <a href="/app" class="secondary-button button-link">個人家計簿へ戻る</a>
+      <form action="/logout" method="post">
+        <button type="submit" class="secondary-button">ログアウト</button>
+      </form>
+    </div>
+  </header>
 
-  <h2>メンバー追加</h2>
-  <form action="/groups/<%= group.id %>/members" method="post">
-    <select name="userId" required>
-      <% users.forEach(user => { %>
-        <option value="<%= user.id %>"><%= user.name %></option>
-      <% }) %>
-    </select>
-
-    <input type="number" step="0.1" name="weight" value="1.0" placeholder="負担率">
-    <button type="submit">追加</button>
-  </form>
-
-  <h2>メンバー</h2>
-  <ul>
-    <% group.members.forEach(member => { %>
-      <li>
-        <%= member.user.name %>
-        / 負担率: <%= member.weight %>
-      </li>
-    <% }) %>
-  </ul>
-
-  <hr>
-
-  <h2>グループ支出入力</h2>
-
-  <% if (group.members.length === 0) { %>
-    <p>先にメンバーを追加してください。</p>
-  <% } else { %>
-    <form action="/groups/<%= group.id %>/transactions" method="post">
-      <select name="userId" required>
-        <% group.members.forEach(member => { %>
-          <option value="<%= member.user.id %>"><%= member.user.name %></option>
-        <% }) %>
-      </select>
-
-      <input
-        type="text"
-        name="rawText"
-        placeholder="例: コンビニで800円"
-        required
-      >
-
-      <button type="submit">登録</button>
-    </form>
+  <% if (error || success) { %>
+    <section class="flash-area" aria-live="polite">
+      <% if (error) { %>
+        <p class="error-message" role="alert"><%= error %></p>
+      <% } %>
+      <% if (success) { %>
+        <p class="success-message" role="status"><%= success %></p>
+      <% } %>
+    </section>
   <% } %>
 
-  <h2>グループ立替支出一覧</h2>
-  <p>合計: <%= total %> 円</p>
+  <main class="group-overview-layout">
+    <section class="panel">
+      <p class="eyebrow">基金</p>
+      <h2>グループ基金</h2>
 
-  <table border="1" cellpadding="6">
-    <tr>
-      <th>支払者</th>
-      <th>金額</th>
-      <th>カテゴリ</th>
-      <th>内容</th>
-    </tr>
+      <% if (fund) { %>
+        <dl class="group-definition-list">
+          <div>
+            <dt>基金名</dt>
+            <dd><%= fund.name %></dd>
+          </div>
+          <div>
+            <dt>状態</dt>
+            <dd><%= fund.isActive ? "有効" : "無効" %></dd>
+          </div>
+        </dl>
+      <% } else { %>
+        <p class="error-message" role="alert">このグループの基金が見つかりません。</p>
+      <% } %>
+    </section>
 
-    <% group.transactions.forEach(tx => { %>
-      <tr>
-        <td><%= tx.user.name %></td>
-        <td><%= tx.amount %> 円</td>
-        <td><%= tx.category %></td>
-        <td><%= tx.rawText %></td>
-      </tr>
-    <% }) %>
-  </table>
+    <section class="panel group-pages-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">会計ページ</p>
+          <h2>初期ページ</h2>
+        </div>
+        <span><%= ledgerPages.length %> 件</span>
+      </div>
 
-  <hr>
+      <% if (ledgerPages.length === 0) { %>
+        <p class="empty-state compact-empty-state">グループ用ページがありません。</p>
+      <% } else { %>
+        <ul class="group-page-list">
+          <% ledgerPages.forEach(page => { %>
+            <li>
+              <div>
+                <strong>
+                  <%= page.pageType === "GROUP_FUND" ? "基金ページ" : "グループ支払いページ" %>
+                </strong>
+                <span><%= page.name %></span>
+              </div>
+              <div class="group-page-meta">
+                <% if (page.isInitial) { %><small>初期</small><% } %>
+                <small>
+                  <% if (page.startDate || page.endDate) { %>
+                    <%= page.startDate ? new Date(page.startDate).toLocaleDateString("ja-JP") : "指定なし" %>
+                    〜
+                    <%= page.endDate ? new Date(page.endDate).toLocaleDateString("ja-JP") : "指定なし" %>
+                  <% } else { %>
+                    全期間
+                  <% } %>
+                </small>
+              </div>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
 
-  <h2>傾斜割り勘の精算結果</h2>
-  <table border="1" cellpadding="6">
-    <tr>
-      <th>名前</th>
-      <th>負担率</th>
-      <th>支払済み</th>
-      <th>本来の負担額</th>
-      <th>差額</th>
-    </tr>
-
-    <% settlement.forEach(row => { %>
-      <tr>
-        <td><%= row.name %></td>
-        <td><%= row.weight %></td>
-        <td><%= row.paid %>円</td>
-        <td><%= row.expected %>円</td>
-        <td><%= row.balance %>円</td>
-      </tr>
-    <% }) %>
-  </table>
-
-  <p>
-    差額がプラスの人は「多く立て替えている人」、マイナスの人は「追加で払うべき人」です。
-  </p>
+      <p class="form-help">
+        基金取引、メンバー追加、支払い管理は後続段階で実装します。
+      </p>
+    </section>
+  </main>
 </body>
 </html>

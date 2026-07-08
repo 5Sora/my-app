@@ -1,0 +1,166 @@
+.dashboard-group-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.group-link-list {
+  display: grid;
+  gap: 8px;
+}
+
+.group-link-list a {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 12px;
+  color: var(--text);
+  border: 1px solid var(--border);
+  text-decoration: none;
+}
+
+.group-link-list a:hover,
+.group-link-list a:focus-visible {
+  border-color: var(--text);
+  background: #f8f6f3;
+}
+
+.group-link-list a > span:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.group-link-list strong {
+  overflow-wrap: anywhere;
+}
+
+.group-link-list small {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.group-overview-layout {
+  width: min(1400px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.group-definition-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.group-definition-list > div {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.group-definition-list dt {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.group-definition-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.group-pages-panel {
+  min-height: 360px;
+}
+
+.group-page-list {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.group-page-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px;
+  border: 1px solid var(--border);
+}
+
+.group-page-list li > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.group-page-list li strong {
+  overflow-wrap: anywhere;
+}
+
+.group-page-list li span,
+.group-page-list small {
+  color: var(--muted);
+}
+
+.group-page-meta {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  text-align: right;
+}
+
+.compact-empty-state {
+  min-height: 220px;
+}
+
+@media (max-width: 900px) {
+  .group-overview-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions > * {
+    flex: 1 1 100%;
+  }
+
+  .header-actions .secondary-button,
+  .header-actions .button-link {
+    width: 100%;
+  }
+
+  .group-page-list li {
+    flex-direction: column;
+  }
+
+  .group-page-meta {
+    justify-items: start;
+    text-align: left;
+  }
+}

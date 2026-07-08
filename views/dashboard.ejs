@@ -6,6 +6,7 @@
   <title><%= user.displayName %> の <%= selectedPage.name %> の収支</title>
   <link rel="stylesheet" href="/css/auth.css">
   <link rel="stylesheet" href="/css/ledger.css">
+  <link rel="stylesheet" href="/css/group.css">
 </head>
 <body class="ledger-body">
   <header class="ledger-header">
@@ -183,6 +184,55 @@
             <p class="form-help">初期ページは削除できません。</p>
           <% } %>
         </form>
+      </section>
+
+
+      <section class="panel dashboard-group-panel">
+        <div class="panel-heading compact">
+          <div>
+            <p class="eyebrow">グループ</p>
+            <h2>所属グループ</h2>
+          </div>
+          <span><%= groupMemberships.length %> 件</span>
+        </div>
+
+        <% if (groupMemberships.length === 0) { %>
+          <p class="form-help">現在所属しているグループはありません。</p>
+        <% } else { %>
+          <nav class="group-link-list" aria-label="所属グループ">
+            <% groupMemberships.forEach(groupMembership => { %>
+              <a href="/groups/<%= groupMembership.group.id %>">
+                <span>
+                  <strong><%= groupMembership.group.name %></strong>
+                  <small>
+                    <%= groupMembership.role === "ADMIN" ? "グループ管理者" : "メンバー" %>
+                  </small>
+                </span>
+                <span aria-hidden="true">→</span>
+              </a>
+            <% }) %>
+          </nav>
+        <% } %>
+
+        <details class="page-action">
+          <summary>＋ 新しいグループを作成</summary>
+          <form action="/groups" method="post" class="page-form">
+            <label>
+              <span>グループ名</span>
+              <input
+                type="text"
+                name="name"
+                maxlength="100"
+                placeholder="例：A-Bukatsu"
+                required
+              >
+            </label>
+            <p class="form-help">
+              作成者は、このグループの最初の管理者になります。
+            </p>
+            <button type="submit" class="primary-button">グループを作成</button>
+          </form>
+        </details>
       </section>
 
       <section class="panel">

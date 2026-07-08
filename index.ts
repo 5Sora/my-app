@@ -226,6 +226,117 @@ function validateLedgerPageInput(input: {
   return null;
 }
 
+
+type GroupMembershipClient = Pick<typeof prisma, "groupMember">;
+type ActivatableGroupRole = "MEMBER" | "ADMIN";
+
+class ActiveGroupMembershipError extends Error {
+  constructor() {
+    super("そのユーザーはすでにグループへ所属しています。");
+    this.name = "ActiveGroupMembershipError";
+  }
+}
+
+async function activateGroupMembership(
+  client: GroupMembershipClient,
+  input: {
+    groupId: number;
+    userId: number;
+    role: ActivatableGroupRole;
+  },
+) {
+  const existingMembership = await client.groupMember.findUnique({
+    where: {
+      userId_groupId: {
+        userId: input.userId,
+        groupId: input.groupId,
+      },
+    },
+  });
+
+  if (existingMembership?.isActive) {
+    throw new ActiveGroupMembershipError();
+  }
+
+  const joinedAt = new Date();
+
+  if (existingMembership) {
+    return client.groupMember.update({
+      where: {
+        userId_groupId: {
+          userId: input.userId,
+          groupId: input.groupId,
+        },
+      },
+      data: {
+        role: input.role,
+        isActive: true,
+        joinedAt,
+        leftAt: null,
+      },
+    });
+  }
+
+  return client.groupMember.create({
+    data: {
+      userId: input.userId,
+      groupId: input.groupId,
+      role: input.role,
+      isActive: true,
+      joinedAt,
+      leftAt: null,
+    },
+  });
+}
+
+function validateGroupName(name: string): string | null {
+  if (!name) {
+    return "グループ名を入力してください。";
+  }
+
+  if (name.length > 100) {
+    return "グループ名は100文字以内で入力してください。";
+  }
+
+  return null;
+}
+
+function buildGroupUrl(
+  groupId: number,
+  options: {
+    error?: string;
+    success?: string;
+  } = {},
+): string {
+  const query = new URLSearchParams();
+
+  if (options.error) query.set("error", options.error);
+  if (options.success) query.set("success", options.success);
+
+  const queryString = query.toString();
+  return queryString ? `/groups/${groupId}?${queryString}` : `/groups/${groupId}`;
+}
+
+async function findActiveGroupMembership(userId: number, groupId: number) {
+  const membership = await prisma.groupMember.findUnique({
+    where: {
+      userId_groupId: {
+        userId,
+        groupId,
+      },
+    },
+    include: {
+      group: true,
+    },
+  });
+
+  if (!membership?.isActive || !membership.group.isActive) {
+    return null;
+  }
+
+  return membership;
+}
+
 app.get("/", (req, res) => {
   if (req.session.userId) {
     res.redirect("/app");
@@ -354,22 +465,28 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
 
   try {
     const requestedPageId = Number(req.query.pageId);
-    const pages = await prisma.ledgerPage.findMany({
-      where: {
-        userId,
-        pageType: "PERSONAL",
-      },
-      orderBy: [{ isInitial: "desc" }, { sortOrder: "asc" }, { id: "asc" }],
-    });
-
-    const selectedPage =
-      pages.find((page) => Number.isInteger(requestedPageId) && page.id === requestedPageId) ??
-      pages[0] ??
-      null;
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const [pages, groupMemberships, user] = await Promise.all([
+      prisma.ledgerPage.findMany({
+        where: {
+          userId,
+          pageType: "PERSONAL",
+        },
+        orderBy: [{ isInitial: "desc" }, { sortOrder: "asc" }, { id: "asc" }],
+      }),
+      prisma.groupMember.findMany({
+        where: {
+          userId,
+          isActive: true,
+        },
+        include: {
+          group: true,
+        },
+        orderBy: [{ joinedAt: "asc" }, { groupId: "asc" }],
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+      }),
+    ]);
 
     if (!user || !user.isActive) {
       await destroySession(req);
@@ -378,10 +495,19 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
       return;
     }
 
+    const selectedPage =
+      pages.find((page) => Number.isInteger(requestedPageId) && page.id === requestedPageId) ??
+      pages[0] ??
+      null;
+
     if (!selectedPage) {
       res.status(500).send("個人家計簿ページが見つかりません。");
       return;
     }
+
+    const activeGroupMemberships = groupMemberships.filter(
+      (membership) => membership.group.isActive,
+    );
 
     const transactionDateFilter = {
       ...(selectedPage.startDate ? { gte: selectedPage.startDate } : {}),
@@ -431,6 +557,7 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
 
     res.render("dashboard", {
       user,
+      groupMemberships: activeGroupMemberships,
       pages,
       selectedPage,
       transactions,
@@ -676,6 +803,161 @@ app.post(
     }
   },
 );
+
+
+app.post("/groups", requireAuthentication, async (req, res, next) => {
+  const userId = req.session.userId;
+
+  if (!userId) {
+    res.redirect("/?error=ログインしてください。");
+    return;
+  }
+
+  const name = String(req.body.name ?? "").trim();
+  const validationError = validateGroupName(name);
+
+  if (validationError) {
+    res.redirect(buildAppUrl({ error: validationError }));
+    return;
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true },
+    });
+
+    if (!user?.isActive) {
+      await destroySession(req);
+      res.clearCookie(sessionCookieName);
+      res.redirect("/?error=このアカウントは利用できません。");
+      return;
+    }
+
+    const group = await prisma.$transaction(async (tx) => {
+      const createdGroup = await tx.expenseGroup.create({
+        data: {
+          name,
+          isActive: true,
+        },
+      });
+
+      await activateGroupMembership(tx, {
+        groupId: createdGroup.id,
+        userId,
+        role: "ADMIN",
+      });
+
+      await tx.groupFund.create({
+        data: {
+          groupId: createdGroup.id,
+          name: `${name}基金`,
+          isActive: true,
+        },
+      });
+
+      await tx.ledgerPage.createMany({
+        data: [
+          {
+            pageType: "GROUP_FUND",
+            userId: null,
+            groupId: createdGroup.id,
+            name: "全期間",
+            startDate: null,
+            endDate: null,
+            isInitial: true,
+            sortOrder: 0,
+          },
+          {
+            pageType: "GROUP_PAYMENT",
+            userId: null,
+            groupId: createdGroup.id,
+            name: "全期間",
+            startDate: null,
+            endDate: null,
+            isInitial: true,
+            sortOrder: 0,
+          },
+        ],
+      });
+
+      return createdGroup;
+    });
+
+    res.redirect(
+      buildGroupUrl(group.id, {
+        success: "グループを作成しました。",
+      }),
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/groups/:groupId", requireAuthentication, async (req, res, next) => {
+  const userId = req.session.userId;
+  const groupId = parsePositiveInteger(req.params.groupId);
+
+  if (!userId) {
+    res.redirect("/?error=ログインしてください。");
+    return;
+  }
+
+  if (!groupId) {
+    res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+    return;
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true },
+    });
+
+    if (!user?.isActive) {
+      await destroySession(req);
+      res.clearCookie(sessionCookieName);
+      res.redirect("/?error=このアカウントは利用できません。");
+      return;
+    }
+
+    const membership = await findActiveGroupMembership(userId, groupId);
+
+    if (!membership) {
+      res.status(403).send("このグループを表示する権限がありません。");
+      return;
+    }
+
+    const [fund, ledgerPages] = await Promise.all([
+      prisma.groupFund.findUnique({
+        where: { groupId },
+      }),
+      prisma.ledgerPage.findMany({
+        where: {
+          groupId,
+          pageType: {
+            in: ["GROUP_FUND", "GROUP_PAYMENT"],
+          },
+        },
+        orderBy: [{ pageType: "asc" }, { isInitial: "desc" }, { sortOrder: "asc" }, { id: "asc" }],
+      }),
+    ]);
+
+    const error = typeof req.query.error === "string" ? req.query.error : null;
+    const success = typeof req.query.success === "string" ? req.query.success : null;
+
+    res.render("group", {
+      group: membership.group,
+      membership,
+      fund,
+      ledgerPages,
+      error,
+      success,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
   const userId = req.session.userId;
