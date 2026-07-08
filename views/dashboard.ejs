@@ -3,25 +3,178 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= user.displayName %> の家計簿</title>
+  <title><%= user.displayName %> の <%= selectedPage.name %> の収支</title>
   <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/ledger.css">
 </head>
-<body class="dashboard-body">
-  <main class="dashboard-card">
+<body class="ledger-body">
+  <header class="ledger-header">
     <div>
-      <p class="dashboard-label">ログイン中</p>
-      <h1><%= user.displayName %> の家計簿</h1>
-      <p>ログインID: <%= user.loginId %></p>
-      <% if (initialPage) { %>
-        <p>初期ページ: <%= initialPage.name %></p>
-      <% } else { %>
-        <p class="error-message">初期ページが見つかりません。</p>
-      <% } %>
-      <p class="dashboard-note">認証機能の確認用画面です。次の工程で個人家計簿画面へ置き換えます。</p>
+      <p class="eyebrow">個人家計簿</p>
+      <h1><%= user.displayName %> の <%= selectedPage.name %> の収支</h1>
+      <p class="period-label">
+        <% if (selectedPage.startDate || selectedPage.endDate) { %>
+          <%= selectedPage.startDate ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
+          〜
+          <%= selectedPage.endDate ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
+        <% } else { %>
+          全期間
+        <% } %>
+      </p>
     </div>
+
     <form action="/logout" method="post">
-      <button type="submit" class="logout-button">ログアウト</button>
+      <button type="submit" class="secondary-button">ログアウト</button>
     </form>
+  </header>
+
+  <section class="summary-grid" aria-label="収支サマリー">
+    <article class="summary-card">
+      <span>繰越金</span>
+      <strong><%= summary.carryover.toLocaleString("ja-JP") %> 円</strong>
+    </article>
+    <article class="summary-card income-card">
+      <span>収入</span>
+      <strong><%= summary.incomeTotal.toLocaleString("ja-JP") %> 円</strong>
+    </article>
+    <article class="summary-card expense-card">
+      <span>支出</span>
+      <strong><%= summary.expenseTotal.toLocaleString("ja-JP") %> 円</strong>
+    </article>
+    <article class="summary-card balance-card">
+      <span>残高</span>
+      <strong><%= summary.balance.toLocaleString("ja-JP") %> 円</strong>
+    </article>
+  </section>
+
+  <main class="ledger-layout">
+    <aside class="ledger-sidebar">
+      <section class="panel">
+        <h2>表示ページ</h2>
+        <nav class="page-list" aria-label="個人家計簿ページ">
+          <% pages.forEach(page => { %>
+            <a
+              href="/app?pageId=<%= page.id %>"
+              class="<%= page.id === selectedPage.id ? 'is-active' : '' %>"
+            >
+              <span><%= page.name %></span>
+              <% if (page.isInitial) { %><small>初期</small><% } %>
+            </a>
+          <% }) %>
+        </nav>
+      </section>
+
+      <section class="panel">
+        <h2>取引を追加</h2>
+
+        <% if (error) { %>
+          <p class="error-message" role="alert"><%= error %></p>
+        <% } %>
+        <% if (success) { %>
+          <p class="success-message" role="status"><%= success %></p>
+        <% } %>
+
+        <form action="/app/transactions" method="post" class="transaction-form">
+          <label>
+            <span>実際の取引日</span>
+            <input type="date" name="transactionDate" value="<%= today %>" required>
+          </label>
+
+          <label>
+            <span>種類</span>
+            <select name="kind" required>
+              <option value="expense">支出</option>
+              <option value="income">収入</option>
+            </select>
+          </label>
+
+          <label>
+            <span>金額</span>
+            <input type="number" name="amount" min="1" step="1" inputmode="numeric" required>
+          </label>
+
+          <label>
+            <span>カテゴリ</span>
+            <select name="category">
+              <option value="">内容から自動分類</option>
+              <optgroup label="収入">
+                <option value="給与・副業">給与・副業</option>
+                <option value="仕送り">仕送り</option>
+                <option value="返金・還付">返金・還付</option>
+                <option value="その他収入">その他収入</option>
+              </optgroup>
+              <optgroup label="支出">
+                <option value="食費">食費</option>
+                <option value="交通費">交通費</option>
+                <option value="学習費">学習費</option>
+                <option value="維持費">維持費</option>
+                <option value="その他支出">その他支出</option>
+              </optgroup>
+            </select>
+          </label>
+
+          <label>
+            <span>内容</span>
+            <textarea
+              name="rawText"
+              maxlength="500"
+              rows="3"
+              placeholder="例：コンビニで昼食"
+              required
+            ></textarea>
+          </label>
+
+          <button type="submit" class="primary-button">登録する</button>
+        </form>
+      </section>
+    </aside>
+
+    <section class="panel transaction-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">詳細</p>
+          <h2>取引履歴</h2>
+        </div>
+        <span><%= transactions.length %> 件</span>
+      </div>
+
+      <% if (transactions.length === 0) { %>
+        <p class="empty-state">この期間には、まだ取引がありません。</p>
+      <% } else { %>
+        <div class="table-wrap">
+          <table class="transaction-table">
+            <thead>
+              <tr>
+                <th>取引日</th>
+                <th>種類</th>
+                <th>金額</th>
+                <th>カテゴリ</th>
+                <th>内容</th>
+                <th>分類元</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% transactions.forEach(transaction => { %>
+                <tr>
+                  <td><%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %></td>
+                  <td>
+                    <span class="kind-badge <%= transaction.kind === 'PERSONAL_INCOME' ? 'income' : 'expense' %>">
+                      <%= transaction.kind === "PERSONAL_INCOME" ? "収入" : "支出" %>
+                    </span>
+                  </td>
+                  <td class="amount-cell <%= transaction.kind === 'PERSONAL_INCOME' ? 'income-text' : 'expense-text' %>">
+                    <%= transaction.kind === "PERSONAL_INCOME" ? "+" : "−" %><%= transaction.amount.toLocaleString("ja-JP") %> 円
+                  </td>
+                  <td><%= transaction.category %></td>
+                  <td><%= transaction.rawText %></td>
+                  <td><%= transaction.classificationSource === "MANUAL" ? "手動" : "キーワード" %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </section>
   </main>
 </body>
 </html>

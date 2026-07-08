@@ -1,0 +1,308 @@
+:root {
+  --surface: #ffffff;
+  --background: #f4f1ed;
+  --border: #d9d3cd;
+  --text: #171513;
+  --muted: #6f6963;
+  --income: #1e6f50;
+  --income-soft: #e9f5ef;
+  --expense: #a43b32;
+  --expense-soft: #faecea;
+  --accent: #d97d5b;
+}
+
+.ledger-body {
+  min-height: 100vh;
+  padding: 28px;
+  color: var(--text);
+  background: var(--background);
+}
+
+.ledger-header {
+  width: min(1400px, 100%);
+  margin: 0 auto 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.ledger-header h1 {
+  margin: 4px 0 6px;
+  font-size: clamp(25px, 3vw, 42px);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.period-label {
+  margin: 0;
+  color: var(--muted);
+}
+
+.summary-grid {
+  width: min(1400px, 100%);
+  margin: 0 auto 20px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summary-card {
+  min-height: 112px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.summary-card span {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.summary-card strong {
+  font-size: clamp(20px, 2.3vw, 32px);
+}
+
+.income-card {
+  border-top: 4px solid var(--income);
+}
+
+.expense-card {
+  border-top: 4px solid var(--expense);
+}
+
+.balance-card {
+  border-top: 4px solid var(--accent);
+}
+
+.ledger-layout {
+  width: min(1400px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.ledger-sidebar {
+  display: grid;
+  gap: 18px;
+}
+
+.panel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 22px;
+}
+
+.panel h2 {
+  margin: 0 0 16px;
+  font-size: 20px;
+}
+
+.page-list {
+  display: grid;
+  gap: 8px;
+}
+
+.page-list a {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  color: var(--text);
+  border: 1px solid transparent;
+  text-decoration: none;
+}
+
+.page-list a:hover,
+.page-list a.is-active {
+  border-color: var(--text);
+  background: #f8f6f3;
+}
+
+.page-list small {
+  color: var(--muted);
+}
+
+.transaction-form {
+  display: grid;
+  gap: 14px;
+}
+
+.transaction-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.transaction-form input,
+.transaction-form select,
+.transaction-form textarea {
+  width: 100%;
+  border: 1px solid #a9a29b;
+  border-radius: 0;
+  padding: 10px 11px;
+  color: var(--text);
+  background: #fff;
+  font: inherit;
+}
+
+.transaction-form textarea {
+  resize: vertical;
+}
+
+.transaction-form input:focus,
+.transaction-form select:focus,
+.transaction-form textarea:focus {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.primary-button,
+.secondary-button {
+  border: 1px solid var(--text);
+  padding: 10px 16px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.primary-button {
+  color: #fff;
+  background: var(--text);
+}
+
+.secondary-button {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.success-message {
+  border-left: 4px solid var(--income);
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  color: var(--income);
+  background: var(--income-soft);
+}
+
+.transaction-panel {
+  min-height: 520px;
+}
+
+.panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.panel-heading h2 {
+  margin: 4px 0 0;
+}
+
+.panel-heading > span {
+  color: var(--muted);
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.transaction-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.transaction-table th,
+.transaction-table td {
+  padding: 13px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.transaction-table th {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.amount-cell {
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+.income-text {
+  color: var(--income);
+}
+
+.expense-text {
+  color: var(--expense);
+}
+
+.kind-badge {
+  display: inline-block;
+  min-width: 46px;
+  padding: 4px 7px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.kind-badge.income {
+  color: var(--income);
+  background: var(--income-soft);
+}
+
+.kind-badge.expense {
+  color: var(--expense);
+  background: var(--expense-soft);
+}
+
+.empty-state {
+  min-height: 360px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+}
+
+@media (max-width: 900px) {
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ledger-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .ledger-body {
+    padding: 16px;
+  }
+
+  .ledger-header {
+    flex-direction: column;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

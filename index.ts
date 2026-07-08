@@ -109,6 +109,56 @@ function requireAuthentication(req: Request, res: Response, next: NextFunction):
   next();
 }
 
+function parsePositiveInteger(value: unknown): number | null {
+  const text = String(value ?? "").trim();
+  if (!/^\d+$/.test(text)) return null;
+
+  const amount = Number(text);
+  if (!Number.isSafeInteger(amount) || amount <= 0) return null;
+
+  return amount;
+}
+
+function parseDateOnly(value: unknown): Date | null {
+  const text = String(value ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+
+  const date = new Date(`${text}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toISOString().slice(0, 10) === text ? date : null;
+}
+
+function classifyTransaction(rawText: string, kind: "income" | "expense"): string {
+  if (kind === "income") {
+    if (/給与|給料|バイト|アルバイト|報酬/.test(rawText)) return "給与・副業";
+    if (/仕送り/.test(rawText)) return "仕送り";
+    if (/返金|還付/.test(rawText)) return "返金・還付";
+    return "その他収入";
+  }
+
+  if (/コンビニ|スーパー|ご飯|食事|ランチ|カフェ|弁当/.test(rawText)) {
+    return "食費";
+  }
+  if (/電車|バス|タクシー|交通|切符|定期/.test(rawText)) {
+    return "交通費";
+  }
+  if (/本|参考書|文具|授業|学習/.test(rawText)) {
+    return "学習費";
+  }
+  if (/家賃|光熱|電気|ガス|水道|通信|携帯/.test(rawText)) {
+    return "維持費";
+  }
+  return "その他支出";
+}
+
+function formatDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 app.get("/", (req, res) => {
   if (req.session.userId) {
     res.redirect("/app");
@@ -229,15 +279,29 @@ app.post("/login", async (req, res, next) => {
 });
 
 app.get("/app", requireAuthentication, async (req, res, next) => {
+  const userId = req.session.userId;
+  if (!userId) {
+    res.redirect("/?error=ログインしてください。");
+    return;
+  }
+
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.session.userId },
-      include: {
-        ledgerPages: {
-          where: { pageType: "PERSONAL" },
-          orderBy: [{ isInitial: "desc" }, { sortOrder: "asc" }],
-        },
+    const requestedPageId = Number(req.query.pageId);
+    const pages = await prisma.ledgerPage.findMany({
+      where: {
+        userId,
+        pageType: "PERSONAL",
       },
+      orderBy: [{ isInitial: "desc" }, { sortOrder: "asc" }, { id: "asc" }],
+    });
+
+    const selectedPage =
+      pages.find((page) => Number.isInteger(requestedPageId) && page.id === requestedPageId) ??
+      pages[0] ??
+      null;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
     });
 
     if (!user || !user.isActive) {
@@ -247,10 +311,135 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
       return;
     }
 
+    if (!selectedPage) {
+      res.status(500).send("個人家計簿ページが見つかりません。");
+      return;
+    }
+
+    const transactionDateFilter = {
+      ...(selectedPage.startDate ? { gte: selectedPage.startDate } : {}),
+      ...(selectedPage.endDate ? { lte: selectedPage.endDate } : {}),
+    };
+
+    const [transactions, carryoverTransactions] = await Promise.all([
+      prisma.transaction.findMany({
+        where: {
+          userId,
+          kind: { in: ["PERSONAL_INCOME", "PERSONAL_EXPENSE"] },
+          ...(Object.keys(transactionDateFilter).length > 0
+            ? { transactionDate: transactionDateFilter }
+            : {}),
+        },
+        orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
+      }),
+      selectedPage.startDate
+        ? prisma.transaction.findMany({
+            where: {
+              userId,
+              kind: { in: ["PERSONAL_INCOME", "PERSONAL_EXPENSE"] },
+              transactionDate: { lt: selectedPage.startDate },
+            },
+            select: { kind: true, amount: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const incomeTotal = transactions
+      .filter((transaction) => transaction.kind === "PERSONAL_INCOME")
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+
+    const expenseTotal = transactions
+      .filter((transaction) => transaction.kind === "PERSONAL_EXPENSE")
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+
+    const carryover = carryoverTransactions.reduce((sum, transaction) => {
+      return transaction.kind === "PERSONAL_INCOME"
+        ? sum + transaction.amount
+        : sum - transaction.amount;
+    }, 0);
+
+    const balance = carryover + incomeTotal - expenseTotal;
+    const error = typeof req.query.error === "string" ? req.query.error : null;
+    const success = typeof req.query.success === "string" ? req.query.success : null;
+
     res.render("dashboard", {
       user,
-      initialPage: user.ledgerPages[0] ?? null,
+      pages,
+      selectedPage,
+      transactions,
+      summary: {
+        carryover,
+        incomeTotal,
+        expenseTotal,
+        balance,
+      },
+      error,
+      success,
+      today: formatDateInputValue(new Date()),
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
+  const userId = req.session.userId;
+  if (!userId) {
+    res.redirect("/?error=ログインしてください。");
+    return;
+  }
+
+  const kindInput = String(req.body.kind ?? "").trim();
+  const rawText = String(req.body.rawText ?? "").trim();
+  const selectedCategory = String(req.body.category ?? "").trim();
+  const amount = parsePositiveInteger(req.body.amount);
+  const transactionDate = parseDateOnly(req.body.transactionDate);
+
+  const inputKind = kindInput === "income" || kindInput === "expense" ? kindInput : null;
+
+  if (!inputKind || !rawText || !amount || !transactionDate) {
+    res.redirect(
+      `/app?error=${encodeURIComponent("取引日・種類・金額・内容を正しく入力してください。")}`,
+    );
+    return;
+  }
+
+  if (rawText.length > 500) {
+    res.redirect(`/app?error=${encodeURIComponent("内容は500文字以内で入力してください。")}`);
+    return;
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true },
+    });
+
+    if (!user?.isActive) {
+      await destroySession(req);
+      res.clearCookie(sessionCookieName);
+      res.redirect("/?error=このアカウントは利用できません。");
+      return;
+    }
+
+    const category = selectedCategory || classifyTransaction(rawText, inputKind);
+    const classificationSource = selectedCategory ? "MANUAL" : "KEYWORD";
+
+    await prisma.transaction.create({
+      data: {
+        userId,
+        groupId: null,
+        groupFundId: null,
+        kind: inputKind === "income" ? "PERSONAL_INCOME" : "PERSONAL_EXPENSE",
+        amount,
+        category,
+        rawText,
+        transactionDate,
+        classificationSource,
+      },
+    });
+
+    res.redirect(`/app?success=${encodeURIComponent("取引を登録しました。")}`);
   } catch (error) {
     next(error);
   }
