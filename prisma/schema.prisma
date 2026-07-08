@@ -4,21 +4,68 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider            = "prisma-client"
+  output              = "../generated/prisma"
+  importFileExtension = "ts"
 }
 
 datasource db {
   provider = "postgresql"
 }
 
+enum UserRole {
+  USER
+  SYSTEM_ADMIN
+}
+
+enum GroupMemberRole {
+  MEMBER
+  ADMIN
+}
+
+enum TransactionKind {
+  PERSONAL_INCOME
+  PERSONAL_EXPENSE
+  GROUP_PAYMENT
+  FUND_CONTRIBUTION
+  FUND_INCOME
+  FUND_EXPENSE
+  FUND_REFUND
+}
+
+enum LedgerPageType {
+  PERSONAL
+  GROUP_FUND
+  GROUP_PAYMENT
+}
+
+enum CalculationMethod {
+  EQUAL
+  HISTORY_ALL
+  HISTORY_SAME_PARTICIPANTS
+  BALANCE_ADJUSTMENT
+}
+
+enum ClassificationSource {
+  MANUAL
+  KEYWORD
+  AI
+}
+
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  createdAt DateTime @default(now()) @map("created_at")
+  id           Int       @id @default(autoincrement())
+  loginId      String    @unique @map("login_id")
+  displayName  String    @map("display_name")
+  passwordHash String    @map("password_hash")
+  role         UserRole  @default(USER)
+  isActive     Boolean   @default(true) @map("is_active")
+  withdrawnAt  DateTime? @map("withdrawn_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   transactions Transaction[]
   memberships  GroupMember[]
+  ledgerPages  LedgerPage[]
 
   @@map("users")
 }
@@ -26,38 +73,94 @@ model User {
 model ExpenseGroup {
   id        Int      @id @default(autoincrement())
   name      String
+  isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   members      GroupMember[]
+  fund         GroupFund?
   transactions Transaction[]
+  ledgerPages  LedgerPage[]
 
   @@map("groups")
 }
 
 model GroupMember {
-  userId  Int   @map("user_id")
-  groupId Int   @map("group_id")
-  weight  Float @default(1.0)
+  userId   Int             @map("user_id")
+  groupId  Int             @map("group_id")
+  role     GroupMemberRole @default(MEMBER)
+  isActive Boolean         @default(true) @map("is_active")
+  joinedAt DateTime        @default(now()) @map("joined_at")
+  leftAt   DateTime?       @map("left_at")
 
-  user  User         @relation(fields: [userId], references: [id])
-  group ExpenseGroup @relation(fields: [groupId], references: [id])
+  user  User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  group ExpenseGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
 
   @@id([userId, groupId])
+  @@index([groupId, isActive])
   @@map("group_members")
 }
 
-model Transaction {
+model GroupFund {
   id        Int      @id @default(autoincrement())
-  userId    Int      @map("user_id")
-  groupId   Int?     @map("group_id")
-  kind      String   @default("expense")
-  amount    Int
-  category  String
-  rawText   String   @map("raw_text")
+  groupId   Int      @unique @map("group_id")
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  user  User          @relation(fields: [userId], references: [id])
-  group ExpenseGroup? @relation(fields: [groupId], references: [id])
+  group        ExpenseGroup  @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  transactions Transaction[]
 
+  @@map("group_funds")
+}
+
+model Transaction {
+  id                   Int                  @id @default(autoincrement())
+  userId               Int?                 @map("user_id")
+  groupId              Int?                 @map("group_id")
+  groupFundId          Int?                 @map("group_fund_id")
+  kind                 TransactionKind
+  amount               Int
+  category             String
+  rawText              String               @map("raw_text")
+  transactionDate      DateTime             @map("transaction_date") @db.Date
+  paymentBatchId       String?              @map("payment_batch_id") @db.Uuid
+  calculationMethod    CalculationMethod?   @map("calculation_method")
+  classificationSource ClassificationSource @default(MANUAL) @map("classification_source")
+  aiResult             Json?                @map("ai_result")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+
+  user      User?         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  group     ExpenseGroup? @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  groupFund GroupFund?    @relation(fields: [groupFundId], references: [id], onDelete: Restrict)
+
+  @@index([userId, transactionDate])
+  @@index([groupId, transactionDate])
+  @@index([groupFundId, transactionDate])
+  @@index([groupId, paymentBatchId])
+  @@index([paymentBatchId])
   @@map("transactions")
+}
+
+model LedgerPage {
+  id        Int            @id @default(autoincrement())
+  pageType  LedgerPageType @map("page_type")
+  userId    Int?           @map("user_id")
+  groupId   Int?           @map("group_id")
+  name      String
+  startDate DateTime?      @map("start_date") @db.Date
+  endDate   DateTime?      @map("end_date") @db.Date
+  isInitial Boolean        @default(false) @map("is_initial")
+  sortOrder Int            @default(0) @map("sort_order")
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  user  User?         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  group ExpenseGroup? @relation(fields: [groupId], references: [id], onDelete: Restrict)
+
+  @@index([userId, pageType, sortOrder])
+  @@index([groupId, pageType, sortOrder])
+  @@map("ledger_pages")
 }
