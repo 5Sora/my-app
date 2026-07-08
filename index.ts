@@ -159,6 +159,73 @@ function formatDateInputValue(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+type OptionalDateResult = {
+  value: Date | null;
+  isValid: boolean;
+};
+
+function parseOptionalDateOnly(value: unknown): OptionalDateResult {
+  const text = String(value ?? "").trim();
+
+  if (!text) {
+    return { value: null, isValid: true };
+  }
+
+  const date = parseDateOnly(text);
+  return { value: date, isValid: date !== null };
+}
+
+function buildAppUrl(options: {
+  pageId?: number | null;
+  error?: string;
+  success?: string;
+} = {}): string {
+  const query = new URLSearchParams();
+
+  if (options.pageId && Number.isSafeInteger(options.pageId)) {
+    query.set("pageId", String(options.pageId));
+  }
+
+  if (options.error) {
+    query.set("error", options.error);
+  }
+
+  if (options.success) {
+    query.set("success", options.success);
+  }
+
+  const queryString = query.toString();
+  return queryString ? `/app?${queryString}` : "/app";
+}
+
+function validateLedgerPageInput(input: {
+  name: string;
+  startDate: OptionalDateResult;
+  endDate: OptionalDateResult;
+}): string | null {
+  if (!input.name) {
+    return "ページ名を入力してください。";
+  }
+
+  if (input.name.length > 100) {
+    return "ページ名は100文字以内で入力してください。";
+  }
+
+  if (!input.startDate.isValid || !input.endDate.isValid) {
+    return "開始日と終了日を正しい日付で入力してください。";
+  }
+
+  if (
+    input.startDate.value &&
+    input.endDate.value &&
+    input.startDate.value > input.endDate.value
+  ) {
+    return "開始日は終了日以前の日付にしてください。";
+  }
+
+  return null;
+}
+
 app.get("/", (req, res) => {
   if (req.session.userId) {
     res.redirect("/app");
@@ -376,11 +443,239 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
       error,
       success,
       today: formatDateInputValue(new Date()),
+      selectedPageForm: {
+        startDate: selectedPage.startDate
+          ? selectedPage.startDate.toISOString().slice(0, 10)
+          : "",
+        endDate: selectedPage.endDate
+          ? selectedPage.endDate.toISOString().slice(0, 10)
+          : "",
+      },
     });
   } catch (error) {
     next(error);
   }
 });
+
+
+app.post("/app/pages", requireAuthentication, async (req, res, next) => {
+  const userId = req.session.userId;
+
+  if (!userId) {
+    res.redirect("/?error=ログインしてください。");
+    return;
+  }
+
+  const currentPageId = parsePositiveInteger(req.body.currentPageId);
+  const name = String(req.body.name ?? "").trim();
+  const startDate = parseOptionalDateOnly(req.body.startDate);
+  const endDate = parseOptionalDateOnly(req.body.endDate);
+  const validationError = validateLedgerPageInput({ name, startDate, endDate });
+
+  if (validationError) {
+    res.redirect(buildAppUrl({ pageId: currentPageId, error: validationError }));
+    return;
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true },
+    });
+
+    if (!user?.isActive) {
+      await destroySession(req);
+      res.clearCookie(sessionCookieName);
+      res.redirect("/?error=このアカウントは利用できません。");
+      return;
+    }
+
+    const pageOrder = await prisma.ledgerPage.aggregate({
+      where: {
+        userId,
+        pageType: "PERSONAL",
+      },
+      _max: {
+        sortOrder: true,
+      },
+    });
+
+    const page = await prisma.ledgerPage.create({
+      data: {
+        pageType: "PERSONAL",
+        userId,
+        groupId: null,
+        name,
+        startDate: startDate.value,
+        endDate: endDate.value,
+        isInitial: false,
+        sortOrder: (pageOrder._max.sortOrder ?? -1) + 1,
+      },
+    });
+
+    res.redirect(
+      buildAppUrl({
+        pageId: page.id,
+        success: "表示ページを追加しました。",
+      }),
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/app/pages/:pageId", requireAuthentication, async (req, res, next) => {
+  const userId = req.session.userId;
+  const pageId = parsePositiveInteger(req.params.pageId);
+
+  if (!userId) {
+    res.redirect("/?error=ログインしてください。");
+    return;
+  }
+
+  if (!pageId) {
+    res.redirect(buildAppUrl({ error: "編集対象のページが正しくありません。" }));
+    return;
+  }
+
+  const name = String(req.body.name ?? "").trim();
+  const startDate = parseOptionalDateOnly(req.body.startDate);
+  const endDate = parseOptionalDateOnly(req.body.endDate);
+  const validationError = validateLedgerPageInput({ name, startDate, endDate });
+
+  if (validationError) {
+    res.redirect(buildAppUrl({ pageId, error: validationError }));
+    return;
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true },
+    });
+
+    if (!user?.isActive) {
+      await destroySession(req);
+      res.clearCookie(sessionCookieName);
+      res.redirect("/?error=このアカウントは利用できません。");
+      return;
+    }
+
+    const page = await prisma.ledgerPage.findFirst({
+      where: {
+        id: pageId,
+        userId,
+        pageType: "PERSONAL",
+      },
+      select: { id: true },
+    });
+
+    if (!page) {
+      res.redirect(buildAppUrl({ error: "編集対象のページが見つかりません。" }));
+      return;
+    }
+
+    await prisma.ledgerPage.update({
+      where: { id: pageId },
+      data: {
+        name,
+        startDate: startDate.value,
+        endDate: endDate.value,
+      },
+    });
+
+    res.redirect(
+      buildAppUrl({
+        pageId,
+        success: "表示ページを更新しました。",
+      }),
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post(
+  "/app/pages/:pageId/delete",
+  requireAuthentication,
+  async (req, res, next) => {
+    const userId = req.session.userId;
+    const pageId = parsePositiveInteger(req.params.pageId);
+
+    if (!userId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!pageId) {
+      res.redirect(buildAppUrl({ error: "削除対象のページが正しくありません。" }));
+      return;
+    }
+
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { isActive: true },
+      });
+
+      if (!user?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const page = await prisma.ledgerPage.findFirst({
+        where: {
+          id: pageId,
+          userId,
+          pageType: "PERSONAL",
+        },
+        select: {
+          id: true,
+          isInitial: true,
+        },
+      });
+
+      if (!page) {
+        res.redirect(buildAppUrl({ error: "削除対象のページが見つかりません。" }));
+        return;
+      }
+
+      if (page.isInitial) {
+        res.redirect(
+          buildAppUrl({
+            pageId,
+            error: "初期ページは削除できません。",
+          }),
+        );
+        return;
+      }
+
+      await prisma.ledgerPage.delete({
+        where: { id: pageId },
+      });
+
+      const fallbackPage = await prisma.ledgerPage.findFirst({
+        where: {
+          userId,
+          pageType: "PERSONAL",
+        },
+        orderBy: [{ isInitial: "desc" }, { sortOrder: "asc" }, { id: "asc" }],
+        select: { id: true },
+      });
+
+      res.redirect(
+        buildAppUrl({
+          pageId: fallbackPage?.id,
+          success: "表示ページを削除しました。",
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
   const userId = req.session.userId;
@@ -394,18 +689,27 @@ app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
   const selectedCategory = String(req.body.category ?? "").trim();
   const amount = parsePositiveInteger(req.body.amount);
   const transactionDate = parseDateOnly(req.body.transactionDate);
+  const pageId = parsePositiveInteger(req.body.pageId);
 
   const inputKind = kindInput === "income" || kindInput === "expense" ? kindInput : null;
 
   if (!inputKind || !rawText || !amount || !transactionDate) {
     res.redirect(
-      `/app?error=${encodeURIComponent("取引日・種類・金額・内容を正しく入力してください。")}`,
+      buildAppUrl({
+        pageId,
+        error: "取引日・種類・金額・内容を正しく入力してください。",
+      }),
     );
     return;
   }
 
   if (rawText.length > 500) {
-    res.redirect(`/app?error=${encodeURIComponent("内容は500文字以内で入力してください。")}`);
+    res.redirect(
+      buildAppUrl({
+        pageId,
+        error: "内容は500文字以内で入力してください。",
+      }),
+    );
     return;
   }
 
@@ -439,7 +743,12 @@ app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
       },
     });
 
-    res.redirect(`/app?success=${encodeURIComponent("取引を登録しました。")}`);
+    res.redirect(
+      buildAppUrl({
+        pageId,
+        success: "取引を登録しました。",
+      }),
+    );
   } catch (error) {
     next(error);
   }

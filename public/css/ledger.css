@@ -283,6 +283,138 @@
   border: 1px dashed var(--border);
 }
 
+
+
+.flash-area {
+  width: min(1400px, 100%);
+  margin: 0 auto 20px;
+}
+
+.flash-area .error-message,
+.flash-area .success-message {
+  margin-bottom: 0;
+}
+
+.panel-heading.compact {
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.page-management-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.page-list a > span:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.page-list a strong {
+  overflow-wrap: anywhere;
+}
+
+.page-list a > span small {
+  color: var(--muted);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.initial-badge {
+  flex: 0 0 auto;
+  align-self: start;
+  border: 1px solid var(--border);
+  padding: 2px 5px;
+  background: var(--surface);
+}
+
+.page-action {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.page-action summary {
+  cursor: pointer;
+  font-weight: 800;
+  list-style-position: outside;
+}
+
+.page-action[open] summary {
+  margin-bottom: 14px;
+}
+
+.page-form {
+  display: grid;
+  gap: 12px;
+}
+
+.page-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.page-form input {
+  width: 100%;
+  border: 1px solid #a9a29b;
+  border-radius: 0;
+  padding: 10px 11px;
+  color: var(--text);
+  background: #fff;
+  font: inherit;
+}
+
+.page-form input:focus {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.date-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.form-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.delete-page-form {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.danger-button {
+  width: 100%;
+  border: 1px solid var(--expense);
+  padding: 10px 16px;
+  color: var(--expense);
+  background: var(--surface);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.danger-button:hover:not(:disabled) {
+  color: #fff;
+  background: var(--expense);
+}
+
+.danger-button:disabled {
+  border-color: var(--border);
+  color: #aaa39c;
+  background: #f4f1ed;
+  cursor: not-allowed;
+}
+
 @media (max-width: 900px) {
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -303,6 +435,10 @@
   }
 
   .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .date-pair {
     grid-template-columns: 1fr;
   }
 }

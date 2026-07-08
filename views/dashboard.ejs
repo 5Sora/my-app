@@ -28,6 +28,17 @@
     </form>
   </header>
 
+  <% if (error || success) { %>
+    <section class="flash-area" aria-live="polite">
+      <% if (error) { %>
+        <p class="error-message" role="alert"><%= error %></p>
+      <% } %>
+      <% if (success) { %>
+        <p class="success-message" role="status"><%= success %></p>
+      <% } %>
+    </section>
+  <% } %>
+
   <section class="summary-grid" aria-label="収支サマリー">
     <article class="summary-card">
       <span>繰越金</span>
@@ -49,32 +60,138 @@
 
   <main class="ledger-layout">
     <aside class="ledger-sidebar">
-      <section class="panel">
-        <h2>表示ページ</h2>
+      <section class="panel page-management-panel">
+        <div class="panel-heading compact">
+          <div>
+            <p class="eyebrow">ページ管理</p>
+            <h2>表示ページ</h2>
+          </div>
+          <span><%= pages.length %> 件</span>
+        </div>
+
         <nav class="page-list" aria-label="個人家計簿ページ">
           <% pages.forEach(page => { %>
             <a
               href="/app?pageId=<%= page.id %>"
               class="<%= page.id === selectedPage.id ? 'is-active' : '' %>"
             >
-              <span><%= page.name %></span>
-              <% if (page.isInitial) { %><small>初期</small><% } %>
+              <span>
+                <strong><%= page.name %></strong>
+                <small>
+                  <% if (page.startDate || page.endDate) { %>
+                    <%= page.startDate ? new Date(page.startDate).toLocaleDateString("ja-JP") : "指定なし" %>
+                    〜
+                    <%= page.endDate ? new Date(page.endDate).toLocaleDateString("ja-JP") : "指定なし" %>
+                  <% } else { %>
+                    全期間
+                  <% } %>
+                </small>
+              </span>
+              <% if (page.isInitial) { %><small class="initial-badge">初期</small><% } %>
             </a>
           <% }) %>
         </nav>
+
+        <details class="page-action">
+          <summary>＋ 新しいページを追加</summary>
+          <form action="/app/pages" method="post" class="page-form">
+            <input
+              type="hidden"
+              name="currentPageId"
+              value="<%= selectedPage.id %>"
+            >
+
+            <label>
+              <span>ページ名</span>
+              <input type="text" name="name" maxlength="100" required>
+            </label>
+
+            <div class="date-pair">
+              <label>
+                <span>開始日</span>
+                <input type="date" name="startDate">
+              </label>
+              <label>
+                <span>終了日</span>
+                <input type="date" name="endDate">
+              </label>
+            </div>
+
+            <p class="form-help">日付を空欄にすると、その方向の期間を制限しません。</p>
+            <button type="submit" class="primary-button">ページを追加</button>
+          </form>
+        </details>
+
+        <details class="page-action">
+          <summary>⚙ 選択中ページを編集</summary>
+          <form
+            action="/app/pages/<%= selectedPage.id %>"
+            method="post"
+            class="page-form"
+          >
+            <label>
+              <span>ページ名</span>
+              <input
+                type="text"
+                name="name"
+                value="<%= selectedPage.name %>"
+                maxlength="100"
+                required
+              >
+            </label>
+
+            <div class="date-pair">
+              <label>
+                <span>開始日</span>
+                <input
+                  type="date"
+                  name="startDate"
+                  value="<%= selectedPageForm.startDate %>"
+                >
+              </label>
+              <label>
+                <span>終了日</span>
+                <input
+                  type="date"
+                  name="endDate"
+                  value="<%= selectedPageForm.endDate %>"
+                >
+              </label>
+            </div>
+
+            <p class="form-help">
+              初期ページも名前と期間は編集できます。
+            </p>
+            <button type="submit" class="primary-button">変更を保存</button>
+          </form>
+        </details>
+
+        <form
+          action="/app/pages/<%= selectedPage.id %>/delete"
+          method="post"
+          class="delete-page-form"
+          onsubmit="return confirm('この表示ページを削除しますか？取引データ自体は削除されません。');"
+        >
+          <button
+            type="submit"
+            class="danger-button"
+            <%= selectedPage.isInitial ? "disabled" : "" %>
+          >
+            − 選択中ページを削除
+          </button>
+          <% if (selectedPage.isInitial) { %>
+            <p class="form-help">初期ページは削除できません。</p>
+          <% } %>
+        </form>
       </section>
 
       <section class="panel">
         <h2>取引を追加</h2>
 
-        <% if (error) { %>
-          <p class="error-message" role="alert"><%= error %></p>
-        <% } %>
-        <% if (success) { %>
-          <p class="success-message" role="status"><%= success %></p>
-        <% } %>
 
         <form action="/app/transactions" method="post" class="transaction-form">
+          <input type="hidden" name="pageId" value="<%= selectedPage.id %>">
+
           <label>
             <span>実際の取引日</span>
             <input type="date" name="transactionDate" value="<%= today %>" required>
