@@ -338,12 +338,19 @@ function buildGroupUrl(
   return queryString ? `/groups/${groupId}?${queryString}` : `/groups/${groupId}`;
 }
 
+type FundContextState = "open" | "closed";
+
+function parseFundContextState(value: unknown): FundContextState {
+  return value === "open" ? "open" : "closed";
+}
+
 function buildGroupFundUrl(
   groupId: number,
   options: {
     pageId?: number | null;
     error?: string;
     success?: string;
+    contextState?: FundContextState;
   } = {},
 ): string {
   const query = new URLSearchParams();
@@ -353,6 +360,7 @@ function buildGroupFundUrl(
   }
   if (options.error) query.set("error", options.error);
   if (options.success) query.set("success", options.success);
+  if (options.contextState === "open") query.set("context", "open");
 
   const queryString = query.toString();
   return queryString
@@ -1194,6 +1202,7 @@ app.get("/groups/:groupId/fund", requireAuthentication, async (req, res, next) =
     const balance = carryover + incomeTotal - expenseTotal;
     const error = typeof req.query.error === "string" ? req.query.error : null;
     const success = typeof req.query.success === "string" ? req.query.success : null;
+    const contextState = parseFundContextState(req.query.context);
 
     res.render("fund", {
       currentUserId: userId,
@@ -1212,12 +1221,385 @@ app.get("/groups/:groupId/fund", requireAuthentication, async (req, res, next) =
       },
       error,
       success,
+      isAdmin: membership.role === "ADMIN",
+      contextState,
+      isContextOpen: contextState === "open",
+      selectedPageForm: {
+        startDate: selectedPage.startDate
+          ? selectedPage.startDate.toISOString().slice(0, 10)
+          : "",
+        endDate: selectedPage.endDate
+          ? selectedPage.endDate.toISOString().slice(0, 10)
+          : "",
+      },
       buildGroupFundUrl,
     });
   } catch (error) {
     next(error);
   }
 });
+
+
+app.post(
+  "/groups/:groupId/fund/pages",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const currentPageId = parsePositiveInteger(req.body.currentPageId);
+    const contextState = parseFundContextState(req.body.contextState);
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    const name = String(req.body.name ?? "").trim();
+    const startDate = parseOptionalDateOnly(req.body.startDate);
+    const endDate = parseOptionalDateOnly(req.body.endDate);
+    const validationError = validateLedgerPageInput({ name, startDate, endDate });
+
+    try {
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true },
+      });
+
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const adminMembership = await findActiveGroupAdminMembership(
+        operatorUserId,
+        groupId,
+      );
+
+      if (!adminMembership) {
+        res.status(403).send("基金の表示ページを追加する権限がありません。");
+        return;
+      }
+
+      const fund = await prisma.groupFund.findUnique({
+        where: { groupId },
+        select: { id: true },
+      });
+
+      if (!fund) {
+        res.redirect(
+          buildGroupFundUrl(groupId, {
+            error: "グループ基金が見つからないため、表示ページを追加できません。",
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      if (validationError) {
+        res.redirect(
+          buildGroupFundUrl(groupId, {
+            pageId: currentPageId,
+            error: validationError,
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      const pageOrder = await prisma.ledgerPage.aggregate({
+        where: {
+          groupId,
+          userId: null,
+          pageType: "GROUP_FUND",
+        },
+        _max: { sortOrder: true },
+      });
+
+      const page = await prisma.ledgerPage.create({
+        data: {
+          pageType: "GROUP_FUND",
+          userId: null,
+          groupId,
+          name,
+          startDate: startDate.value,
+          endDate: endDate.value,
+          isInitial: false,
+          sortOrder: (pageOrder._max.sortOrder ?? -1) + 1,
+        },
+      });
+
+      res.redirect(
+        buildGroupFundUrl(groupId, {
+          pageId: page.id,
+          success: "基金の表示ページを追加しました。",
+          contextState,
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.post(
+  "/groups/:groupId/fund/pages/:pageId",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const pageId = parsePositiveInteger(req.params.pageId);
+    const contextState = parseFundContextState(req.body.contextState);
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    if (!pageId) {
+      res.redirect(
+        buildGroupFundUrl(groupId, {
+          error: "編集対象のページが正しくありません。",
+          contextState,
+        }),
+      );
+      return;
+    }
+
+    const name = String(req.body.name ?? "").trim();
+    const startDate = parseOptionalDateOnly(req.body.startDate);
+    const endDate = parseOptionalDateOnly(req.body.endDate);
+    const validationError = validateLedgerPageInput({ name, startDate, endDate });
+
+    try {
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true },
+      });
+
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const adminMembership = await findActiveGroupAdminMembership(
+        operatorUserId,
+        groupId,
+      );
+
+      if (!adminMembership) {
+        res.status(403).send("基金の表示ページを編集する権限がありません。");
+        return;
+      }
+
+      const fund = await prisma.groupFund.findUnique({
+        where: { groupId },
+        select: { id: true },
+      });
+
+      if (!fund) {
+        res.redirect(
+          buildGroupFundUrl(groupId, {
+            error: "グループ基金が見つからないため、表示ページを編集できません。",
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      const page = await prisma.ledgerPage.findFirst({
+        where: {
+          id: pageId,
+          groupId,
+          userId: null,
+          pageType: "GROUP_FUND",
+        },
+        select: { id: true },
+      });
+
+      if (!page) {
+        res.redirect(
+          buildGroupFundUrl(groupId, {
+            error: "編集対象のページが見つかりません。",
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      if (validationError) {
+        res.redirect(
+          buildGroupFundUrl(groupId, {
+            pageId,
+            error: validationError,
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      await prisma.ledgerPage.update({
+        where: { id: pageId },
+        data: {
+          name,
+          startDate: startDate.value,
+          endDate: endDate.value,
+        },
+      });
+
+      res.redirect(
+        buildGroupFundUrl(groupId, {
+          pageId,
+          success: "基金の表示ページを更新しました。",
+          contextState,
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.post(
+  "/groups/:groupId/fund/pages/:pageId/delete",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const pageId = parsePositiveInteger(req.params.pageId);
+    const contextState = parseFundContextState(req.body.contextState);
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    if (!pageId) {
+      res.redirect(
+        buildGroupFundUrl(groupId, {
+          error: "削除対象のページが正しくありません。",
+          contextState,
+        }),
+      );
+      return;
+    }
+
+    try {
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true },
+      });
+
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const adminMembership = await findActiveGroupAdminMembership(
+        operatorUserId,
+        groupId,
+      );
+
+      if (!adminMembership) {
+        res.status(403).send("基金の表示ページを削除する権限がありません。");
+        return;
+      }
+
+      const fund = await prisma.groupFund.findUnique({
+        where: { groupId },
+        select: { id: true },
+      });
+
+      if (!fund) {
+        res.redirect(
+          buildGroupFundUrl(groupId, {
+            error: "グループ基金が見つからないため、表示ページを削除できません。",
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      const page = await prisma.ledgerPage.findFirst({
+        where: {
+          id: pageId,
+          groupId,
+          userId: null,
+          pageType: "GROUP_FUND",
+        },
+        select: {
+          id: true,
+          isInitial: true,
+        },
+      });
+
+      if (!page) {
+        res.redirect(
+          buildGroupFundUrl(groupId, {
+            error: "削除対象のページが見つかりません。",
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      if (page.isInitial) {
+        res.redirect(
+          buildGroupFundUrl(groupId, {
+            pageId,
+            error: "初期ページは削除できません。",
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      await prisma.ledgerPage.delete({
+        where: { id: pageId },
+      });
+
+      const fallbackPage = await prisma.ledgerPage.findFirst({
+        where: {
+          groupId,
+          userId: null,
+          pageType: "GROUP_FUND",
+        },
+        orderBy: [{ isInitial: "desc" }, { sortOrder: "asc" }, { id: "asc" }],
+        select: { id: true },
+      });
+
+      res.redirect(
+        buildGroupFundUrl(groupId, {
+          pageId: fallbackPage?.id,
+          success: "基金の表示ページを削除しました。",
+          contextState,
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 
 app.post(

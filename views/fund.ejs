@@ -30,8 +30,9 @@
       <a href="/app" class="secondary-button button-link group-nav-item">自分の家計簿</a>
       <a href="/groups/<%= group.id %>" class="secondary-button button-link group-nav-item">概要</a>
       <a
-        href="<%= buildGroupFundUrl(group.id, { pageId: selectedPage.id }) %>"
+        href="<%= buildGroupFundUrl(group.id, { pageId: selectedPage.id, contextState }) %>"
         class="secondary-button button-link group-nav-item is-active"
+        data-fund-context-link
         aria-current="page"
       >
         基金
@@ -79,11 +80,12 @@
     </article>
   </section>
 
-  <main class="fund-layout is-context-closed" data-fund-layout>
+  <main class="fund-layout<%= isContextOpen ? '' : ' is-context-closed' %>" data-fund-layout>
     <aside
       class="fund-context-column"
       id="fund-context-panel"
       aria-label="基金ページと有効メンバー"
+      aria-hidden="<%= String(!isContextOpen) %>"
     >
       <section class="panel fund-page-panel">
         <div class="panel-heading compact">
@@ -97,8 +99,9 @@
         <nav class="page-list" aria-label="グループ基金ページ">
           <% pages.forEach(page => { %>
             <a
-              href="<%= buildGroupFundUrl(group.id, { pageId: page.id }) %>"
+              href="<%= buildGroupFundUrl(group.id, { pageId: page.id, contextState }) %>"
               class="<%= page.id === selectedPage.id ? 'is-active' : '' %>"
+              data-fund-context-link
               <% if (page.id === selectedPage.id) { %>aria-current="page"<% } %>
             >
               <span>
@@ -119,7 +122,7 @@
         </nav>
 
         <p class="form-help fund-stage-note">
-          ページの追加・編集・削除は第6-2で実装します。
+          LedgerPage管理はグループ管理者だけが行えます。
         </p>
       </section>
 
@@ -170,27 +173,30 @@
         class="fund-context-toggle"
         data-fund-context-toggle
         aria-controls="fund-context-panel"
-        aria-expanded="false"
-        aria-label="左領域を開く"
-        title="左領域を開く"
-      >→</button>
+        aria-expanded="<%= String(isContextOpen) %>"
+        aria-label="<%= isContextOpen ? '左領域を閉じる' : '左領域を開く' %>"
+        title="<%= isContextOpen ? '左領域を閉じる' : '左領域を開く' %>"
+      ><%= isContextOpen ? '←' : '→' %></button>
       <button
         type="button"
-        disabled
-        aria-label="LedgerPage編集は第6-2で実装します"
-        title="LedgerPage編集は第6-2で実装します"
+        data-open-dialog="fund-page-edit-dialog"
+        <%= isAdmin ? "" : "disabled" %>
+        aria-label="<%= isAdmin ? '選択中LedgerPageを編集' : 'LedgerPage編集はグループ管理者のみ可能です' %>"
+        title="<%= isAdmin ? '選択中LedgerPageを編集' : 'LedgerPage編集はグループ管理者のみ可能です' %>"
       >⚙</button>
       <button
         type="button"
-        disabled
-        aria-label="LedgerPage追加は第6-2で実装します"
-        title="LedgerPage追加は第6-2で実装します"
+        data-open-dialog="fund-page-add-dialog"
+        <%= isAdmin ? "" : "disabled" %>
+        aria-label="<%= isAdmin ? 'LedgerPageを追加' : 'LedgerPage追加はグループ管理者のみ可能です' %>"
+        title="<%= isAdmin ? 'LedgerPageを追加' : 'LedgerPage追加はグループ管理者のみ可能です' %>"
       >＋</button>
       <button
-        type="button"
-        disabled
-        aria-label="<%= selectedPage.isInitial ? '初期LedgerPageは削除できません' : 'LedgerPage削除は第6-2で実装します' %>"
-        title="<%= selectedPage.isInitial ? '初期LedgerPageは削除できません' : 'LedgerPage削除は第6-2で実装します' %>"
+        type="submit"
+        form="fund-delete-page-form"
+        <%= !isAdmin || selectedPage.isInitial ? "disabled" : "" %>
+        aria-label="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>"
+        title="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>"
       >−</button>
     </aside>
 
@@ -281,11 +287,97 @@
     </section>
   </main>
 
+
+  <% if (isAdmin) { %>
+    <dialog class="fund-page-dialog" id="fund-page-add-dialog" aria-labelledby="fund-page-add-title">
+      <form action="/groups/<%= group.id %>/fund/pages" method="post" class="page-form fund-dialog-form">
+        <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
+        <input type="hidden" name="contextState" value="<%= contextState %>" data-fund-context-state>
+        <div class="fund-dialog-heading">
+          <div>
+            <p class="eyebrow">LedgerPage管理</p>
+            <h2 id="fund-page-add-title">表示ページを追加</h2>
+          </div>
+          <button type="button" class="fund-dialog-close" data-close-dialog aria-label="閉じる" title="閉じる">×</button>
+        </div>
+
+        <label>
+          <span>ページ名</span>
+          <input type="text" name="name" maxlength="100" required>
+        </label>
+
+        <div class="date-pair">
+          <label>
+            <span>開始日</span>
+            <input type="date" name="startDate">
+          </label>
+          <label>
+            <span>終了日</span>
+            <input type="date" name="endDate">
+          </label>
+        </div>
+
+        <p class="form-help">日付を空欄にすると、その方向の期間を制限しません。</p>
+        <div class="fund-dialog-actions">
+          <button type="button" class="secondary-button" data-close-dialog>キャンセル</button>
+          <button type="submit" class="primary-button">ページを追加</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="fund-page-dialog" id="fund-page-edit-dialog" aria-labelledby="fund-page-edit-title">
+      <form action="/groups/<%= group.id %>/fund/pages/<%= selectedPage.id %>" method="post" class="page-form fund-dialog-form">
+        <input type="hidden" name="contextState" value="<%= contextState %>" data-fund-context-state>
+        <div class="fund-dialog-heading">
+          <div>
+            <p class="eyebrow">LedgerPage管理</p>
+            <h2 id="fund-page-edit-title">選択中ページを編集</h2>
+          </div>
+          <button type="button" class="fund-dialog-close" data-close-dialog aria-label="閉じる" title="閉じる">×</button>
+        </div>
+
+        <label>
+          <span>ページ名</span>
+          <input type="text" name="name" value="<%= selectedPage.name %>" maxlength="100" required>
+        </label>
+
+        <div class="date-pair">
+          <label>
+            <span>開始日</span>
+            <input type="date" name="startDate" value="<%= selectedPageForm.startDate %>">
+          </label>
+          <label>
+            <span>終了日</span>
+            <input type="date" name="endDate" value="<%= selectedPageForm.endDate %>">
+          </label>
+        </div>
+
+        <p class="form-help">初期ページも名前と期間は編集できます。初期ページの属性と削除不可状態は維持されます。</p>
+        <div class="fund-dialog-actions">
+          <button type="button" class="secondary-button" data-close-dialog>キャンセル</button>
+          <button type="submit" class="primary-button">変更を保存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <form
+      id="fund-delete-page-form"
+      action="/groups/<%= group.id %>/fund/pages/<%= selectedPage.id %>/delete"
+      method="post"
+      class="fund-hidden-form"
+      onsubmit="return confirm('選択中の表示ページを削除しますか？基金Transaction自体は削除されません。');"
+    >
+      <input type="hidden" name="contextState" value="<%= contextState %>" data-fund-context-state>
+    </form>
+  <% } %>
+
   <script>
     (() => {
       const layout = document.querySelector("[data-fund-layout]");
       const toggle = document.querySelector("[data-fund-context-toggle]");
       const context = document.getElementById("fund-context-panel");
+      const stateInputs = document.querySelectorAll("[data-fund-context-state]");
+      const stateLinks = document.querySelectorAll("[data-fund-context-link]");
 
       if (!layout || !toggle || !context) return;
 
@@ -296,13 +388,49 @@
         toggle.setAttribute("aria-label", isOpen ? "左領域を閉じる" : "左領域を開く");
         toggle.setAttribute("title", isOpen ? "左領域を閉じる" : "左領域を開く");
         context.setAttribute("aria-hidden", String(!isOpen));
+
+        const contextState = isOpen ? "open" : "closed";
+        stateInputs.forEach((input) => {
+          if (input instanceof HTMLInputElement) input.value = contextState;
+        });
+        stateLinks.forEach((link) => {
+          if (!(link instanceof HTMLAnchorElement)) return;
+          const url = new URL(link.href);
+          if (isOpen) {
+            url.searchParams.set("context", "open");
+          } else {
+            url.searchParams.delete("context");
+          }
+          link.href = `${url.pathname}${url.search}${url.hash}`;
+        });
       };
 
-      // PC・モバイルとも、初回表示時は左3/12領域を閉じる。
-      setOpen(false);
+      // 初回は閉状態。POST後やページ切替後は、直前の開閉状態を復元する。
+      setOpen(toggle.getAttribute("aria-expanded") === "true");
 
       toggle.addEventListener("click", () => {
         setOpen(toggle.getAttribute("aria-expanded") !== "true");
+      });
+
+      document.querySelectorAll("[data-open-dialog]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const dialogId = button.getAttribute("data-open-dialog");
+          const dialog = dialogId ? document.getElementById(dialogId) : null;
+          if (dialog instanceof HTMLDialogElement) dialog.showModal();
+        });
+      });
+
+      document.querySelectorAll("[data-close-dialog]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const dialog = button.closest("dialog");
+          if (dialog instanceof HTMLDialogElement) dialog.close();
+        });
+      });
+
+      document.querySelectorAll("dialog").forEach((dialog) => {
+        dialog.addEventListener("click", (event) => {
+          if (event.target === dialog) dialog.close();
+        });
       });
     })();
   </script>
