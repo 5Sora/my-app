@@ -235,6 +235,28 @@
         </details>
       </section>
 
+      <section class="panel dashboard-contribution-panel">
+        <div class="panel-heading compact">
+          <div>
+            <p class="eyebrow">グループ基金</p>
+            <h2>基金へ拠出</h2>
+          </div>
+        </div>
+
+        <p class="form-help">あなた個人の財布から、所属グループの基金へ拠出します。</p>
+        <button
+          type="button"
+          class="primary-button dashboard-contribution-button"
+          data-open-contribution-dialog
+          <%= contributionGroups.length === 0 ? "disabled" : "" %>
+        >
+          基金へ拠出
+        </button>
+        <% if (contributionGroups.length === 0) { %>
+          <p class="form-help">拠出可能な有効グループ基金がありません。</p>
+        <% } %>
+      </section>
+
       <section class="panel">
         <h2>取引を追加</h2>
 
@@ -314,6 +336,7 @@
               <tr>
                 <th>取引日</th>
                 <th>種類</th>
+                <th>対象</th>
                 <th>金額</th>
                 <th>カテゴリ</th>
                 <th>内容</th>
@@ -322,19 +345,33 @@
             </thead>
             <tbody>
               <% transactions.forEach(transaction => { %>
+                <%
+                  const isIncome = transaction.kind === "PERSONAL_INCOME";
+                  const kindLabel = transaction.kind === "FUND_CONTRIBUTION"
+                    ? "基金拠出"
+                    : isIncome
+                      ? "収入"
+                      : "支出";
+                  const classificationLabel = transaction.classificationSource === "MANUAL"
+                    ? "手動"
+                    : transaction.classificationSource === "AI"
+                      ? "AI"
+                      : "キーワード";
+                %>
                 <tr>
                   <td><%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %></td>
                   <td>
-                    <span class="kind-badge <%= transaction.kind === 'PERSONAL_INCOME' ? 'income' : 'expense' %>">
-                      <%= transaction.kind === "PERSONAL_INCOME" ? "収入" : "支出" %>
+                    <span class="kind-badge <%= isIncome ? 'income' : 'expense' %>">
+                      <%= kindLabel %>
                     </span>
                   </td>
-                  <td class="amount-cell <%= transaction.kind === 'PERSONAL_INCOME' ? 'income-text' : 'expense-text' %>">
-                    <%= transaction.kind === "PERSONAL_INCOME" ? "+" : "−" %><%= transaction.amount.toLocaleString("ja-JP") %> 円
+                  <td><%= transaction.group?.name ?? "個人" %></td>
+                  <td class="amount-cell <%= isIncome ? 'income-text' : 'expense-text' %>">
+                    <%= isIncome ? "+" : "−" %><%= transaction.amount.toLocaleString("ja-JP") %> 円
                   </td>
                   <td><%= transaction.category %></td>
                   <td><%= transaction.rawText %></td>
-                  <td><%= transaction.classificationSource === "MANUAL" ? "手動" : "キーワード" %></td>
+                  <td><%= classificationLabel %></td>
                 </tr>
               <% }) %>
             </tbody>
@@ -343,5 +380,97 @@
       <% } %>
     </section>
   </main>
+
+  <dialog class="dashboard-dialog" id="dashboard-contribution-dialog" aria-labelledby="dashboard-contribution-title">
+    <form action="/app/fund-contributions" method="post" class="transaction-form dashboard-dialog-form" data-submit-lock>
+      <input type="hidden" name="pageId" value="<%= selectedPage.id %>">
+
+      <div class="dashboard-dialog-heading">
+        <div>
+          <p class="eyebrow">グループ基金</p>
+          <h2 id="dashboard-contribution-title">基金へ拠出</h2>
+        </div>
+        <button type="button" class="dashboard-dialog-close" data-close-contribution-dialog aria-label="閉じる" title="閉じる">×</button>
+      </div>
+
+      <label>
+        <span>拠出先グループ</span>
+        <select name="groupId" required>
+          <option value="">選択してください</option>
+          <% contributionGroups.forEach(groupMembership => { %>
+            <option value="<%= groupMembership.group.id %>">
+              <%= groupMembership.group.name %> — <%= groupMembership.group.fund?.name ?? "基金" %>
+            </option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label>
+        <span>実際の取引日</span>
+        <input type="date" name="transactionDate" value="<%= today %>" required>
+      </label>
+
+      <label>
+        <span>金額</span>
+        <input type="number" name="amount" min="1" step="1" inputmode="numeric" required>
+      </label>
+
+      <label>
+        <span>内容</span>
+        <textarea name="rawText" maxlength="500" rows="4" placeholder="例：7月分の基金拠出" required></textarea>
+      </label>
+
+      <p class="form-help">登録した1件は、個人家計簿では支出、対象基金では収入として表示されます。</p>
+      <div class="dashboard-dialog-actions">
+        <button type="button" class="secondary-button" data-close-contribution-dialog>キャンセル</button>
+        <button type="submit" class="primary-button">基金へ拠出</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    (() => {
+      const dialog = document.getElementById("dashboard-contribution-dialog");
+      const openButton = document.querySelector("[data-open-contribution-dialog]");
+
+      openButton?.addEventListener("click", () => {
+        if (dialog instanceof HTMLDialogElement) dialog.showModal();
+      });
+
+      document.querySelectorAll("[data-close-contribution-dialog]").forEach((button) => {
+        button.addEventListener("click", () => {
+          if (dialog instanceof HTMLDialogElement) dialog.close();
+        });
+      });
+
+      dialog?.addEventListener("click", (event) => {
+        if (event.target === dialog && dialog instanceof HTMLDialogElement) dialog.close();
+      });
+
+      document.querySelectorAll("form[data-submit-lock]").forEach((form) => {
+        form.addEventListener("submit", (event) => {
+          if (event.defaultPrevented) return;
+
+          if (form.dataset.submitting === "true") {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+          }
+
+          form.dataset.submitting = "true";
+          form.setAttribute("aria-busy", "true");
+          form.querySelectorAll("button[type='submit'], input[type='submit']").forEach((control) => {
+            if (control instanceof HTMLButtonElement) {
+              control.textContent = "処理中…";
+              control.disabled = true;
+            } else if (control instanceof HTMLInputElement) {
+              control.value = "処理中…";
+              control.disabled = true;
+            }
+          });
+        });
+      });
+    })();
+  </script>
 </body>
 </html>

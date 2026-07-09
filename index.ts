@@ -331,6 +331,79 @@ function validateFundExpenseInput(input: {
   return null;
 }
 
+const fundContributionCategory = "基金拠出";
+
+function validateFundContributionInput(input: {
+  transactionDate: Date | null;
+  amount: number | null;
+  rawText: string;
+}): string | null {
+  if (!input.transactionDate) {
+    return "取引日を正しい日付で入力してください。";
+  }
+
+  if (!input.amount) {
+    return "金額は1円以上の整数で入力してください。";
+  }
+
+  if (!input.rawText) {
+    return "内容を入力してください。";
+  }
+
+  if (input.rawText.length > 500) {
+    return "内容は500文字以内で入力してください。";
+  }
+
+  return null;
+}
+
+type FundContributionCreationResult =
+  | { status: "created"; transactionId: number }
+  | { status: "membership-not-found" }
+  | { status: "fund-unavailable" };
+
+async function createFundContributionTransaction(input: {
+  userId: number;
+  groupId: number;
+  transactionDate: Date;
+  amount: number;
+  rawText: string;
+}): Promise<FundContributionCreationResult> {
+  const membership = await findActiveGroupMembership(input.userId, input.groupId);
+
+  if (!membership) {
+    return { status: "membership-not-found" };
+  }
+
+  const fund = await prisma.groupFund.findUnique({
+    where: { groupId: input.groupId },
+    select: { id: true, isActive: true },
+  });
+
+  if (!fund?.isActive) {
+    return { status: "fund-unavailable" };
+  }
+
+  const transaction = await prisma.transaction.create({
+    data: {
+      userId: input.userId,
+      groupId: input.groupId,
+      groupFundId: fund.id,
+      kind: "FUND_CONTRIBUTION",
+      amount: input.amount,
+      category: fundContributionCategory,
+      rawText: input.rawText,
+      transactionDate: input.transactionDate,
+      paymentBatchId: null,
+      calculationMethod: null,
+      classificationSource: "MANUAL",
+      aiResult: null,
+    },
+    select: { id: true },
+  });
+
+  return { status: "created", transactionId: transaction.id };
+}
 
 type GroupMembershipClient = Pick<typeof prisma, "groupMember">;
 type ActivatableGroupRole = "MEMBER" | "ADMIN";
@@ -638,7 +711,13 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
           isActive: true,
         },
         include: {
-          group: true,
+          group: {
+            include: {
+              fund: {
+                select: { id: true, name: true, isActive: true },
+              },
+            },
+          },
         },
         orderBy: [{ joinedAt: "asc" }, { groupId: "asc" }],
       }),
@@ -667,6 +746,9 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
     const activeGroupMemberships = groupMemberships.filter(
       (membership) => membership.group.isActive,
     );
+    const contributionGroups = activeGroupMemberships.filter(
+      (membership) => membership.group.fund?.isActive,
+    );
 
     const transactionDateFilter = buildTransactionDateFilter(
       selectedPage.startDate,
@@ -677,18 +759,23 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
       prisma.transaction.findMany({
         where: {
           userId,
-          kind: { in: ["PERSONAL_INCOME", "PERSONAL_EXPENSE"] },
+          kind: { in: ["PERSONAL_INCOME", "PERSONAL_EXPENSE", "FUND_CONTRIBUTION"] },
           ...(Object.keys(transactionDateFilter).length > 0
             ? { transactionDate: transactionDateFilter }
             : {}),
         },
-        orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
+        include: {
+          group: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }, { id: "desc" }],
       }),
       selectedPage.startDate
         ? prisma.transaction.findMany({
             where: {
               userId,
-              kind: { in: ["PERSONAL_INCOME", "PERSONAL_EXPENSE"] },
+              kind: { in: ["PERSONAL_INCOME", "PERSONAL_EXPENSE", "FUND_CONTRIBUTION"] },
               transactionDate: { lt: selectedPage.startDate },
             },
             select: { kind: true, amount: true },
@@ -701,7 +788,11 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
       .reduce((sum, transaction) => sum + transaction.amount, 0);
 
     const expenseTotal = transactions
-      .filter((transaction) => transaction.kind === "PERSONAL_EXPENSE")
+      .filter(
+        (transaction) =>
+          transaction.kind === "PERSONAL_EXPENSE" ||
+          transaction.kind === "FUND_CONTRIBUTION",
+      )
       .reduce((sum, transaction) => sum + transaction.amount, 0);
 
     const carryover = carryoverTransactions.reduce((sum, transaction) => {
@@ -717,6 +808,7 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
     res.render("dashboard", {
       user,
       groupMemberships: activeGroupMemberships,
+      contributionGroups,
       pages,
       selectedPage,
       transactions,
@@ -1323,6 +1415,7 @@ app.get("/groups/:groupId/fund", requireAuthentication, async (req, res, next) =
       canCreateFundTransaction: fund.isActive,
       fundIncomeCategories,
       fundExpenseCategories,
+      today: formatDateInputValue(new Date()),
       contextState,
       isContextOpen: contextState === "open",
       selectedPageForm: {
@@ -1693,6 +1786,96 @@ app.post(
         buildGroupFundUrl(groupId, {
           pageId: fallbackPage?.id,
           success: "基金の表示ページを削除しました。",
+          contextState,
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+
+app.post(
+  "/groups/:groupId/fund/transactions/contribution",
+  requireAuthentication,
+  async (req, res, next) => {
+    const userId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const currentPageId = parsePositiveInteger(req.body.currentPageId);
+    const contextState = parseFundContextState(req.body.contextState);
+
+    if (!userId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    const transactionDate = parseDateOnly(req.body.transactionDate);
+    const amount = parsePositiveInteger(req.body.amount);
+    const rawText = String(req.body.rawText ?? "").trim();
+    const validationError = validateFundContributionInput({
+      transactionDate,
+      amount,
+      rawText,
+    });
+
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { isActive: true },
+      });
+
+      if (!user?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      if (validationError) {
+        res.redirect(
+          buildGroupFundUrl(groupId, {
+            pageId: currentPageId,
+            error: validationError,
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      const result = await createFundContributionTransaction({
+        userId,
+        groupId,
+        transactionDate: transactionDate!,
+        amount: amount!,
+        rawText,
+      });
+
+      if (result.status === "membership-not-found") {
+        res.status(403).send("このグループへ基金拠出する権限がありません。");
+        return;
+      }
+
+      if (result.status === "fund-unavailable") {
+        res.redirect(
+          buildGroupFundUrl(groupId, {
+            pageId: currentPageId,
+            error: "有効なグループ基金が見つからないため、基金拠出を登録できません。",
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      res.redirect(
+        buildGroupFundUrl(groupId, {
+          pageId: currentPageId,
+          success: "基金へ拠出しました。",
           contextState,
         }),
       );
@@ -2550,6 +2733,92 @@ app.post(
     }
   },
 );
+
+app.post("/app/fund-contributions", requireAuthentication, async (req, res, next) => {
+  const userId = req.session.userId;
+  const pageId = parsePositiveInteger(req.body.pageId);
+  const groupId = parsePositiveInteger(req.body.groupId);
+  const transactionDate = parseDateOnly(req.body.transactionDate);
+  const amount = parsePositiveInteger(req.body.amount);
+  const rawText = String(req.body.rawText ?? "").trim();
+
+  if (!userId) {
+    res.redirect("/?error=ログインしてください。");
+    return;
+  }
+
+  if (!groupId) {
+    res.redirect(
+      buildAppUrl({
+        pageId,
+        error: "拠出先のグループを選択してください。",
+      }),
+    );
+    return;
+  }
+
+  const validationError = validateFundContributionInput({
+    transactionDate,
+    amount,
+    rawText,
+  });
+
+  if (validationError) {
+    res.redirect(buildAppUrl({ pageId, error: validationError }));
+    return;
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true },
+    });
+
+    if (!user?.isActive) {
+      await destroySession(req);
+      res.clearCookie(sessionCookieName);
+      res.redirect("/?error=このアカウントは利用できません。");
+      return;
+    }
+
+    const result = await createFundContributionTransaction({
+      userId,
+      groupId,
+      transactionDate: transactionDate!,
+      amount: amount!,
+      rawText,
+    });
+
+    if (result.status === "membership-not-found") {
+      res.redirect(
+        buildAppUrl({
+          pageId,
+          error: "現在所属している有効なグループを選択してください。",
+        }),
+      );
+      return;
+    }
+
+    if (result.status === "fund-unavailable") {
+      res.redirect(
+        buildAppUrl({
+          pageId,
+          error: "有効なグループ基金が見つからないため、基金拠出を登録できません。",
+        }),
+      );
+      return;
+    }
+
+    res.redirect(
+      buildAppUrl({
+        pageId,
+        success: "基金へ拠出しました。",
+      }),
+    );
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
   const userId = req.session.userId;

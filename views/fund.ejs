@@ -437,9 +437,9 @@
           <strong>基金収入</strong>
           <span>外部寄付、助成金、イベント収益などを登録します。</span>
         </button>
-        <button type="button" class="fund-transaction-type-option" disabled>
+        <button type="button" class="fund-transaction-type-option" data-switch-dialog="fund-contribution-dialog">
           <strong>自分が基金へ拠出</strong>
-          <span>第6-3-3で実装します。</span>
+          <span>あなた個人の財布から、このグループ基金へ拠出します。</span>
         </button>
         <button type="button" class="fund-transaction-type-option" data-switch-dialog="fund-expense-dialog">
           <strong>基金支出</strong>
@@ -451,6 +451,44 @@
         </button>
       </div>
     </div>
+  </dialog>
+
+  <dialog class="fund-page-dialog" id="fund-contribution-dialog" aria-labelledby="fund-contribution-title">
+    <form action="/groups/<%= group.id %>/fund/transactions/contribution" method="post" class="page-form fund-dialog-form">
+      <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
+      <input type="hidden" name="contextState" value="<%= contextState %>" data-fund-context-state>
+
+      <div class="fund-dialog-heading">
+        <div>
+          <p class="eyebrow">基金Transaction</p>
+          <h2 id="fund-contribution-title">基金へ拠出</h2>
+        </div>
+        <button type="button" class="fund-dialog-close" data-close-dialog aria-label="閉じる" title="閉じる">×</button>
+      </div>
+
+      <p class="form-help">拠出者はログイン中のあなた本人です。ほかのメンバー名義では登録できません。</p>
+
+      <label>
+        <span>実際の取引日</span>
+        <input type="date" name="transactionDate" value="<%= today %>" required>
+      </label>
+
+      <label>
+        <span>金額</span>
+        <input type="number" name="amount" min="1" step="1" inputmode="numeric" required>
+      </label>
+
+      <label>
+        <span>内容</span>
+        <textarea name="rawText" rows="4" maxlength="500" placeholder="例：7月分の基金拠出" required></textarea>
+      </label>
+
+      <p class="form-help">この1件を、基金側では収入、あなたの個人家計簿では支出として表示します。</p>
+      <div class="fund-dialog-actions">
+        <button type="button" class="secondary-button" data-switch-dialog="fund-transaction-type-dialog">取引種別へ戻る</button>
+        <button type="submit" class="primary-button">基金へ拠出</button>
+      </div>
+    </form>
   </dialog>
 
   <dialog class="fund-page-dialog" id="fund-income-dialog" aria-labelledby="fund-income-title">
@@ -503,7 +541,7 @@
         </select>
       </label>
 
-      <p class="form-help">個人からの基金拠出はここでは登録せず、後続の「基金へ拠出」から登録します。</p>
+      <p class="form-help">個人からの基金拠出は「自分が基金へ拠出」から登録してください。</p>
       <div class="fund-dialog-actions">
         <button type="button" class="secondary-button" data-switch-dialog="fund-transaction-type-dialog">取引種別へ戻る</button>
         <button type="submit" class="primary-button">基金収入を登録</button>
