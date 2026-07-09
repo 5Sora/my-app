@@ -150,6 +150,23 @@
   overflow-wrap: anywhere;
 }
 
+.group-basic-admin-section {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.group-basic-admin-section h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.group-name-form {
+  max-width: 620px;
+}
+
 .group-feature-description,
 .group-feature-page {
   margin: 0;

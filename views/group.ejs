@@ -86,6 +86,32 @@
           <dd><%= activeAdminCount %> 人</dd>
         </div>
       </dl>
+
+      <% if (isAdmin) { %>
+        <section class="group-basic-admin-section" aria-labelledby="group-name-heading">
+          <h3 id="group-name-heading">グループ名を変更</h3>
+          <form
+            action="/groups/<%= group.id %>/name"
+            method="post"
+            class="page-form group-name-form"
+          >
+            <label>
+              <span>グループ名</span>
+              <input
+                type="text"
+                name="name"
+                value="<%= group.name %>"
+                maxlength="100"
+                required
+              >
+            </label>
+            <p class="form-help">
+              前後の空白は保存時に取り除きます。同名のグループも使用できます。
+            </p>
+            <button type="submit" class="primary-button">グループ名を保存</button>
+          </form>
+        </section>
+      <% } %>
     </section>
 
     <div class="group-feature-grid">

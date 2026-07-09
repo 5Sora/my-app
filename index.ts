@@ -244,6 +244,13 @@ class GroupMemberOperationError extends Error {
   }
 }
 
+class GroupAuthorizationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GroupAuthorizationError";
+  }
+}
+
 async function activateGroupMembership(
   client: GroupMembershipClient,
   input: {
@@ -1009,6 +1016,156 @@ app.get("/groups/:groupId", requireAuthentication, async (req, res, next) => {
     next(error);
   }
 });
+
+
+app.post(
+  "/groups/:groupId/name",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const name = String(req.body.name ?? "").trim();
+    const validationError = validateGroupName(name);
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    try {
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true },
+      });
+
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const adminMembership = await findActiveGroupAdminMembership(
+        operatorUserId,
+        groupId,
+      );
+
+      if (!adminMembership) {
+        res.status(403).send("グループ名を変更する権限がありません。");
+        return;
+      }
+
+      if (validationError) {
+        res.redirect(buildGroupUrl(groupId, { error: validationError }));
+        return;
+      }
+
+      const result = await prisma.$transaction(
+        async (tx) => {
+          const membership = await tx.groupMember.findUnique({
+            where: {
+              userId_groupId: {
+                userId: operatorUserId,
+                groupId,
+              },
+            },
+            include: {
+              group: true,
+            },
+          });
+
+          if (
+            !membership?.isActive ||
+            membership.role !== "ADMIN" ||
+            !membership.group.isActive
+          ) {
+            throw new GroupAuthorizationError(
+              "グループ名を変更する権限がありません。",
+            );
+          }
+
+          const currentGroup = await tx.expenseGroup.findUnique({
+            where: { id: groupId },
+          });
+
+          if (!currentGroup?.isActive) {
+            throw new GroupMemberOperationError(
+              "対象の有効なグループが見つかりません。",
+            );
+          }
+
+          const currentFund = await tx.groupFund.findUnique({
+            where: { groupId },
+          });
+
+          if (!currentFund) {
+            throw new GroupMemberOperationError(
+              "グループ基金が見つからないため、グループ名を変更できません。",
+            );
+          }
+
+          const shouldRenameFund =
+            currentFund.name === `${currentGroup.name}基金`;
+
+          await tx.expenseGroup.update({
+            where: { id: groupId },
+            data: { name },
+          });
+
+          if (shouldRenameFund) {
+            await tx.groupFund.update({
+              where: { groupId },
+              data: { name: `${name}基金` },
+            });
+          }
+
+          return { fundNameChanged: shouldRenameFund };
+        },
+        { isolationLevel: "Serializable" },
+      );
+
+      res.redirect(
+        buildGroupUrl(groupId, {
+          success: result.fundNameChanged
+            ? "グループ名と基金名を変更しました。"
+            : "グループ名を変更しました。",
+        }),
+      );
+    } catch (error) {
+      if (error instanceof GroupAuthorizationError) {
+        res.status(403).send(error.message);
+        return;
+      }
+
+      if (error instanceof GroupMemberOperationError) {
+        res.redirect(buildGroupUrl(groupId, { error: error.message }));
+        return;
+      }
+
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "P2034"
+      ) {
+        res.redirect(
+          buildGroupUrl(groupId, {
+            error:
+              "同時にグループ情報が更新されました。画面を確認して再度操作してください。",
+          }),
+        );
+        return;
+      }
+
+      next(error);
+    }
+  },
+);
 
 
 app.post(
