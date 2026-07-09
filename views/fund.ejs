@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= fund.name %> - <%= selectedPage.name %></title>
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/ledger.css">
+  <link rel="stylesheet" href="/css/group.css">
+  <link rel="stylesheet" href="/css/fund.css">
+</head>
+<body class="ledger-body fund-body">
+  <header class="ledger-header">
+    <div>
+      <p class="eyebrow">グループ基金</p>
+      <h1><%= fund.name %></h1>
+      <p class="period-label">
+        <strong><%= selectedPage.name %></strong>：
+        <% if (selectedPage.startDate || selectedPage.endDate) { %>
+          <%= selectedPage.startDate ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
+          〜
+          <%= selectedPage.endDate ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
+        <% } else { %>
+          全期間
+        <% } %>
+      </p>
+    </div>
+
+    <nav class="header-actions group-header-nav" aria-label="グループ画面ナビゲーション">
+      <a href="/app" class="secondary-button button-link group-nav-item">自分の家計簿</a>
+      <a href="/groups/<%= group.id %>" class="secondary-button button-link group-nav-item">概要</a>
+      <a
+        href="<%= buildGroupFundUrl(group.id, { pageId: selectedPage.id }) %>"
+        class="secondary-button button-link group-nav-item is-active"
+        aria-current="page"
+      >
+        基金
+      </a>
+      <span
+        class="secondary-button button-link group-nav-item is-disabled"
+        aria-disabled="true"
+        title="関連支払いは未実装です"
+      >
+        関連支払い
+      </span>
+      <form action="/logout" method="post" class="group-nav-logout">
+        <button type="submit" class="secondary-button group-nav-item">ログアウト</button>
+      </form>
+    </nav>
+  </header>
+
+  <% if (error || success) { %>
+    <section class="flash-area" aria-live="polite">
+      <% if (error) { %>
+        <p class="error-message" role="alert"><%= error %></p>
+      <% } %>
+      <% if (success) { %>
+        <p class="success-message" role="status"><%= success %></p>
+      <% } %>
+    </section>
+  <% } %>
+
+  <section class="summary-grid" aria-label="基金収支サマリー">
+    <article class="summary-card">
+      <span>繰越金</span>
+      <strong><%= summary.carryover.toLocaleString("ja-JP") %> 円</strong>
+    </article>
+    <article class="summary-card income-card">
+      <span>基金収入</span>
+      <strong><%= summary.incomeTotal.toLocaleString("ja-JP") %> 円</strong>
+    </article>
+    <article class="summary-card expense-card">
+      <span>基金支出</span>
+      <strong><%= summary.expenseTotal.toLocaleString("ja-JP") %> 円</strong>
+    </article>
+    <article class="summary-card balance-card">
+      <span>基金残高</span>
+      <strong><%= summary.balance.toLocaleString("ja-JP") %> 円</strong>
+    </article>
+  </section>
+
+  <main class="fund-layout is-context-closed" data-fund-layout>
+    <aside
+      class="fund-context-column"
+      id="fund-context-panel"
+      aria-label="基金ページと有効メンバー"
+    >
+      <section class="panel fund-page-panel">
+        <div class="panel-heading compact">
+          <div>
+            <p class="eyebrow">期間</p>
+            <h2>表示ページ</h2>
+          </div>
+          <span><%= pages.length %> 件</span>
+        </div>
+
+        <nav class="page-list" aria-label="グループ基金ページ">
+          <% pages.forEach(page => { %>
+            <a
+              href="<%= buildGroupFundUrl(group.id, { pageId: page.id }) %>"
+              class="<%= page.id === selectedPage.id ? 'is-active' : '' %>"
+              <% if (page.id === selectedPage.id) { %>aria-current="page"<% } %>
+            >
+              <span>
+                <strong><%= page.name %></strong>
+                <small>
+                  <% if (page.startDate || page.endDate) { %>
+                    <%= page.startDate ? new Date(page.startDate).toLocaleDateString("ja-JP") : "指定なし" %>
+                    〜
+                    <%= page.endDate ? new Date(page.endDate).toLocaleDateString("ja-JP") : "指定なし" %>
+                  <% } else { %>
+                    全期間
+                  <% } %>
+                </small>
+              </span>
+              <% if (page.isInitial) { %><small class="initial-badge">初期</small><% } %>
+            </a>
+          <% }) %>
+        </nav>
+
+        <p class="form-help fund-stage-note">
+          ページの追加・編集・削除は第6-2で実装します。
+        </p>
+      </section>
+
+      <section class="panel fund-member-panel">
+        <div class="panel-heading compact">
+          <div>
+            <p class="eyebrow">閲覧専用</p>
+            <h2>有効メンバー</h2>
+          </div>
+          <span><%= activeMembers.length %> 人</span>
+        </div>
+
+        <ul class="fund-member-list">
+          <% activeMembers.forEach(member => { %>
+            <li>
+              <span>
+                <strong><%= member.user.displayName %></strong>
+                <% if (member.userId === currentUserId) { %><small>あなた</small><% } %>
+              </span>
+              <small><%= member.role === "ADMIN" ? "管理者" : "メンバー" %></small>
+            </li>
+          <% }) %>
+        </ul>
+      </section>
+
+      <section class="panel fund-status-panel">
+        <p class="eyebrow">基金状態</p>
+        <dl class="group-definition-list">
+          <div>
+            <dt>基金名</dt>
+            <dd><%= fund.name %></dd>
+          </div>
+          <div>
+            <dt>状態</dt>
+            <dd><%= fund.isActive ? "有効" : "無効" %></dd>
+          </div>
+          <div>
+            <dt>自分の権限</dt>
+            <dd><%= membership.role === "ADMIN" ? "グループ管理者" : "メンバー" %></dd>
+          </div>
+        </dl>
+      </section>
+    </aside>
+
+    <aside class="fund-operation-rail" aria-label="LedgerPage操作">
+      <button
+        type="button"
+        class="fund-context-toggle"
+        data-fund-context-toggle
+        aria-controls="fund-context-panel"
+        aria-expanded="false"
+        aria-label="左領域を開く"
+        title="左領域を開く"
+      >→</button>
+      <button
+        type="button"
+        disabled
+        aria-label="LedgerPage編集は第6-2で実装します"
+        title="LedgerPage編集は第6-2で実装します"
+      >⚙</button>
+      <button
+        type="button"
+        disabled
+        aria-label="LedgerPage追加は第6-2で実装します"
+        title="LedgerPage追加は第6-2で実装します"
+      >＋</button>
+      <button
+        type="button"
+        disabled
+        aria-label="<%= selectedPage.isInitial ? '初期LedgerPageは削除できません' : 'LedgerPage削除は第6-2で実装します' %>"
+        title="<%= selectedPage.isInitial ? '初期LedgerPageは削除できません' : 'LedgerPage削除は第6-2で実装します' %>"
+      >−</button>
+    </aside>
+
+    <aside class="panel fund-collapsed-column" aria-hidden="true">
+      <p class="eyebrow">期間サマリー</p>
+      <h2><%= selectedPage.name %></h2>
+      <p class="fund-collapsed-balance">
+        基金残高
+        <strong><%= summary.balance.toLocaleString("ja-JP") %> 円</strong>
+      </p>
+      <p class="form-help">左の右矢印から、LedgerPage一覧と有効メンバー一覧を開けます。</p>
+    </aside>
+
+    <section class="panel transaction-panel fund-transaction-panel">
+      <div class="panel-heading fund-history-heading">
+        <div>
+          <p class="eyebrow">詳細</p>
+          <h2>基金取引履歴</h2>
+        </div>
+        <div class="fund-history-actions">
+          <span><%= transactions.length %> 件</span>
+          <button
+            type="button"
+            class="fund-history-add"
+            disabled
+            aria-label="基金取引追加は第6-3で実装します"
+            title="基金取引追加は第6-3で実装します"
+          >＋</button>
+        </div>
+      </div>
+
+      <% if (transactions.length === 0) { %>
+        <p class="empty-state">この期間には、まだ基金取引がありません。</p>
+      <% } else { %>
+        <div class="table-wrap">
+          <table class="transaction-table fund-transaction-table">
+            <thead>
+              <tr>
+                <th>取引日</th>
+                <th>取引種別</th>
+                <th>金額</th>
+                <th>内容</th>
+                <th>関係者</th>
+                <th>カテゴリ</th>
+                <th>分類元</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% transactions.forEach(transaction => { %>
+                <% const isIncome = transaction.kind === "FUND_CONTRIBUTION" || transaction.kind === "FUND_INCOME"; %>
+                <% const kindLabels = {
+                  FUND_CONTRIBUTION: "基金拠出",
+                  FUND_INCOME: "基金収入",
+                  FUND_EXPENSE: "基金支出",
+                  FUND_REFUND: "基金返金"
+                }; %>
+                <% const sourceLabels = { MANUAL: "手動", KEYWORD: "キーワード", AI: "AI" }; %>
+                <tr>
+                  <td><%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %></td>
+                  <td>
+                    <span class="kind-badge <%= isIncome ? 'income' : 'expense' %>">
+                      <%= kindLabels[transaction.kind] %>
+                    </span>
+                  </td>
+                  <td class="amount-cell <%= isIncome ? 'income-text' : 'expense-text' %>">
+                    <%= isIncome ? "+" : "−" %><%= transaction.amount.toLocaleString("ja-JP") %> 円
+                  </td>
+                  <td><%= transaction.rawText %></td>
+                  <td>
+                    <% if (transaction.user) { %>
+                      <%= transaction.user.displayName %>
+                    <% } else if (transaction.kind === "FUND_INCOME") { %>
+                      外部収入
+                    <% } else if (transaction.kind === "FUND_REFUND") { %>
+                      外部・関係者なし
+                    <% } else { %>
+                      関係者なし
+                    <% } %>
+                  </td>
+                  <td><%= transaction.category %></td>
+                  <td><%= sourceLabels[transaction.classificationSource] %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const layout = document.querySelector("[data-fund-layout]");
+      const toggle = document.querySelector("[data-fund-context-toggle]");
+      const context = document.getElementById("fund-context-panel");
+
+      if (!layout || !toggle || !context) return;
+
+      const setOpen = (isOpen) => {
+        layout.classList.toggle("is-context-closed", !isOpen);
+        toggle.textContent = isOpen ? "←" : "→";
+        toggle.setAttribute("aria-expanded", String(isOpen));
+        toggle.setAttribute("aria-label", isOpen ? "左領域を閉じる" : "左領域を開く");
+        toggle.setAttribute("title", isOpen ? "左領域を閉じる" : "左領域を開く");
+        context.setAttribute("aria-hidden", String(!isOpen));
+      };
+
+      // PC・モバイルとも、初回表示時は左3/12領域を閉じる。
+      setOpen(false);
+
+      toggle.addEventListener("click", () => {
+        setOpen(toggle.getAttribute("aria-expanded") !== "true");
+      });
+    })();
+  </script>
+</body>
+</html>

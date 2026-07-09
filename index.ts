@@ -175,6 +175,13 @@ function parseOptionalDateOnly(value: unknown): OptionalDateResult {
   return { value: date, isValid: date !== null };
 }
 
+function buildTransactionDateFilter(startDate: Date | null, endDate: Date | null) {
+  return {
+    ...(startDate ? { gte: startDate } : {}),
+    ...(endDate ? { lte: endDate } : {}),
+  };
+}
+
 function buildAppUrl(options: {
   pageId?: number | null;
   error?: string;
@@ -329,6 +336,28 @@ function buildGroupUrl(
 
   const queryString = query.toString();
   return queryString ? `/groups/${groupId}?${queryString}` : `/groups/${groupId}`;
+}
+
+function buildGroupFundUrl(
+  groupId: number,
+  options: {
+    pageId?: number | null;
+    error?: string;
+    success?: string;
+  } = {},
+): string {
+  const query = new URLSearchParams();
+
+  if (options.pageId && Number.isSafeInteger(options.pageId)) {
+    query.set("pageId", String(options.pageId));
+  }
+  if (options.error) query.set("error", options.error);
+  if (options.success) query.set("success", options.success);
+
+  const queryString = query.toString();
+  return queryString
+    ? `/groups/${groupId}/fund?${queryString}`
+    : `/groups/${groupId}/fund`;
 }
 
 async function findActiveGroupMembership(userId: number, groupId: number) {
@@ -533,10 +562,10 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
       (membership) => membership.group.isActive,
     );
 
-    const transactionDateFilter = {
-      ...(selectedPage.startDate ? { gte: selectedPage.startDate } : {}),
-      ...(selectedPage.endDate ? { lte: selectedPage.endDate } : {}),
-    };
+    const transactionDateFilter = buildTransactionDateFilter(
+      selectedPage.startDate,
+      selectedPage.endDate,
+    );
 
     const [transactions, carryoverTransactions] = await Promise.all([
       prisma.transaction.findMany({
@@ -1011,6 +1040,179 @@ app.get("/groups/:groupId", requireAuthentication, async (req, res, next) => {
       activeAdminCount,
       error,
       success,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+app.get("/groups/:groupId/fund", requireAuthentication, async (req, res, next) => {
+  const userId = req.session.userId;
+  const groupId = parsePositiveInteger(req.params.groupId);
+
+  if (!userId) {
+    res.redirect("/?error=ログインしてください。");
+    return;
+  }
+
+  if (!groupId) {
+    res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+    return;
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true },
+    });
+
+    if (!user?.isActive) {
+      await destroySession(req);
+      res.clearCookie(sessionCookieName);
+      res.redirect("/?error=このアカウントは利用できません。");
+      return;
+    }
+
+    const membership = await findActiveGroupMembership(userId, groupId);
+
+    if (!membership) {
+      res.status(403).send("このグループの基金を表示する権限がありません。");
+      return;
+    }
+
+    const [fund, pages, activeMembers] = await Promise.all([
+      prisma.groupFund.findUnique({
+        where: { groupId },
+      }),
+      prisma.ledgerPage.findMany({
+        where: {
+          groupId,
+          pageType: "GROUP_FUND",
+          userId: null,
+        },
+        orderBy: [{ isInitial: "desc" }, { sortOrder: "asc" }, { id: "asc" }],
+      }),
+      prisma.groupMember.findMany({
+        where: {
+          groupId,
+          isActive: true,
+          user: {
+            isActive: true,
+          },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              displayName: true,
+            },
+          },
+        },
+        orderBy: [{ role: "desc" }, { joinedAt: "asc" }, { userId: "asc" }],
+      }),
+    ]);
+
+    if (!fund) {
+      res.status(500).send("このグループの基金が見つかりません。");
+      return;
+    }
+
+    const requestedPageId = parsePositiveInteger(req.query.pageId);
+    const selectedPage =
+      pages.find((page) => page.id === requestedPageId) ?? pages[0] ?? null;
+
+    if (!selectedPage) {
+      res.status(500).send("グループ基金の表示ページが見つかりません。");
+      return;
+    }
+
+    const fundKinds = [
+      "FUND_CONTRIBUTION",
+      "FUND_INCOME",
+      "FUND_EXPENSE",
+      "FUND_REFUND",
+    ] as const;
+    const transactionDateFilter = buildTransactionDateFilter(
+      selectedPage.startDate,
+      selectedPage.endDate,
+    );
+
+    const [transactions, carryoverTransactions] = await Promise.all([
+      prisma.transaction.findMany({
+        where: {
+          groupFundId: fund.id,
+          kind: { in: [...fundKinds] },
+          ...(Object.keys(transactionDateFilter).length > 0
+            ? { transactionDate: transactionDateFilter }
+            : {}),
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              displayName: true,
+            },
+          },
+        },
+        orderBy: [
+          { transactionDate: "desc" },
+          { createdAt: "desc" },
+          { id: "desc" },
+        ],
+      }),
+      selectedPage.startDate
+        ? prisma.transaction.findMany({
+            where: {
+              groupFundId: fund.id,
+              kind: { in: [...fundKinds] },
+              transactionDate: { lt: selectedPage.startDate },
+            },
+            select: { kind: true, amount: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const isFundIncome = (kind: string) =>
+      kind === "FUND_CONTRIBUTION" || kind === "FUND_INCOME";
+
+    const incomeTotal = transactions.reduce(
+      (sum, transaction) =>
+        isFundIncome(transaction.kind) ? sum + transaction.amount : sum,
+      0,
+    );
+    const expenseTotal = transactions.reduce(
+      (sum, transaction) =>
+        isFundIncome(transaction.kind) ? sum : sum + transaction.amount,
+      0,
+    );
+    const carryover = carryoverTransactions.reduce(
+      (sum, transaction) =>
+        isFundIncome(transaction.kind) ? sum + transaction.amount : sum - transaction.amount,
+      0,
+    );
+    const balance = carryover + incomeTotal - expenseTotal;
+    const error = typeof req.query.error === "string" ? req.query.error : null;
+    const success = typeof req.query.success === "string" ? req.query.success : null;
+
+    res.render("fund", {
+      currentUserId: userId,
+      group: membership.group,
+      membership,
+      fund,
+      pages,
+      selectedPage,
+      activeMembers,
+      transactions,
+      summary: {
+        carryover,
+        incomeTotal,
+        expenseTotal,
+        balance,
+      },
+      error,
+      success,
+      buildGroupFundUrl,
     });
   } catch (error) {
     next(error);

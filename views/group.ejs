@@ -27,13 +27,12 @@
       >
         概要
       </a>
-      <span
-        class="secondary-button button-link group-nav-item is-disabled"
-        aria-disabled="true"
-        title="グループ基金は未実装です"
+      <a
+        href="/groups/<%= group.id %>/fund"
+        class="secondary-button button-link group-nav-item"
       >
         基金
-      </span>
+      </a>
       <span
         class="secondary-button button-link group-nav-item is-disabled"
         aria-disabled="true"
@@ -121,7 +120,7 @@
             <p class="eyebrow">基金</p>
             <h2>グループ基金</h2>
           </div>
-          <span>未実装</span>
+          <span>表示可能</span>
         </div>
 
         <% if (fund) { %>
@@ -144,9 +143,18 @@
           初期ページ：
           <strong><%= fundPage ? fundPage.name : "未作成" %></strong>
         </p>
-        <span class="secondary-button button-link group-feature-disabled" aria-disabled="true">
-          基金画面は後続段階で実装
-        </span>
+        <% if (fund && fundPage) { %>
+          <a
+            href="/groups/<%= group.id %>/fund?pageId=<%= fundPage.id %>"
+            class="secondary-button button-link"
+          >
+            基金画面を開く
+          </a>
+        <% } else { %>
+          <span class="secondary-button button-link group-feature-disabled" aria-disabled="true">
+            基金画面を開けません
+          </span>
+        <% } %>
       </section>
 
       <section class="panel group-feature-card group-payment-card">
