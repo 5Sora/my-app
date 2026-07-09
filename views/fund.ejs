@@ -221,9 +221,10 @@
           <button
             type="button"
             class="fund-history-add"
-            disabled
-            aria-label="基金取引追加は第6-3で実装します"
-            title="基金取引追加は第6-3で実装します"
+            data-open-dialog="fund-transaction-type-dialog"
+            <%= canCreateFundTransaction ? "" : "disabled" %>
+            aria-label="<%= canCreateFundTransaction ? '基金取引を追加' : '無効な基金には取引を追加できません' %>"
+            title="<%= canCreateFundTransaction ? '基金取引を追加' : '無効な基金には取引を追加できません' %>"
           >＋</button>
         </div>
       </div>
@@ -371,6 +372,95 @@
     </form>
   <% } %>
 
+  <dialog class="fund-page-dialog" id="fund-transaction-type-dialog" aria-labelledby="fund-transaction-type-title">
+    <div class="fund-dialog-form">
+      <div class="fund-dialog-heading">
+        <div>
+          <p class="eyebrow">基金Transaction</p>
+          <h2 id="fund-transaction-type-title">追加する取引を選択</h2>
+        </div>
+        <button type="button" class="fund-dialog-close" data-close-dialog aria-label="閉じる" title="閉じる">×</button>
+      </div>
+
+      <div class="fund-transaction-type-list">
+        <button type="button" class="fund-transaction-type-option" data-switch-dialog="fund-income-dialog">
+          <strong>基金収入</strong>
+          <span>外部寄付、助成金、イベント収益などを登録します。</span>
+        </button>
+        <button type="button" class="fund-transaction-type-option" disabled>
+          <strong>自分が基金へ拠出</strong>
+          <span>第6-3-3で実装します。</span>
+        </button>
+        <button type="button" class="fund-transaction-type-option" disabled>
+          <strong>基金支出</strong>
+          <span>第6-3-2で実装します。</span>
+        </button>
+        <button type="button" class="fund-transaction-type-option" disabled>
+          <strong>基金返金</strong>
+          <span>第6-3-4で実装します。</span>
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="fund-page-dialog" id="fund-income-dialog" aria-labelledby="fund-income-title">
+    <form action="/groups/<%= group.id %>/fund/transactions/income" method="post" class="page-form fund-dialog-form">
+      <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
+      <input type="hidden" name="contextState" value="<%= contextState %>" data-fund-context-state>
+
+      <div class="fund-dialog-heading">
+        <div>
+          <p class="eyebrow">基金Transaction</p>
+          <h2 id="fund-income-title">基金収入を登録</h2>
+        </div>
+        <button type="button" class="fund-dialog-close" data-close-dialog aria-label="閉じる" title="閉じる">×</button>
+      </div>
+
+      <label>
+        <span>実際の取引日</span>
+        <input type="date" name="transactionDate" required>
+      </label>
+
+      <label>
+        <span>金額</span>
+        <input type="number" name="amount" min="1" step="1" inputmode="numeric" required>
+      </label>
+
+      <label>
+        <span>内容</span>
+        <textarea name="rawText" rows="4" maxlength="500" required></textarea>
+      </label>
+
+      <label>
+        <span>カテゴリ</span>
+        <select name="category" required>
+          <option value="">選択してください</option>
+          <% fundIncomeCategories.forEach(category => { %>
+            <option value="<%= category %>"><%= category %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label>
+        <span>関係者</span>
+        <select name="relatedUserId">
+          <option value="">外部・関係者なし</option>
+          <% activeMembers.forEach(member => { %>
+            <option value="<%= member.userId %>">
+              <%= member.user.displayName %><%= member.userId === currentUserId ? "（あなた）" : "" %>
+            </option>
+          <% }) %>
+        </select>
+      </label>
+
+      <p class="form-help">個人からの基金拠出はここでは登録せず、後続の「基金へ拠出」から登録します。</p>
+      <div class="fund-dialog-actions">
+        <button type="button" class="secondary-button" data-switch-dialog="fund-transaction-type-dialog">取引種別へ戻る</button>
+        <button type="submit" class="primary-button">基金収入を登録</button>
+      </div>
+    </form>
+  </dialog>
+
   <script>
     (() => {
       const layout = document.querySelector("[data-fund-layout]");
@@ -417,6 +507,17 @@
           const dialogId = button.getAttribute("data-open-dialog");
           const dialog = dialogId ? document.getElementById(dialogId) : null;
           if (dialog instanceof HTMLDialogElement) dialog.showModal();
+        });
+      });
+
+      document.querySelectorAll("[data-switch-dialog]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const currentDialog = button.closest("dialog");
+          const nextDialogId = button.getAttribute("data-switch-dialog");
+          const nextDialog = nextDialogId ? document.getElementById(nextDialogId) : null;
+
+          if (currentDialog instanceof HTMLDialogElement) currentDialog.close();
+          if (nextDialog instanceof HTMLDialogElement) nextDialog.showModal();
         });
       });
 

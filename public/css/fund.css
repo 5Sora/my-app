@@ -316,3 +316,54 @@
     width: 100%;
   }
 }
+
+.fund-transaction-type-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.fund-transaction-type-option {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  background: var(--surface);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.fund-transaction-type-option strong {
+  font-size: 1rem;
+}
+
+.fund-transaction-type-option span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.fund-transaction-type-option:not(:disabled):hover,
+.fund-transaction-type-option:not(:disabled):focus-visible {
+  border-color: var(--text);
+  background: #f5f1ec;
+}
+
+.fund-transaction-type-option:disabled {
+  color: #aaa39c;
+  background: #ebe7e2;
+  cursor: not-allowed;
+}
+
+.fund-transaction-type-option:disabled span {
+  color: #9b948d;
+}
+
+.fund-dialog-form textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 96px;
+}
