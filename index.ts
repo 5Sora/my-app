@@ -241,10 +241,24 @@ const fundIncomeCategories = [
   "その他基金収入",
 ] as const;
 
+const fundExpenseCategories = [
+  "備品費",
+  "会場費",
+  "交通費",
+  "飲食費",
+  "活動費",
+  "その他基金支出",
+] as const;
+
 type FundIncomeCategory = (typeof fundIncomeCategories)[number];
+type FundExpenseCategory = (typeof fundExpenseCategories)[number];
 
 function isFundIncomeCategory(value: string): value is FundIncomeCategory {
   return fundIncomeCategories.includes(value as FundIncomeCategory);
+}
+
+function isFundExpenseCategory(value: string): value is FundExpenseCategory {
+  return fundExpenseCategories.includes(value as FundExpenseCategory);
 }
 
 function validateFundIncomeInput(input: {
@@ -273,6 +287,41 @@ function validateFundIncomeInput(input: {
 
   if (!isFundIncomeCategory(input.category)) {
     return "基金収入のカテゴリを選択してください。";
+  }
+
+  if (input.relatedUserIdText && !input.relatedUserId) {
+    return "関係者が正しくありません。";
+  }
+
+  return null;
+}
+
+function validateFundExpenseInput(input: {
+  transactionDate: Date | null;
+  amount: number | null;
+  rawText: string;
+  category: string;
+  relatedUserIdText: string;
+  relatedUserId: number | null;
+}): string | null {
+  if (!input.transactionDate) {
+    return "取引日を正しい日付で入力してください。";
+  }
+
+  if (!input.amount) {
+    return "金額は1円以上の整数で入力してください。";
+  }
+
+  if (!input.rawText) {
+    return "内容を入力してください。";
+  }
+
+  if (input.rawText.length > 500) {
+    return "内容は500文字以内で入力してください。";
+  }
+
+  if (!isFundExpenseCategory(input.category)) {
+    return "基金支出のカテゴリを選択してください。";
   }
 
   if (input.relatedUserIdText && !input.relatedUserId) {
@@ -1273,6 +1322,7 @@ app.get("/groups/:groupId/fund", requireAuthentication, async (req, res, next) =
       isAdmin: membership.role === "ADMIN",
       canCreateFundTransaction: fund.isActive,
       fundIncomeCategories,
+      fundExpenseCategories,
       contextState,
       isContextOpen: contextState === "open",
       selectedPageForm: {
@@ -1780,6 +1830,143 @@ app.post(
         buildGroupFundUrl(groupId, {
           pageId: currentPageId,
           success: "基金収入を登録しました。",
+          contextState,
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+
+app.post(
+  "/groups/:groupId/fund/transactions/expense",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const currentPageId = parsePositiveInteger(req.body.currentPageId);
+    const contextState = parseFundContextState(req.body.contextState);
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    const transactionDate = parseDateOnly(req.body.transactionDate);
+    const amount = parsePositiveInteger(req.body.amount);
+    const rawText = String(req.body.rawText ?? "").trim();
+    const category = String(req.body.category ?? "").trim();
+    const relatedUserIdText = String(req.body.relatedUserId ?? "").trim();
+    const relatedUserId = relatedUserIdText
+      ? parsePositiveInteger(relatedUserIdText)
+      : null;
+    const validationError = validateFundExpenseInput({
+      transactionDate,
+      amount,
+      rawText,
+      category,
+      relatedUserIdText,
+      relatedUserId,
+    });
+
+    try {
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true },
+      });
+
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const membership = await findActiveGroupMembership(operatorUserId, groupId);
+
+      if (!membership) {
+        res.status(403).send("基金支出を登録する権限がありません。");
+        return;
+      }
+
+      const fund = await prisma.groupFund.findUnique({
+        where: { groupId },
+        select: { id: true, isActive: true },
+      });
+
+      if (!fund?.isActive) {
+        res.redirect(
+          buildGroupFundUrl(groupId, {
+            pageId: currentPageId,
+            error: "有効なグループ基金が見つからないため、基金支出を登録できません。",
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      if (validationError) {
+        res.redirect(
+          buildGroupFundUrl(groupId, {
+            pageId: currentPageId,
+            error: validationError,
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      if (relatedUserId) {
+        const relatedMembership = await prisma.groupMember.findFirst({
+          where: {
+            groupId,
+            userId: relatedUserId,
+            isActive: true,
+            user: { isActive: true },
+          },
+          select: { userId: true },
+        });
+
+        if (!relatedMembership) {
+          res.redirect(
+            buildGroupFundUrl(groupId, {
+              pageId: currentPageId,
+              error: "関係者には対象グループの有効メンバーを選択してください。",
+              contextState,
+            }),
+          );
+          return;
+        }
+      }
+
+      await prisma.transaction.create({
+        data: {
+          userId: relatedUserId,
+          groupId,
+          groupFundId: fund.id,
+          kind: "FUND_EXPENSE",
+          amount: amount!,
+          category,
+          rawText,
+          transactionDate: transactionDate!,
+          paymentBatchId: null,
+          calculationMethod: null,
+          classificationSource: "MANUAL",
+          aiResult: null,
+        },
+      });
+
+      res.redirect(
+        buildGroupFundUrl(groupId, {
+          pageId: currentPageId,
+          success: "基金支出を登録しました。",
           contextState,
         }),
       );

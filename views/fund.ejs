@@ -211,6 +211,22 @@
     </aside>
 
     <section class="panel transaction-panel fund-transaction-panel">
+      <% const kindLabels = {
+        FUND_CONTRIBUTION: "基金拠出",
+        FUND_INCOME: "基金収入",
+        FUND_EXPENSE: "基金支出",
+        FUND_REFUND: "基金返金"
+      }; %>
+      <% const sourceLabels = { MANUAL: "手動", KEYWORD: "キーワード", AI: "AI" }; %>
+      <% const carryoverIsIncomeSide = summary.carryover >= 0; %>
+      <% const balanceIsIncomeSide = summary.balance >= 0; %>
+      <% const carryoverDateLabel = selectedPage.startDate
+        ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP")
+        : "開始時"; %>
+      <% const balanceDateLabel = selectedPage.endDate
+        ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP")
+        : "現在"; %>
+
       <div class="panel-heading fund-history-heading">
         <div>
           <p class="eyebrow">詳細</p>
@@ -229,62 +245,96 @@
         </div>
       </div>
 
-      <% if (transactions.length === 0) { %>
-        <p class="empty-state">この期間には、まだ基金取引がありません。</p>
-      <% } else { %>
-        <div class="table-wrap">
-          <table class="transaction-table fund-transaction-table">
-            <thead>
-              <tr>
-                <th>取引日</th>
-                <th>取引種別</th>
-                <th>金額</th>
-                <th>内容</th>
-                <th>関係者</th>
-                <th>カテゴリ</th>
-                <th>分類元</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% transactions.forEach(transaction => { %>
-                <% const isIncome = transaction.kind === "FUND_CONTRIBUTION" || transaction.kind === "FUND_INCOME"; %>
-                <% const kindLabels = {
-                  FUND_CONTRIBUTION: "基金拠出",
-                  FUND_INCOME: "基金収入",
-                  FUND_EXPENSE: "基金支出",
-                  FUND_REFUND: "基金返金"
-                }; %>
-                <% const sourceLabels = { MANUAL: "手動", KEYWORD: "キーワード", AI: "AI" }; %>
-                <tr>
-                  <td><%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %></td>
-                  <td>
-                    <span class="kind-badge <%= isIncome ? 'income' : 'expense' %>">
-                      <%= kindLabels[transaction.kind] %>
-                    </span>
-                  </td>
-                  <td class="amount-cell <%= isIncome ? 'income-text' : 'expense-text' %>">
-                    <%= isIncome ? "+" : "−" %><%= transaction.amount.toLocaleString("ja-JP") %> 円
-                  </td>
-                  <td><%= transaction.rawText %></td>
-                  <td>
-                    <% if (transaction.user) { %>
-                      <%= transaction.user.displayName %>
-                    <% } else if (transaction.kind === "FUND_INCOME") { %>
-                      外部収入
-                    <% } else if (transaction.kind === "FUND_REFUND") { %>
-                      外部・関係者なし
-                    <% } else { %>
-                      関係者なし
-                    <% } %>
-                  </td>
-                  <td><%= transaction.category %></td>
-                  <td><%= sourceLabels[transaction.classificationSource] %></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
+      <div class="fund-ledger" aria-label="基金収入と基金支出の取引台帳">
+        <div class="fund-ledger-column-heading" role="row">
+          <span role="columnheader">日付</span>
+          <span role="columnheader">内容</span>
+          <span role="columnheader">金額</span>
+          <span role="columnheader">内容</span>
+          <span role="columnheader">金額</span>
         </div>
-      <% } %>
+
+        <section class="fund-ledger-section fund-ledger-carryover" aria-label="繰越金">
+          <div class="fund-ledger-row fund-ledger-summary-row">
+            <time title="<%= carryoverDateLabel %>"><%= carryoverDateLabel %></time>
+            <% if (carryoverIsIncomeSide) { %>
+              <div class="fund-ledger-content-cell"><strong>繰越金</strong></div>
+              <strong class="fund-ledger-amount income-text">+<%= summary.carryover.toLocaleString("ja-JP") %> 円</strong>
+              <div class="fund-ledger-empty-cell" aria-hidden="true"></div>
+              <div class="fund-ledger-empty-cell" aria-hidden="true"></div>
+            <% } else { %>
+              <div class="fund-ledger-empty-cell" aria-hidden="true"></div>
+              <div class="fund-ledger-empty-cell" aria-hidden="true"></div>
+              <div class="fund-ledger-content-cell"><strong>繰越金</strong></div>
+              <strong class="fund-ledger-amount expense-text">−<%= Math.abs(summary.carryover).toLocaleString("ja-JP") %> 円</strong>
+            <% } %>
+          </div>
+        </section>
+
+        <section class="fund-ledger-section fund-ledger-transactions" aria-label="取引詳細">
+          <div class="fund-ledger-scroll" tabindex="0" aria-label="基金取引詳細。上下にスクロールできます">
+            <% if (transactions.length === 0) { %>
+              <p class="empty-state fund-ledger-empty-state">この期間には、まだ基金取引がありません。</p>
+            <% } else { %>
+              <% transactions.forEach(transaction => { %>
+                <% const isIncomeTransaction = transaction.kind === "FUND_CONTRIBUTION" || transaction.kind === "FUND_INCOME"; %>
+                <% const relationLabel = transaction.user
+                  ? transaction.user.displayName
+                  : transaction.kind === "FUND_INCOME"
+                    ? "外部収入"
+                    : transaction.kind === "FUND_REFUND"
+                      ? "外部・関係者なし"
+                      : "関係者なし"; %>
+                <article class="fund-ledger-row fund-ledger-transaction-row">
+                  <time
+                    datetime="<%= new Date(transaction.transactionDate).toISOString().slice(0, 10) %>"
+                    title="<%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %>"
+                  >
+                    <%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %>
+                  </time>
+
+                  <% if (isIncomeTransaction) { %>
+                    <% const transactionMeta = `${kindLabels[transaction.kind]}・${relationLabel}・${transaction.category}・${sourceLabels[transaction.classificationSource]}`; %>
+                    <div class="fund-ledger-content-cell">
+                      <strong class="fund-ledger-primary-text" data-ledger-tooltip="<%= transaction.rawText %>" aria-label="<%= transaction.rawText %>"><%= transaction.rawText %></strong>
+                      <small class="fund-ledger-meta" data-ledger-tooltip="<%= transactionMeta %>" aria-label="<%= transactionMeta %>"><%= transactionMeta %></small>
+                    </div>
+                    <strong class="fund-ledger-amount income-text">+<%= transaction.amount.toLocaleString("ja-JP") %> 円</strong>
+                    <div class="fund-ledger-empty-cell" aria-hidden="true"></div>
+                    <div class="fund-ledger-empty-cell" aria-hidden="true"></div>
+                  <% } else { %>
+                    <div class="fund-ledger-empty-cell" aria-hidden="true"></div>
+                    <div class="fund-ledger-empty-cell" aria-hidden="true"></div>
+                    <% const transactionMeta = `${kindLabels[transaction.kind]}・${relationLabel}・${transaction.category}・${sourceLabels[transaction.classificationSource]}`; %>
+                    <div class="fund-ledger-content-cell">
+                      <strong class="fund-ledger-primary-text" data-ledger-tooltip="<%= transaction.rawText %>" aria-label="<%= transaction.rawText %>"><%= transaction.rawText %></strong>
+                      <small class="fund-ledger-meta" data-ledger-tooltip="<%= transactionMeta %>" aria-label="<%= transactionMeta %>"><%= transactionMeta %></small>
+                    </div>
+                    <strong class="fund-ledger-amount expense-text">−<%= transaction.amount.toLocaleString("ja-JP") %> 円</strong>
+                  <% } %>
+                </article>
+              <% }) %>
+            <% } %>
+          </div>
+        </section>
+
+        <section class="fund-ledger-section fund-ledger-balance" aria-label="残高">
+          <div class="fund-ledger-row fund-ledger-summary-row">
+            <time title="<%= balanceDateLabel %>"><%= balanceDateLabel %></time>
+            <% if (balanceIsIncomeSide) { %>
+              <div class="fund-ledger-content-cell"><strong>残高</strong></div>
+              <strong class="fund-ledger-amount income-text">+<%= summary.balance.toLocaleString("ja-JP") %> 円</strong>
+              <div class="fund-ledger-empty-cell" aria-hidden="true"></div>
+              <div class="fund-ledger-empty-cell" aria-hidden="true"></div>
+            <% } else { %>
+              <div class="fund-ledger-empty-cell" aria-hidden="true"></div>
+              <div class="fund-ledger-empty-cell" aria-hidden="true"></div>
+              <div class="fund-ledger-content-cell"><strong>残高</strong></div>
+              <strong class="fund-ledger-amount expense-text">−<%= Math.abs(summary.balance).toLocaleString("ja-JP") %> 円</strong>
+            <% } %>
+          </div>
+        </section>
+      </div>
     </section>
   </main>
 
@@ -391,9 +441,9 @@
           <strong>自分が基金へ拠出</strong>
           <span>第6-3-3で実装します。</span>
         </button>
-        <button type="button" class="fund-transaction-type-option" disabled>
+        <button type="button" class="fund-transaction-type-option" data-switch-dialog="fund-expense-dialog">
           <strong>基金支出</strong>
-          <span>第6-3-2で実装します。</span>
+          <span>備品費、会場費、交通費、飲食費、活動費などを登録します。</span>
         </button>
         <button type="button" class="fund-transaction-type-option" disabled>
           <strong>基金返金</strong>
@@ -461,6 +511,64 @@
     </form>
   </dialog>
 
+  <dialog class="fund-page-dialog" id="fund-expense-dialog" aria-labelledby="fund-expense-title">
+    <form action="/groups/<%= group.id %>/fund/transactions/expense" method="post" class="page-form fund-dialog-form">
+      <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
+      <input type="hidden" name="contextState" value="<%= contextState %>" data-fund-context-state>
+
+      <div class="fund-dialog-heading">
+        <div>
+          <p class="eyebrow">基金Transaction</p>
+          <h2 id="fund-expense-title">基金支出を登録</h2>
+        </div>
+        <button type="button" class="fund-dialog-close" data-close-dialog aria-label="閉じる" title="閉じる">×</button>
+      </div>
+
+      <label>
+        <span>実際の取引日</span>
+        <input type="date" name="transactionDate" required>
+      </label>
+
+      <label>
+        <span>金額</span>
+        <input type="number" name="amount" min="1" step="1" inputmode="numeric" required>
+      </label>
+
+      <label>
+        <span>内容</span>
+        <textarea name="rawText" rows="4" maxlength="500" required></textarea>
+      </label>
+
+      <label>
+        <span>カテゴリ</span>
+        <select name="category" required>
+          <option value="">選択してください</option>
+          <% fundExpenseCategories.forEach(category => { %>
+            <option value="<%= category %>"><%= category %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label>
+        <span>関係者</span>
+        <select name="relatedUserId">
+          <option value="">外部・関係者なし</option>
+          <% activeMembers.forEach(member => { %>
+            <option value="<%= member.userId %>">
+              <%= member.user.displayName %><%= member.userId === currentUserId ? "（あなた）" : "" %>
+            </option>
+          <% }) %>
+        </select>
+      </label>
+
+      <p class="form-help">備品購入、会場費、活動費、立替補填など、基金の通常支出として登録します。</p>
+      <div class="fund-dialog-actions">
+        <button type="button" class="secondary-button" data-switch-dialog="fund-transaction-type-dialog">取引種別へ戻る</button>
+        <button type="submit" class="primary-button">基金支出を登録</button>
+      </div>
+    </form>
+  </dialog>
+
   <script>
     (() => {
       const layout = document.querySelector("[data-fund-layout]");
@@ -502,6 +610,76 @@
         setOpen(toggle.getAttribute("aria-expanded") !== "true");
       });
 
+      // 取引詳細の縦スクロールバー幅を、見出し・繰越金・残高へ同期する。
+      const fundLedger = document.querySelector(".fund-ledger");
+      const fundLedgerScroll = document.querySelector(".fund-ledger-scroll");
+      const syncFundLedgerScrollbar = () => {
+        if (!(fundLedger instanceof HTMLElement) || !(fundLedgerScroll instanceof HTMLElement)) return;
+        const scrollbarWidth = Math.max(0, fundLedgerScroll.offsetWidth - fundLedgerScroll.clientWidth);
+        fundLedger.style.setProperty("--fund-ledger-scrollbar-width", `${scrollbarWidth}px`);
+      };
+
+      requestAnimationFrame(syncFundLedgerScrollbar);
+      window.addEventListener("resize", syncFundLedgerScrollbar);
+      if ("ResizeObserver" in window && fundLedgerScroll instanceof HTMLElement) {
+        const ledgerResizeObserver = new ResizeObserver(syncFundLedgerScrollbar);
+        ledgerResizeObserver.observe(fundLedgerScroll);
+      }
+
+      // 省略された取引内容は、スクロール領域に切られない独自ツールチップで全文表示する。
+      const ledgerTooltip = document.createElement("div");
+      ledgerTooltip.className = "fund-ledger-tooltip";
+      ledgerTooltip.setAttribute("role", "tooltip");
+      ledgerTooltip.hidden = true;
+      document.body.append(ledgerTooltip);
+
+      let activeTooltipTarget = null;
+
+      const hideLedgerTooltip = () => {
+        ledgerTooltip.hidden = true;
+        ledgerTooltip.textContent = "";
+        activeTooltipTarget = null;
+      };
+
+      const showLedgerTooltip = (target) => {
+        if (!(target instanceof HTMLElement)) return;
+        const fullText = target.dataset.ledgerTooltip;
+        if (!fullText || target.scrollWidth <= target.clientWidth) {
+          hideLedgerTooltip();
+          return;
+        }
+
+        ledgerTooltip.textContent = fullText;
+        ledgerTooltip.hidden = false;
+        activeTooltipTarget = target;
+
+        const targetRect = target.getBoundingClientRect();
+        const tooltipRect = ledgerTooltip.getBoundingClientRect();
+        const viewportPadding = 12;
+        const gap = 8;
+
+        let left = targetRect.left;
+        left = Math.min(left, window.innerWidth - tooltipRect.width - viewportPadding);
+        left = Math.max(viewportPadding, left);
+
+        let top = targetRect.bottom + gap;
+        if (top + tooltipRect.height > window.innerHeight - viewportPadding) {
+          top = Math.max(viewportPadding, targetRect.top - tooltipRect.height - gap);
+        }
+
+        ledgerTooltip.style.left = `${left}px`;
+        ledgerTooltip.style.top = `${top}px`;
+      };
+
+      document.querySelectorAll("[data-ledger-tooltip]").forEach((target) => {
+        target.addEventListener("mouseenter", () => showLedgerTooltip(target));
+        target.addEventListener("mouseleave", hideLedgerTooltip);
+      });
+
+      fundLedgerScroll?.addEventListener("scroll", hideLedgerTooltip, { passive: true });
+      window.addEventListener("resize", hideLedgerTooltip);
+      window.addEventListener("scroll", hideLedgerTooltip, { passive: true, capture: true });
+
       document.querySelectorAll("[data-open-dialog]").forEach((button) => {
         button.addEventListener("click", () => {
           const dialogId = button.getAttribute("data-open-dialog");
@@ -531,6 +709,34 @@
       document.querySelectorAll("dialog").forEach((dialog) => {
         dialog.addEventListener("click", (event) => {
           if (event.target === dialog) dialog.close();
+        });
+      });
+
+      // DB更新フォームは最初の有効なsubmitで即時ロックし、連打による重複登録を防ぐ。
+      document.querySelectorAll("form[method='post']").forEach((form) => {
+        form.addEventListener("submit", (event) => {
+          if (event.defaultPrevented) return;
+
+          if (form.dataset.submitting === "true") {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+          }
+
+          form.dataset.submitting = "true";
+          form.setAttribute("aria-busy", "true");
+
+          form.querySelectorAll("button[type='submit'], input[type='submit']").forEach((control) => {
+            if (control instanceof HTMLButtonElement) {
+              control.dataset.originalText = control.textContent ?? "";
+              control.textContent = "処理中…";
+              control.disabled = true;
+            } else if (control instanceof HTMLInputElement) {
+              control.dataset.originalValue = control.value;
+              control.value = "処理中…";
+              control.disabled = true;
+            }
+          });
         });
       });
     })();
