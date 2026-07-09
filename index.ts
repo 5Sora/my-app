@@ -357,6 +357,38 @@ function validateFundContributionInput(input: {
   return null;
 }
 
+const fundRefundCategory = "基金返金";
+
+function validateFundRefundInput(input: {
+  transactionDate: Date | null;
+  amount: number | null;
+  rawText: string;
+  recipientUserIdText: string;
+  recipientUserId: number | null;
+}): string | null {
+  if (!input.transactionDate) {
+    return "取引日を正しい日付で入力してください。";
+  }
+
+  if (!input.amount) {
+    return "金額は1円以上の整数で入力してください。";
+  }
+
+  if (!input.rawText) {
+    return "内容を入力してください。";
+  }
+
+  if (input.rawText.length > 500) {
+    return "内容は500文字以内で入力してください。";
+  }
+
+  if (input.recipientUserIdText && !input.recipientUserId) {
+    return "返金先が正しくありません。";
+  }
+
+  return null;
+}
+
 type FundContributionCreationResult =
   | { status: "created"; transactionId: number }
   | { status: "membership-not-found" }
@@ -759,7 +791,7 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
       prisma.transaction.findMany({
         where: {
           userId,
-          kind: { in: ["PERSONAL_INCOME", "PERSONAL_EXPENSE", "FUND_CONTRIBUTION"] },
+          kind: { in: ["PERSONAL_INCOME", "PERSONAL_EXPENSE", "FUND_CONTRIBUTION", "FUND_REFUND"] },
           ...(Object.keys(transactionDateFilter).length > 0
             ? { transactionDate: transactionDateFilter }
             : {}),
@@ -775,7 +807,7 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
         ? prisma.transaction.findMany({
             where: {
               userId,
-              kind: { in: ["PERSONAL_INCOME", "PERSONAL_EXPENSE", "FUND_CONTRIBUTION"] },
+              kind: { in: ["PERSONAL_INCOME", "PERSONAL_EXPENSE", "FUND_CONTRIBUTION", "FUND_REFUND"] },
               transactionDate: { lt: selectedPage.startDate },
             },
             select: { kind: true, amount: true },
@@ -784,7 +816,10 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
     ]);
 
     const incomeTotal = transactions
-      .filter((transaction) => transaction.kind === "PERSONAL_INCOME")
+      .filter(
+        (transaction) =>
+          transaction.kind === "PERSONAL_INCOME" || transaction.kind === "FUND_REFUND",
+      )
       .reduce((sum, transaction) => sum + transaction.amount, 0);
 
     const expenseTotal = transactions
@@ -796,7 +831,7 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
       .reduce((sum, transaction) => sum + transaction.amount, 0);
 
     const carryover = carryoverTransactions.reduce((sum, transaction) => {
-      return transaction.kind === "PERSONAL_INCOME"
+      return transaction.kind === "PERSONAL_INCOME" || transaction.kind === "FUND_REFUND"
         ? sum + transaction.amount
         : sum - transaction.amount;
     }, 0);
@@ -1279,7 +1314,7 @@ app.get("/groups/:groupId/fund", requireAuthentication, async (req, res, next) =
       return;
     }
 
-    const [fund, pages, activeMembers] = await Promise.all([
+    const [fund, pages, activeMembers, refundRecipients] = await Promise.all([
       prisma.groupFund.findUnique({
         where: { groupId },
       }),
@@ -1308,6 +1343,23 @@ app.get("/groups/:groupId/fund", requireAuthentication, async (req, res, next) =
           },
         },
         orderBy: [{ role: "desc" }, { joinedAt: "asc" }, { userId: "asc" }],
+      }),
+      prisma.groupMember.findMany({
+        where: {
+          groupId,
+          user: {
+            isActive: true,
+          },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              displayName: true,
+            },
+          },
+        },
+        orderBy: [{ isActive: "desc" }, { joinedAt: "asc" }, { userId: "asc" }],
       }),
     ]);
 
@@ -1402,6 +1454,7 @@ app.get("/groups/:groupId/fund", requireAuthentication, async (req, res, next) =
       pages,
       selectedPage,
       activeMembers,
+      refundRecipients,
       transactions,
       summary: {
         carryover,
@@ -2150,6 +2203,142 @@ app.post(
         buildGroupFundUrl(groupId, {
           pageId: currentPageId,
           success: "基金支出を登録しました。",
+          contextState,
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+
+app.post(
+  "/groups/:groupId/fund/transactions/refund",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const currentPageId = parsePositiveInteger(req.body.currentPageId);
+    const contextState = parseFundContextState(req.body.contextState);
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    const transactionDate = parseDateOnly(req.body.transactionDate);
+    const amount = parsePositiveInteger(req.body.amount);
+    const rawText = String(req.body.rawText ?? "").trim();
+    const recipientUserIdText = String(req.body.recipientUserId ?? "").trim();
+    const recipientUserId = recipientUserIdText
+      ? parsePositiveInteger(recipientUserIdText)
+      : null;
+    const validationError = validateFundRefundInput({
+      transactionDate,
+      amount,
+      rawText,
+      recipientUserIdText,
+      recipientUserId,
+    });
+
+    try {
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true },
+      });
+
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const membership = await findActiveGroupMembership(operatorUserId, groupId);
+
+      if (!membership) {
+        res.status(403).send("基金返金を登録する権限がありません。");
+        return;
+      }
+
+      const fund = await prisma.groupFund.findUnique({
+        where: { groupId },
+        select: { id: true, isActive: true },
+      });
+
+      if (!fund?.isActive) {
+        res.redirect(
+          buildGroupFundUrl(groupId, {
+            pageId: currentPageId,
+            error: "有効なグループ基金が見つからないため、基金返金を登録できません。",
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      if (validationError) {
+        res.redirect(
+          buildGroupFundUrl(groupId, {
+            pageId: currentPageId,
+            error: validationError,
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      if (recipientUserId) {
+        const recipientMembership = await prisma.groupMember.findFirst({
+          where: {
+            groupId,
+            userId: recipientUserId,
+            user: { isActive: true },
+          },
+          select: { userId: true },
+        });
+
+        if (!recipientMembership) {
+          res.redirect(
+            buildGroupFundUrl(groupId, {
+              pageId: currentPageId,
+              error: "返金先には、このグループの有効メンバーまたは脱退済みメンバーを選択してください。",
+              contextState,
+            }),
+          );
+          return;
+        }
+      }
+
+      await prisma.transaction.create({
+        data: {
+          userId: recipientUserId,
+          groupId,
+          groupFundId: fund.id,
+          kind: "FUND_REFUND",
+          amount: amount!,
+          category: fundRefundCategory,
+          rawText,
+          transactionDate: transactionDate!,
+          paymentBatchId: null,
+          calculationMethod: null,
+          classificationSource: "MANUAL",
+          aiResult: null,
+        },
+      });
+
+      res.redirect(
+        buildGroupFundUrl(groupId, {
+          pageId: currentPageId,
+          success: recipientUserId
+            ? "ユーザーへの基金返金を登録しました。"
+            : "外部への基金返金を登録しました。",
           contextState,
         }),
       );

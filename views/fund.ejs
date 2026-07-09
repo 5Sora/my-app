@@ -445,9 +445,9 @@
           <strong>基金支出</strong>
           <span>備品費、会場費、交通費、飲食費、活動費などを登録します。</span>
         </button>
-        <button type="button" class="fund-transaction-type-option" disabled>
+        <button type="button" class="fund-transaction-type-option" data-switch-dialog="fund-refund-dialog">
           <strong>基金返金</strong>
-          <span>第6-3-4で実装します。</span>
+          <span>ユーザーまたは外部へ、基金から返金します。</span>
         </button>
       </div>
     </div>
@@ -606,6 +606,55 @@
       </div>
     </form>
   </dialog>
+
+  <dialog class="fund-page-dialog" id="fund-refund-dialog" aria-labelledby="fund-refund-title">
+    <form action="/groups/<%= group.id %>/fund/transactions/refund" method="post" class="page-form fund-dialog-form">
+      <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
+      <input type="hidden" name="contextState" value="<%= contextState %>" data-fund-context-state>
+
+      <div class="fund-dialog-heading">
+        <div>
+          <p class="eyebrow">基金Transaction</p>
+          <h2 id="fund-refund-title">基金返金を登録</h2>
+        </div>
+        <button type="button" class="fund-dialog-close" data-close-dialog aria-label="閉じる" title="閉じる">×</button>
+      </div>
+
+      <label>
+        <span>実際の取引日</span>
+        <input type="date" name="transactionDate" value="<%= today %>" required>
+      </label>
+
+      <label>
+        <span>金額</span>
+        <input type="number" name="amount" min="1" step="1" inputmode="numeric" required>
+      </label>
+
+      <label>
+        <span>内容</span>
+        <textarea name="rawText" rows="4" maxlength="500" placeholder="例：イベント中止に伴う参加費返金" required></textarea>
+      </label>
+
+      <label>
+        <span>返金先</span>
+        <select name="recipientUserId">
+          <option value="">外部・ユーザー指定なし</option>
+          <% refundRecipients.forEach(member => { %>
+            <option value="<%= member.userId %>">
+              <%= member.user.displayName %><%= member.userId === currentUserId ? "（あなた）" : "" %><%= member.isActive ? "" : "（脱退済み）" %>
+            </option>
+          <% }) %>
+        </select>
+      </label>
+
+      <p class="form-help">カテゴリは「基金返金」に固定されます。ユーザー返金は受取人の個人家計簿で収入として表示され、外部返金は基金側だけに表示されます。</p>
+      <div class="fund-dialog-actions">
+        <button type="button" class="secondary-button" data-switch-dialog="fund-transaction-type-dialog">取引種別へ戻る</button>
+        <button type="submit" class="primary-button">基金返金を登録</button>
+      </div>
+    </form>
+  </dialog>
+
 
   <script>
     (() => {
