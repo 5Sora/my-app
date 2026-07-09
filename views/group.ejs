@@ -81,6 +81,10 @@
           <dt>有効メンバー</dt>
           <dd><%= activeMemberCount %> 人</dd>
         </div>
+        <div>
+          <dt>有効な管理者</dt>
+          <dd><%= activeAdminCount %> 人</dd>
+        </div>
       </dl>
     </section>
 
@@ -148,14 +152,33 @@
       <div class="panel-heading">
         <div>
           <p class="eyebrow">所属</p>
-          <h2>メンバー</h2>
+          <h2>有効メンバー一覧</h2>
         </div>
         <span><%= activeMemberCount %> 人</span>
       </div>
 
-      <p class="form-help">
-        メンバー一覧、論理脱退、ADMIN権限変更は第3段階で追加します。
-      </p>
+      <% if (activeMembers.length === 0) { %>
+        <p class="empty-state group-member-empty">有効なメンバーがいません。</p>
+      <% } else { %>
+        <ul class="group-member-list">
+          <% activeMembers.forEach(member => { %>
+            <li>
+              <span class="group-member-identity">
+                <strong><%= member.user.displayName %></strong>
+                <small>ユーザーID：<%= member.user.loginId %></small>
+              </span>
+              <span class="group-member-badges">
+                <% if (member.userId === currentUserId) { %>
+                  <small class="current-user-badge">あなた</small>
+                <% } %>
+                <small class="role-badge <%= member.role === 'ADMIN' ? 'admin' : '' %>">
+                  <%= member.role === "ADMIN" ? "管理者" : "メンバー" %>
+                </small>
+              </span>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
     </section>
 
     <% if (isAdmin) { %>
@@ -163,32 +186,105 @@
         <div class="panel-heading">
           <div>
             <p class="eyebrow">管理者操作</p>
-            <h2>ユーザーIDでメンバーを追加</h2>
+            <h2>メンバー追加・管理</h2>
           </div>
-          <span>直接追加</span>
+          <span>ADMIN限定</span>
         </div>
 
-        <form action="/groups/<%= group.id %>/members" method="post" class="page-form group-member-form">
-          <label>
-            <span>ユーザーID（ログインID）</span>
-            <input
-              type="text"
-              name="loginId"
-              maxlength="50"
-              autocomplete="off"
-              autocapitalize="none"
-              spellcheck="false"
-              required
-            >
-          </label>
+        <section class="group-admin-subsection" aria-labelledby="member-add-heading">
+          <h3 id="member-add-heading">ユーザーIDでメンバーを追加</h3>
+          <form action="/groups/<%= group.id %>/members" method="post" class="page-form group-member-form">
+            <label>
+              <span>ユーザーID（ログインID）</span>
+              <input
+                type="text"
+                name="loginId"
+                maxlength="50"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                required
+              >
+            </label>
 
-          <p class="form-help">
-            完全一致で検索します。ユーザー一覧や候補は表示しません。
-            追加後は本人の承認を挟まず、正式なメンバーとして所属します。
-          </p>
+            <p class="form-help">
+              完全一致で検索します。ユーザー一覧や候補は表示しません。
+              脱退済みユーザーを追加すると、MEMBERとして再有効化します。
+            </p>
 
-          <button type="submit" class="primary-button">メンバーを追加</button>
-        </form>
+            <button type="submit" class="primary-button">メンバーを追加</button>
+          </form>
+        </section>
+
+        <section class="group-admin-subsection" aria-labelledby="member-management-heading">
+          <h3 id="member-management-heading">有効メンバーを管理</h3>
+
+          <div class="group-admin-member-list">
+            <% activeMembers.forEach(member => { %>
+              <% const isOnlyActiveAdmin = member.role === "ADMIN" && activeAdminCount === 1; %>
+              <article class="group-admin-member-row">
+                <div class="group-admin-member-info">
+                  <strong><%= member.user.displayName %></strong>
+                  <small>ユーザーID：<%= member.user.loginId %></small>
+                  <% if (member.userId === currentUserId) { %>
+                    <small class="current-user-badge">あなた</small>
+                  <% } %>
+                </div>
+
+                <form
+                  action="/groups/<%= group.id %>/members/<%= member.userId %>/role"
+                  method="post"
+                  class="group-role-form"
+                >
+                  <label>
+                    <span>グループ権限</span>
+                    <select name="role" aria-label="<%= member.user.displayName %>さんのグループ権限">
+                      <option
+                        value="MEMBER"
+                        <%= member.role === "MEMBER" ? "selected" : "" %>
+                        <%= isOnlyActiveAdmin ? "disabled" : "" %>
+                      >
+                        メンバー
+                      </option>
+                      <option
+                        value="ADMIN"
+                        <%= member.role === "ADMIN" ? "selected" : "" %>
+                      >
+                        管理者
+                      </option>
+                    </select>
+                  </label>
+                  <button type="submit" class="small-button">権限を保存</button>
+                </form>
+
+                <form
+                  action="/groups/<%= group.id %>/members/<%= member.userId %>/remove"
+                  method="post"
+                  class="group-remove-form"
+                  onsubmit="return confirm('<%= member.user.displayName %>さんを脱退済みにしますか？過去の取引履歴は削除されません。');"
+                >
+                  <button
+                    type="submit"
+                    class="small-danger-button"
+                    <%= member.userId === currentUserId || isOnlyActiveAdmin ? "disabled" : "" %>
+                  >
+                    脱退処理
+                  </button>
+                </form>
+
+                <% if (member.userId === currentUserId) { %>
+                  <p class="form-help group-member-action-note">
+                    本人による自主脱退は現在実装していません。
+                  </p>
+                <% } else if (isOnlyActiveAdmin) { %>
+                  <p class="form-help group-member-action-note">
+                    唯一の有効な管理者は降格・脱退できません。
+                  </p>
+                <% } %>
+              </article>
+            <% }) %>
+          </div>
+        </section>
       </section>
     <% } %>
   </main>

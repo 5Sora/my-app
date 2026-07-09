@@ -237,6 +237,13 @@ class ActiveGroupMembershipError extends Error {
   }
 }
 
+class GroupMemberOperationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GroupMemberOperationError";
+  }
+}
+
 async function activateGroupMembership(
   client: GroupMembershipClient,
   input: {
@@ -938,7 +945,7 @@ app.get("/groups/:groupId", requireAuthentication, async (req, res, next) => {
       return;
     }
 
-    const [fund, ledgerPages, activeMemberCount] = await Promise.all([
+    const [fund, ledgerPages, activeMembers] = await Promise.all([
       prisma.groupFund.findUnique({
         where: { groupId },
       }),
@@ -956,7 +963,7 @@ app.get("/groups/:groupId", requireAuthentication, async (req, res, next) => {
           { id: "asc" },
         ],
       }),
-      prisma.groupMember.count({
+      prisma.groupMember.findMany({
         where: {
           groupId,
           isActive: true,
@@ -964,19 +971,37 @@ app.get("/groups/:groupId", requireAuthentication, async (req, res, next) => {
             isActive: true,
           },
         },
+        include: {
+          user: {
+            select: {
+              id: true,
+              loginId: true,
+              displayName: true,
+              isActive: true,
+            },
+          },
+        },
+        orderBy: [{ role: "desc" }, { joinedAt: "asc" }, { userId: "asc" }],
       }),
     ]);
 
+    const activeMemberCount = activeMembers.length;
+    const activeAdminCount = activeMembers.filter(
+      (member) => member.role === "ADMIN",
+    ).length;
     const error = typeof req.query.error === "string" ? req.query.error : null;
     const success = typeof req.query.success === "string" ? req.query.success : null;
 
     res.render("group", {
+      currentUserId: userId,
       group: membership.group,
       membership,
       isAdmin: membership.role === "ADMIN",
       fund,
       ledgerPages,
+      activeMembers,
       activeMemberCount,
+      activeAdminCount,
       error,
       success,
     });
@@ -1094,6 +1119,312 @@ app.post(
         res.redirect(
           buildGroupUrl(groupId, {
             error: "そのユーザーはすでにグループへ所属しています。",
+          }),
+        );
+        return;
+      }
+
+      next(error);
+    }
+  },
+);
+
+
+app.post(
+  "/groups/:groupId/members/:memberUserId/role",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const memberUserId = parsePositiveInteger(req.params.memberUserId);
+    const roleInput = String(req.body.role ?? "").trim();
+    const role =
+      roleInput === "MEMBER" || roleInput === "ADMIN" ? roleInput : null;
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    if (!memberUserId || !role) {
+      res.redirect(
+        buildGroupUrl(groupId, {
+          error: "変更するメンバーまたは権限の指定が正しくありません。",
+        }),
+      );
+      return;
+    }
+
+    try {
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true },
+      });
+
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const adminMembership = await findActiveGroupAdminMembership(
+        operatorUserId,
+        groupId,
+      );
+
+      if (!adminMembership) {
+        res.status(403).send("メンバー権限を変更する権限がありません。");
+        return;
+      }
+
+      const result = await prisma.$transaction(
+        async (tx) => {
+          const targetMembership = await tx.groupMember.findUnique({
+            where: {
+              userId_groupId: {
+                userId: memberUserId,
+                groupId,
+              },
+            },
+            include: {
+              user: {
+                select: {
+                  displayName: true,
+                  isActive: true,
+                },
+              },
+            },
+          });
+
+          if (!targetMembership?.isActive || !targetMembership.user.isActive) {
+            throw new GroupMemberOperationError(
+              "対象の有効なメンバーが見つかりません。",
+            );
+          }
+
+          if (targetMembership.role === role) {
+            return {
+              changed: false,
+              displayName: targetMembership.user.displayName,
+            };
+          }
+
+          if (targetMembership.role === "ADMIN" && role === "MEMBER") {
+            const activeAdminCount = await tx.groupMember.count({
+              where: {
+                groupId,
+                role: "ADMIN",
+                isActive: true,
+                user: {
+                  isActive: true,
+                },
+              },
+            });
+
+            if (activeAdminCount <= 1) {
+              throw new GroupMemberOperationError(
+                "唯一の有効なグループ管理者はメンバーへ変更できません。",
+              );
+            }
+          }
+
+          await tx.groupMember.update({
+            where: {
+              userId_groupId: {
+                userId: memberUserId,
+                groupId,
+              },
+            },
+            data: { role },
+          });
+
+          return {
+            changed: true,
+            displayName: targetMembership.user.displayName,
+          };
+        },
+        { isolationLevel: "Serializable" },
+      );
+
+      res.redirect(
+        buildGroupUrl(groupId, {
+          success: result.changed
+            ? `${result.displayName}さんの権限を変更しました。`
+            : `${result.displayName}さんの権限は変更されていません。`,
+        }),
+      );
+    } catch (error) {
+      if (error instanceof GroupMemberOperationError) {
+        res.redirect(buildGroupUrl(groupId, { error: error.message }));
+        return;
+      }
+
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "P2034"
+      ) {
+        res.redirect(
+          buildGroupUrl(groupId, {
+            error: "同時にメンバー情報が更新されました。画面を確認して再度操作してください。",
+          }),
+        );
+        return;
+      }
+
+      next(error);
+    }
+  },
+);
+
+app.post(
+  "/groups/:groupId/members/:memberUserId/remove",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const memberUserId = parsePositiveInteger(req.params.memberUserId);
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    if (!memberUserId) {
+      res.redirect(
+        buildGroupUrl(groupId, {
+          error: "脱退処理するメンバーの指定が正しくありません。",
+        }),
+      );
+      return;
+    }
+
+    if (memberUserId === operatorUserId) {
+      res.redirect(
+        buildGroupUrl(groupId, {
+          error: "本人による自主脱退は現在実装していません。",
+        }),
+      );
+      return;
+    }
+
+    try {
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true },
+      });
+
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const adminMembership = await findActiveGroupAdminMembership(
+        operatorUserId,
+        groupId,
+      );
+
+      if (!adminMembership) {
+        res.status(403).send("メンバーを脱退処理する権限がありません。");
+        return;
+      }
+
+      const removedMember = await prisma.$transaction(
+        async (tx) => {
+          const targetMembership = await tx.groupMember.findUnique({
+            where: {
+              userId_groupId: {
+                userId: memberUserId,
+                groupId,
+              },
+            },
+            include: {
+              user: {
+                select: {
+                  displayName: true,
+                  isActive: true,
+                },
+              },
+            },
+          });
+
+          if (!targetMembership?.isActive || !targetMembership.user.isActive) {
+            throw new GroupMemberOperationError(
+              "対象の有効なメンバーが見つかりません。",
+            );
+          }
+
+          if (targetMembership.role === "ADMIN") {
+            const activeAdminCount = await tx.groupMember.count({
+              where: {
+                groupId,
+                role: "ADMIN",
+                isActive: true,
+                user: {
+                  isActive: true,
+                },
+              },
+            });
+
+            if (activeAdminCount <= 1) {
+              throw new GroupMemberOperationError(
+                "唯一の有効なグループ管理者は脱退処理できません。",
+              );
+            }
+          }
+
+          await tx.groupMember.update({
+            where: {
+              userId_groupId: {
+                userId: memberUserId,
+                groupId,
+              },
+            },
+            data: {
+              isActive: false,
+              leftAt: new Date(),
+            },
+          });
+
+          return targetMembership.user.displayName;
+        },
+        { isolationLevel: "Serializable" },
+      );
+
+      res.redirect(
+        buildGroupUrl(groupId, {
+          success: `${removedMember}さんを脱退済みにしました。`,
+        }),
+      );
+    } catch (error) {
+      if (error instanceof GroupMemberOperationError) {
+        res.redirect(buildGroupUrl(groupId, { error: error.message }));
+        return;
+      }
+
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "P2034"
+      ) {
+        res.redirect(
+          buildGroupUrl(groupId, {
+            error: "同時にメンバー情報が更新されました。画面を確認して再度操作してください。",
           }),
         );
         return;

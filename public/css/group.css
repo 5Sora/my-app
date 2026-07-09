@@ -203,3 +203,198 @@
     gap: 5px;
   }
 }
+
+
+.group-member-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.group-member-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+}
+
+.group-member-identity,
+.group-admin-member-info {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.group-member-identity strong,
+.group-admin-member-info strong {
+  overflow-wrap: anywhere;
+}
+
+.group-member-identity small,
+.group-admin-member-info > small:not(.current-user-badge) {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.group-member-badges {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.role-badge,
+.current-user-badge {
+  display: inline-block;
+  padding: 4px 7px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.role-badge {
+  color: var(--text);
+  background: #eeeae5;
+}
+
+.role-badge.admin {
+  color: #60420c;
+  background: #fff1c9;
+}
+
+.current-user-badge {
+  width: fit-content;
+  color: #3f4f91;
+  background: #edf0ff;
+}
+
+.group-member-empty {
+  min-height: 120px;
+}
+
+.group-admin-subsection {
+  display: grid;
+  gap: 14px;
+}
+
+.group-admin-subsection + .group-admin-subsection {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.group-admin-subsection h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.group-admin-member-list {
+  display: grid;
+  gap: 10px;
+}
+
+.group-admin-member-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(260px, auto) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+}
+
+.group-role-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+
+.group-role-form label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.group-role-form select {
+  min-width: 130px;
+  border: 1px solid #a9a29b;
+  padding: 8px 9px;
+  color: var(--text);
+  background: #fff;
+  font: inherit;
+}
+
+.small-button,
+.small-danger-button {
+  border: 1px solid var(--text);
+  padding: 8px 10px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.small-danger-button {
+  border-color: var(--expense);
+  color: var(--expense);
+}
+
+.small-danger-button:hover:not(:disabled) {
+  color: #fff;
+  background: var(--expense);
+}
+
+.small-button:disabled,
+.small-danger-button:disabled {
+  border-color: var(--border);
+  color: #aaa39c;
+  background: #f4f1ed;
+  cursor: not-allowed;
+}
+
+.group-remove-form {
+  align-self: end;
+}
+
+.group-member-action-note {
+  grid-column: 2 / -1;
+}
+
+@media (max-width: 900px) {
+  .group-admin-member-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .group-member-action-note {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .group-member-list li {
+    flex-direction: column;
+  }
+
+  .group-member-badges {
+    justify-content: flex-start;
+  }
+
+  .group-role-form {
+    display: grid;
+  }
+
+  .group-role-form select,
+  .group-role-form .small-button,
+  .group-remove-form,
+  .group-remove-form .small-danger-button {
+    width: 100%;
+  }
+}
