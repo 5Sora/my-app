@@ -33,13 +33,12 @@
       >
         基金
       </a>
-      <span
-        class="secondary-button button-link group-nav-item is-disabled"
-        aria-disabled="true"
-        title="関連支払いは未実装です"
+      <a
+        href="/groups/<%= group.id %>/payments"
+        class="secondary-button button-link group-nav-item"
       >
         関連支払い
-      </span>
+      </a>
       <form action="/logout" method="post" class="group-nav-logout">
         <button type="submit" class="secondary-button group-nav-item">ログアウト</button>
       </form>
@@ -163,7 +162,7 @@
             <p class="eyebrow">支払い</p>
             <h2>関連支払い・割り勘</h2>
           </div>
-          <span>未実装</span>
+          <span>表示可能</span>
         </div>
 
         <p class="group-feature-description">
@@ -176,9 +175,18 @@
           初期ページ：
           <strong><%= paymentPage ? paymentPage.name : "未作成" %></strong>
         </p>
-        <span class="secondary-button button-link group-feature-disabled" aria-disabled="true">
-          関連支払い画面は後続段階で実装
-        </span>
+        <% if (paymentPage) { %>
+          <a
+            href="/groups/<%= group.id %>/payments?pageId=<%= paymentPage.id %>"
+            class="secondary-button button-link"
+          >
+            関連支払い画面を開く
+          </a>
+        <% } else { %>
+          <span class="secondary-button button-link group-feature-disabled" aria-disabled="true">
+            関連支払い画面を開けません
+          </span>
+        <% } %>
       </section>
     </div>
 

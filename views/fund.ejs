@@ -37,13 +37,12 @@
       >
         基金
       </a>
-      <span
-        class="secondary-button button-link group-nav-item is-disabled"
-        aria-disabled="true"
-        title="関連支払いは未実装です"
+      <a
+        href="/groups/<%= group.id %>/payments"
+        class="secondary-button button-link group-nav-item"
       >
         関連支払い
-      </span>
+      </a>
       <form action="/logout" method="post" class="group-nav-logout">
         <button type="submit" class="secondary-button group-nav-item">ログアウト</button>
       </form>

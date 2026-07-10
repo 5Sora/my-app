@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= group.name %> - 関連支払い - <%= selectedPage.name %></title>
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/ledger.css">
+  <link rel="stylesheet" href="/css/group.css">
+  <link rel="stylesheet" href="/css/payments.css">
+</head>
+<body class="ledger-body payments-body">
+  <header class="ledger-header">
+    <div>
+      <p class="eyebrow">グループ関連支払い</p>
+      <h1><%= group.name %></h1>
+      <p class="period-label">
+        <strong><%= selectedPage.name %></strong>：
+        <% if (selectedPage.startDate || selectedPage.endDate) { %>
+          <%= selectedPage.startDate ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
+          〜
+          <%= selectedPage.endDate ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
+        <% } else { %>
+          全期間
+        <% } %>
+      </p>
+    </div>
+
+    <nav class="header-actions group-header-nav" aria-label="グループ画面ナビゲーション">
+      <a href="/app" class="secondary-button button-link group-nav-item">自分の家計簿</a>
+      <a href="/groups/<%= group.id %>" class="secondary-button button-link group-nav-item">概要</a>
+      <a href="/groups/<%= group.id %>/fund" class="secondary-button button-link group-nav-item">基金</a>
+      <a
+        href="<%= buildGroupPaymentsUrl(group.id, { pageId: selectedPage.id, contextState }) %>"
+        class="secondary-button button-link group-nav-item is-active"
+        data-payment-context-link
+        aria-current="page"
+      >
+        関連支払い
+      </a>
+      <form action="/logout" method="post" class="group-nav-logout">
+        <button type="submit" class="secondary-button group-nav-item">ログアウト</button>
+      </form>
+    </nav>
+  </header>
+
+  <% if (error || success) { %>
+    <section class="flash-area" aria-live="polite">
+      <% if (error) { %><p class="error-message" role="alert"><%= error %></p><% } %>
+      <% if (success) { %><p class="success-message" role="status"><%= success %></p><% } %>
+    </section>
+  <% } %>
+
+  <main class="payments-layout">
+    <section class="payments-main-column" aria-label="関連支払いの操作と履歴">
+      <section class="panel payments-top-area">
+        <div class="payments-title-area">
+          <p class="eyebrow">表示対象</p>
+          <h2><%= selectedPage.name %>の関連支払い</h2>
+          <dl class="payments-page-summary">
+            <div>
+              <dt>対象期間</dt>
+              <dd>
+                <% if (selectedPage.startDate || selectedPage.endDate) { %>
+                  <%= selectedPage.startDate ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP") : "指定なし" %>
+                  〜
+                  <%= selectedPage.endDate ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP") : "指定なし" %>
+                <% } else { %>
+                  全期間
+                <% } %>
+              </dd>
+            </div>
+            <div>
+              <dt>期間内合計</dt>
+              <dd><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong></dd>
+            </div>
+          </dl>
+          <p class="payments-stage-note">第7-1-1では表示基盤を実装します。支払い入力は第7-2で有効化します。</p>
+        </div>
+
+        <div class="payments-method-area" aria-labelledby="calculation-method-heading">
+          <div class="panel-heading compact payments-method-heading">
+            <div>
+              <p class="eyebrow">割り勘</p>
+              <h2 id="calculation-method-heading">算出方法</h2>
+            </div>
+            <span>4方式</span>
+          </div>
+
+          <ul class="payments-method-list">
+            <% calculationMethodOptions.forEach((method, index) => { %>
+              <li>
+                <button
+                  type="button"
+                  class="payments-method-help"
+                  aria-label="<%= method.label %>の説明を表示"
+                  aria-expanded="false"
+                  aria-controls="payment-method-description-<%= index %>"
+                  data-method-help
+                >?</button>
+                <strong><%= method.label %></strong>
+                <p id="payment-method-description-<%= index %>" hidden><%= method.description %></p>
+              </li>
+            <% }) %>
+          </ul>
+
+          <button
+            type="button"
+            class="primary-button payments-start-button"
+            disabled
+            aria-disabled="true"
+            title="第7-3で有効化します"
+          >
+            割り勘を開始
+          </button>
+        </div>
+      </section>
+
+      <section
+        class="payments-lower-area<%= contextState === 'closed' ? ' is-context-closed' : '' %>"
+        data-payment-lower
+        data-context-state="<%= contextState ?? 'auto' %>"
+      >
+        <section class="payments-context-half" aria-label="表示ページと有効メンバー">
+          <div
+            class="payments-context-panels"
+            id="payment-context-panel"
+            aria-hidden="<%= String(contextState === 'closed') %>"
+          >
+            <section class="panel payments-page-panel">
+              <div class="panel-heading compact">
+                <div>
+                  <p class="eyebrow">期間</p>
+                  <h2>表示ページ</h2>
+                </div>
+                <span><%= pages.length %> 件</span>
+              </div>
+
+              <nav class="page-list" aria-label="グループ関連支払いページ">
+                <% pages.forEach(page => { %>
+                  <a
+                    href="<%= buildGroupPaymentsUrl(group.id, { pageId: page.id, contextState }) %>"
+                    class="<%= page.id === selectedPage.id ? 'is-active' : '' %>"
+                    data-payment-context-link
+                    <% if (page.id === selectedPage.id) { %>aria-current="page"<% } %>
+                  >
+                    <span>
+                      <strong><%= page.name %></strong>
+                      <small>
+                        <% if (page.startDate || page.endDate) { %>
+                          <%= page.startDate ? new Date(page.startDate).toLocaleDateString("ja-JP") : "指定なし" %>
+                          〜
+                          <%= page.endDate ? new Date(page.endDate).toLocaleDateString("ja-JP") : "指定なし" %>
+                        <% } else { %>
+                          全期間
+                        <% } %>
+                      </small>
+                    </span>
+                    <% if (page.isInitial) { %><small class="initial-badge">初期</small><% } %>
+                  </a>
+                <% }) %>
+              </nav>
+            </section>
+
+            <section class="panel payments-member-panel">
+              <div class="panel-heading compact">
+                <div>
+                  <p class="eyebrow">参加候補</p>
+                  <h2>有効メンバー</h2>
+                </div>
+                <span><%= activeMembers.length %> 人</span>
+              </div>
+
+              <% if (activeMembers.length === 0) { %>
+                <p class="empty-state">有効なメンバーがいません。</p>
+              <% } else { %>
+                <ul class="payments-member-list">
+                  <% activeMembers.forEach(member => { %>
+                    <li>
+                      <span class="payments-member-action" aria-hidden="true">履歴</span>
+                      <span class="payments-member-name">
+                        <strong><%= member.user.displayName %></strong>
+                        <small><%= member.role === "ADMIN" ? "管理者" : "メンバー" %><%= member.userId === currentUserId ? "・あなた" : "" %></small>
+                      </span>
+                    </li>
+                  <% }) %>
+                </ul>
+              <% } %>
+              <p class="form-help">メンバー追加・脱退・権限変更はグループ概要で行います。</p>
+            </section>
+          </div>
+
+          <aside class="payments-operation-rail" aria-label="関連支払いページ操作">
+            <button
+              type="button"
+              data-payment-context-toggle
+              aria-controls="payment-context-panel"
+              aria-expanded="<%= String(contextState !== 'closed') %>"
+              aria-label="左領域を閉じる"
+              title="左領域を閉じる"
+            >←</button>
+            <button type="button" disabled aria-disabled="true" aria-label="選択ページを編集（第7-1-2で実装）" title="選択ページを編集（第7-1-2で実装）">⚙</button>
+            <button type="button" disabled aria-disabled="true" aria-label="ページを追加（第7-1-2で実装）" title="ページを追加（第7-1-2で実装）">＋</button>
+            <button type="button" disabled aria-disabled="true" aria-label="選択ページを削除（第7-1-2で実装）" title="選択ページを削除（第7-1-2で実装）">−</button>
+          </aside>
+
+          <section class="panel payments-collapsed-summary" aria-hidden="true">
+            <p class="eyebrow">期間内サマリー</p>
+            <h2><%= selectedPage.name %></h2>
+            <p><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong></p>
+            <p><%= transactions.length %> 件・<%= perPersonRows.length %> 人</p>
+          </section>
+        </section>
+
+        <section class="panel payments-history-panel" aria-labelledby="payment-history-heading">
+          <div class="panel-heading payments-history-heading">
+            <div>
+              <p class="eyebrow">確定済みTransaction</p>
+              <h2 id="payment-history-heading">関連支払い履歴</h2>
+            </div>
+            <button
+              type="button"
+              class="payments-history-add"
+              disabled
+              aria-disabled="true"
+              aria-label="個別支払いを登録（第7-2で実装）"
+              title="個別支払いを登録（第7-2で実装）"
+            >＋</button>
+          </div>
+
+          <div class="payments-history-tabs" role="tablist" aria-label="履歴表示方法">
+            <button
+              type="button"
+              role="tab"
+              id="payments-chronological-tab"
+              aria-controls="payments-chronological-panel"
+              aria-selected="true"
+              tabindex="0"
+              data-payment-tab="chronological"
+            >時系列</button>
+            <button
+              type="button"
+              role="tab"
+              id="payments-person-tab"
+              aria-controls="payments-person-panel"
+              aria-selected="false"
+              tabindex="-1"
+              data-payment-tab="person"
+            >人ごと</button>
+          </div>
+
+          <section
+            id="payments-chronological-panel"
+            role="tabpanel"
+            aria-labelledby="payments-chronological-tab"
+            data-payment-tab-panel="chronological"
+          >
+            <div class="payments-ledger payments-ledger-chronological" aria-label="時系列の関連支払い履歴">
+              <div class="payments-ledger-heading" aria-hidden="true">
+                <span>日付</span><span>負担内容</span><span>金額</span><span>名前</span>
+              </div>
+              <div class="payments-ledger-scroll" tabindex="0" aria-label="時系列履歴。上下にスクロールできます">
+                <% if (transactions.length === 0) { %>
+                  <p class="empty-state payments-history-empty">この期間には、まだ関連支払いがありません。</p>
+                <% } else { %>
+                  <% transactions.forEach(transaction => { %>
+                    <article class="payments-ledger-row">
+                      <time datetime="<%= transaction.transactionDate.toISOString().slice(0, 10) %>"><%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %></time>
+                      <span class="payments-ledger-text" tabindex="0" data-payment-tooltip="<%= transaction.rawText %>"><%= transaction.rawText %></span>
+                      <strong><%= transaction.amount.toLocaleString("ja-JP") %> 円</strong>
+                      <span><%= transaction.user?.displayName ?? "不明なユーザー" %></span>
+                    </article>
+                  <% }) %>
+                <% } %>
+              </div>
+              <div class="payments-ledger-total">
+                <span>—</span><strong>総額</strong><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong><span>—</span>
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="payments-person-panel"
+            role="tabpanel"
+            aria-labelledby="payments-person-tab"
+            data-payment-tab-panel="person"
+            hidden
+          >
+            <div class="payments-ledger payments-ledger-person" aria-label="人ごとの関連支払い集計">
+              <div class="payments-ledger-heading" aria-hidden="true">
+                <span>名前</span><span>合計支払額</span><span>支払い件数</span>
+              </div>
+              <div class="payments-ledger-scroll" tabindex="0" aria-label="人ごとの集計。上下にスクロールできます">
+                <% if (perPersonRows.length === 0) { %>
+                  <p class="empty-state payments-history-empty">この期間に集計できる支払いがありません。</p>
+                <% } else { %>
+                  <% perPersonRows.forEach(row => { %>
+                    <article class="payments-ledger-row">
+                      <strong><%= row.displayName %></strong>
+                      <strong><%= row.totalAmount.toLocaleString("ja-JP") %> 円</strong>
+                      <span><%= row.paymentCount.toLocaleString("ja-JP") %> 件</span>
+                    </article>
+                  <% }) %>
+                <% } %>
+              </div>
+              <div class="payments-ledger-total">
+                <strong>合計</strong><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong><span><%= transactions.length.toLocaleString("ja-JP") %> 件</span>
+              </div>
+            </div>
+          </section>
+        </section>
+      </section>
+    </section>
+
+    <aside class="panel payments-result-column" aria-labelledby="latest-payment-batch-heading">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">前回確定分</p>
+          <h2 id="latest-payment-batch-heading">直近の割り勘結果</h2>
+        </div>
+        <% if (latestBatch) { %><span><%= latestBatch.allocations.length %> 人</span><% } %>
+      </div>
+
+      <% if (!latestBatch) { %>
+        <div class="payments-result-empty">
+          <strong>まだ確定済みの割り勘結果はありません。</strong>
+          <p>参加者と算出方法を選択して、最初の割り勘を開始できます。</p>
+        </div>
+      <% } else { %>
+        <dl class="payments-batch-definition">
+          <div><dt>取引日</dt><dd><%= new Date(latestBatch.transactionDate).toLocaleDateString("ja-JP") %></dd></div>
+          <div><dt>内容</dt><dd><span tabindex="0" data-payment-tooltip="<%= latestBatch.rawText %>"><%= latestBatch.rawText %></span></dd></div>
+          <div><dt>カテゴリ</dt><dd><%= latestBatch.category %></dd></div>
+          <div><dt>算出方法</dt><dd><%= latestBatch.calculationMethodLabel %></dd></div>
+          <div><dt>総額</dt><dd><strong><%= latestBatch.totalAmount.toLocaleString("ja-JP") %> 円</strong></dd></div>
+        </dl>
+
+        <h3 class="payments-allocation-heading">参加者別負担額</h3>
+        <ul class="payments-allocation-list">
+          <% latestBatch.allocations.forEach(allocation => { %>
+            <li>
+              <span><%= allocation.displayName %></span>
+              <strong><%= allocation.amount.toLocaleString("ja-JP") %> 円</strong>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </aside>
+  </main>
+
+  <script>
+    (() => {
+      const lowerArea = document.querySelector("[data-payment-lower]");
+      const toggle = document.querySelector("[data-payment-context-toggle]");
+      const contextPanel = document.getElementById("payment-context-panel");
+      const contextLinks = document.querySelectorAll("[data-payment-context-link]");
+
+      const setContextOpen = (isOpen, persistInLinks = true) => {
+        if (!(lowerArea instanceof HTMLElement) || !(toggle instanceof HTMLButtonElement) || !(contextPanel instanceof HTMLElement)) return;
+
+        lowerArea.classList.toggle("is-context-closed", !isOpen);
+        lowerArea.dataset.contextState = isOpen ? "open" : "closed";
+        toggle.textContent = isOpen ? "←" : "→";
+        toggle.setAttribute("aria-expanded", String(isOpen));
+        toggle.setAttribute("aria-label", isOpen ? "左領域を閉じる" : "左領域を開く");
+        toggle.setAttribute("title", isOpen ? "左領域を閉じる" : "左領域を開く");
+        contextPanel.setAttribute("aria-hidden", String(!isOpen));
+
+        if (!persistInLinks) return;
+        contextLinks.forEach((link) => {
+          if (!(link instanceof HTMLAnchorElement)) return;
+          const url = new URL(link.href);
+          url.searchParams.set("context", isOpen ? "open" : "closed");
+          link.href = `${url.pathname}${url.search}${url.hash}`;
+        });
+      };
+
+      if (lowerArea instanceof HTMLElement && toggle instanceof HTMLButtonElement && contextPanel instanceof HTMLElement) {
+        const explicitState = lowerArea.dataset.contextState;
+        const initialOpen = explicitState === "open" || (explicitState !== "closed" && !window.matchMedia("(max-width: 760px)").matches);
+        setContextOpen(initialOpen, explicitState === "open" || explicitState === "closed");
+        toggle.addEventListener("click", () => setContextOpen(toggle.getAttribute("aria-expanded") !== "true"));
+      }
+
+      const tabs = [...document.querySelectorAll("[data-payment-tab]")];
+      const panels = [...document.querySelectorAll("[data-payment-tab-panel]")];
+      const activateTab = (name, focus = false) => {
+        tabs.forEach((tab) => {
+          const selected = tab.getAttribute("data-payment-tab") === name;
+          tab.setAttribute("aria-selected", String(selected));
+          tab.setAttribute("tabindex", selected ? "0" : "-1");
+          if (selected && focus && tab instanceof HTMLElement) tab.focus();
+        });
+        panels.forEach((panel) => {
+          panel.hidden = panel.getAttribute("data-payment-tab-panel") !== name;
+        });
+      };
+
+      tabs.forEach((tab, index) => {
+        tab.addEventListener("click", () => activateTab(tab.getAttribute("data-payment-tab")));
+        tab.addEventListener("keydown", (event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          const offset = event.key === "ArrowRight" ? 1 : -1;
+          const next = tabs[(index + offset + tabs.length) % tabs.length];
+          activateTab(next.getAttribute("data-payment-tab"), true);
+        });
+      });
+
+      document.querySelectorAll("[data-method-help]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const controlledId = button.getAttribute("aria-controls");
+          const description = controlledId ? document.getElementById(controlledId) : null;
+          if (!description) return;
+          const willOpen = description.hidden;
+          document.querySelectorAll("[data-method-help]").forEach((other) => other.setAttribute("aria-expanded", "false"));
+          document.querySelectorAll(".payments-method-list p").forEach((item) => { item.hidden = true; });
+          description.hidden = !willOpen;
+          button.setAttribute("aria-expanded", String(willOpen));
+        });
+      });
+
+      const tooltip = document.createElement("div");
+      tooltip.className = "payments-tooltip";
+      tooltip.setAttribute("role", "tooltip");
+      tooltip.hidden = true;
+      document.body.append(tooltip);
+
+      const hideTooltip = () => {
+        tooltip.hidden = true;
+        tooltip.textContent = "";
+      };
+      const showTooltip = (target) => {
+        if (!(target instanceof HTMLElement)) return;
+        const text = target.dataset.paymentTooltip;
+        if (!text || target.scrollWidth <= target.clientWidth) {
+          hideTooltip();
+          return;
+        }
+        tooltip.textContent = text;
+        tooltip.hidden = false;
+        const rect = target.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        const padding = 12;
+        let left = Math.max(padding, Math.min(rect.left, window.innerWidth - tooltipRect.width - padding));
+        let top = rect.bottom + 8;
+        if (top + tooltipRect.height > window.innerHeight - padding) top = Math.max(padding, rect.top - tooltipRect.height - 8);
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      };
+      document.querySelectorAll("[data-payment-tooltip]").forEach((target) => {
+        target.addEventListener("mouseenter", () => showTooltip(target));
+        target.addEventListener("mouseleave", hideTooltip);
+        target.addEventListener("focus", () => showTooltip(target));
+        target.addEventListener("blur", hideTooltip);
+        target.addEventListener("click", () => tooltip.hidden ? showTooltip(target) : hideTooltip());
+      });
+      window.addEventListener("resize", hideTooltip);
+      window.addEventListener("scroll", hideTooltip, { passive: true, capture: true });
+    })();
+  </script>
+</body>
+</html>

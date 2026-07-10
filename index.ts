@@ -571,6 +571,66 @@ function buildGroupFundUrl(
     : `/groups/${groupId}/fund`;
 }
 
+type PaymentContextState = "open" | "closed";
+
+function parsePaymentContextState(value: unknown): PaymentContextState | null {
+  if (value === "open" || value === "closed") return value;
+  return null;
+}
+
+function buildGroupPaymentsUrl(
+  groupId: number,
+  options: {
+    pageId?: number | null;
+    error?: string;
+    success?: string;
+    contextState?: PaymentContextState | null;
+  } = {},
+): string {
+  const query = new URLSearchParams();
+
+  if (options.pageId && Number.isSafeInteger(options.pageId)) {
+    query.set("pageId", String(options.pageId));
+  }
+  if (options.error) query.set("error", options.error);
+  if (options.success) query.set("success", options.success);
+  if (options.contextState) query.set("context", options.contextState);
+
+  const queryString = query.toString();
+  const baseUrl = `/groups/${groupId}/payments`;
+  return queryString ? `${baseUrl}?${queryString}` : baseUrl;
+}
+
+const calculationMethodOptions = [
+  {
+    value: "EQUAL",
+    label: "均等",
+    description: "総額を選択参加者で均等に配分します。",
+  },
+  {
+    value: "HISTORY_ALL",
+    label: "過去の負担比率・全履歴",
+    description: "過去の確定済み支払い比率を今回へ適用します。",
+  },
+  {
+    value: "HISTORY_SAME_PARTICIPANTS",
+    label: "過去の負担比率・同じ参加者",
+    description: "同じ参加者構成の過去batch比率を利用します。",
+  },
+  {
+    value: "BALANCE_ADJUSTMENT",
+    label: "累計負担調整",
+    description: "累計支払額の差が小さくなるよう今回の負担を調整します。",
+  },
+] as const;
+
+function getCalculationMethodLabel(value: string | null): string {
+  return (
+    calculationMethodOptions.find((method) => method.value === value)?.label ??
+    "未設定"
+  );
+}
+
 async function findActiveGroupMembership(userId: number, groupId: number) {
   const membership = await prisma.groupMember.findUnique({
     where: {
@@ -1273,6 +1333,216 @@ app.get("/groups/:groupId", requireAuthentication, async (req, res, next) => {
       activeAdminCount,
       error,
       success,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, next) => {
+  const userId = req.session.userId;
+  const groupId = parsePositiveInteger(req.params.groupId);
+
+  if (!userId) {
+    res.redirect("/?error=ログインしてください。");
+    return;
+  }
+
+  if (!groupId) {
+    res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+    return;
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true },
+    });
+
+    if (!user?.isActive) {
+      await destroySession(req);
+      res.clearCookie(sessionCookieName);
+      res.redirect("/?error=このアカウントは利用できません。");
+      return;
+    }
+
+    const membership = await findActiveGroupMembership(userId, groupId);
+
+    if (!membership) {
+      res.status(403).send("このグループの関連支払いを表示する権限がありません。");
+      return;
+    }
+
+    const [pages, activeMembers] = await Promise.all([
+      prisma.ledgerPage.findMany({
+        where: {
+          groupId,
+          pageType: "GROUP_PAYMENT",
+          userId: null,
+        },
+        orderBy: [{ isInitial: "desc" }, { sortOrder: "asc" }, { id: "asc" }],
+      }),
+      prisma.groupMember.findMany({
+        where: {
+          groupId,
+          isActive: true,
+          user: { isActive: true },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              displayName: true,
+            },
+          },
+        },
+        orderBy: [{ role: "desc" }, { joinedAt: "asc" }, { userId: "asc" }],
+      }),
+    ]);
+
+    const requestedPageId = parsePositiveInteger(req.query.pageId);
+    const selectedPage =
+      pages.find((page) => page.id === requestedPageId) ?? pages[0] ?? null;
+
+    if (!selectedPage) {
+      res.status(500).send("関連支払いの表示ページが見つかりません。");
+      return;
+    }
+
+    const transactionDateFilter = buildTransactionDateFilter(
+      selectedPage.startDate,
+      selectedPage.endDate,
+    );
+
+    const [transactions, latestBatchTransaction] = await Promise.all([
+      prisma.transaction.findMany({
+        where: {
+          groupId,
+          kind: "GROUP_PAYMENT",
+          ...(Object.keys(transactionDateFilter).length > 0
+            ? { transactionDate: transactionDateFilter }
+            : {}),
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              displayName: true,
+            },
+          },
+        },
+        orderBy: [
+          { transactionDate: "desc" },
+          { createdAt: "desc" },
+          { id: "desc" },
+        ],
+      }),
+      prisma.transaction.findFirst({
+        where: {
+          groupId,
+          kind: "GROUP_PAYMENT",
+          paymentBatchId: { not: null },
+        },
+        select: { paymentBatchId: true },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      }),
+    ]);
+
+    const latestBatchTransactions = latestBatchTransaction?.paymentBatchId
+      ? await prisma.transaction.findMany({
+          where: {
+            groupId,
+            kind: "GROUP_PAYMENT",
+            paymentBatchId: latestBatchTransaction.paymentBatchId,
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+              },
+            },
+          },
+          orderBy: [{ userId: "asc" }, { id: "asc" }],
+        })
+      : [];
+
+    const perPersonMap = new Map<
+      number,
+      { userId: number; displayName: string; totalAmount: number; paymentCount: number }
+    >();
+
+    for (const transaction of transactions) {
+      if (!transaction.userId) continue;
+
+      const current = perPersonMap.get(transaction.userId) ?? {
+        userId: transaction.userId,
+        displayName: transaction.user?.displayName ?? "不明なユーザー",
+        totalAmount: 0,
+        paymentCount: 0,
+      };
+      current.totalAmount += transaction.amount;
+      current.paymentCount += 1;
+      perPersonMap.set(transaction.userId, current);
+    }
+
+    const perPersonRows = [...perPersonMap.values()].sort(
+      (left, right) =>
+        right.totalAmount - left.totalAmount ||
+        left.displayName.localeCompare(right.displayName, "ja") ||
+        left.userId - right.userId,
+    );
+    const historyTotal = transactions.reduce(
+      (sum, transaction) => sum + transaction.amount,
+      0,
+    );
+
+    const latestBatch = latestBatchTransactions.length
+      ? {
+          paymentBatchId: latestBatchTransactions[0].paymentBatchId,
+          transactionDate: latestBatchTransactions[0].transactionDate,
+          rawText: latestBatchTransactions[0].rawText,
+          category: latestBatchTransactions[0].category,
+          calculationMethod: latestBatchTransactions[0].calculationMethod,
+          calculationMethodLabel: getCalculationMethodLabel(
+            latestBatchTransactions[0].calculationMethod,
+          ),
+          totalAmount: latestBatchTransactions.reduce(
+            (sum, transaction) => sum + transaction.amount,
+            0,
+          ),
+          allocations: latestBatchTransactions.map((transaction) => ({
+            transactionId: transaction.id,
+            userId: transaction.userId,
+            displayName: transaction.user?.displayName ?? "不明なユーザー",
+            amount: transaction.amount,
+          })),
+        }
+      : null;
+
+    const contextState = parsePaymentContextState(req.query.context);
+    const error = typeof req.query.error === "string" ? req.query.error : null;
+    const success = typeof req.query.success === "string" ? req.query.success : null;
+
+    res.render("payments", {
+      currentUserId: userId,
+      group: membership.group,
+      membership,
+      isAdmin: membership.role === "ADMIN",
+      pages,
+      selectedPage,
+      activeMembers,
+      transactions,
+      perPersonRows,
+      historyTotal,
+      latestBatch,
+      calculationMethodOptions,
+      contextState,
+      isContextOpen: contextState !== "closed",
+      error,
+      success,
+      buildGroupPaymentsUrl,
     });
   } catch (error) {
     next(error);
