@@ -1540,6 +1540,14 @@ app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, nex
       calculationMethodOptions,
       contextState,
       isContextOpen: contextState !== "closed",
+      selectedPageForm: {
+        startDate: selectedPage.startDate
+          ? selectedPage.startDate.toISOString().slice(0, 10)
+          : "",
+        endDate: selectedPage.endDate
+          ? selectedPage.endDate.toISOString().slice(0, 10)
+          : "",
+      },
       error,
       success,
       buildGroupPaymentsUrl,
@@ -1548,6 +1556,323 @@ app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, nex
     next(error);
   }
 });
+
+
+app.post(
+  "/groups/:groupId/payments/pages",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const currentPageId = parsePositiveInteger(req.body.currentPageId);
+    const contextState = parsePaymentContextState(req.body.contextState);
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    const name = String(req.body.name ?? "").trim();
+    const startDate = parseOptionalDateOnly(req.body.startDate);
+    const endDate = parseOptionalDateOnly(req.body.endDate);
+    const validationError = validateLedgerPageInput({ name, startDate, endDate });
+
+    try {
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true },
+      });
+
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const adminMembership = await findActiveGroupAdminMembership(
+        operatorUserId,
+        groupId,
+      );
+
+      if (!adminMembership) {
+        res.status(403).send("関連支払いの表示ページを追加する権限がありません。");
+        return;
+      }
+
+      if (validationError) {
+        res.redirect(
+          buildGroupPaymentsUrl(groupId, {
+            pageId: currentPageId,
+            error: validationError,
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      const pageOrder = await prisma.ledgerPage.aggregate({
+        where: {
+          groupId,
+          userId: null,
+          pageType: "GROUP_PAYMENT",
+        },
+        _max: { sortOrder: true },
+      });
+
+      const page = await prisma.ledgerPage.create({
+        data: {
+          pageType: "GROUP_PAYMENT",
+          userId: null,
+          groupId,
+          name,
+          startDate: startDate.value,
+          endDate: endDate.value,
+          isInitial: false,
+          sortOrder: (pageOrder._max.sortOrder ?? -1) + 1,
+        },
+      });
+
+      res.redirect(
+        buildGroupPaymentsUrl(groupId, {
+          pageId: page.id,
+          success: "関連支払いの表示ページを追加しました。",
+          contextState,
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.post(
+  "/groups/:groupId/payments/pages/:pageId",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const pageId = parsePositiveInteger(req.params.pageId);
+    const contextState = parsePaymentContextState(req.body.contextState);
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    if (!pageId) {
+      res.redirect(
+        buildGroupPaymentsUrl(groupId, {
+          error: "編集対象のページが正しくありません。",
+          contextState,
+        }),
+      );
+      return;
+    }
+
+    const name = String(req.body.name ?? "").trim();
+    const startDate = parseOptionalDateOnly(req.body.startDate);
+    const endDate = parseOptionalDateOnly(req.body.endDate);
+    const validationError = validateLedgerPageInput({ name, startDate, endDate });
+
+    try {
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true },
+      });
+
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const adminMembership = await findActiveGroupAdminMembership(
+        operatorUserId,
+        groupId,
+      );
+
+      if (!adminMembership) {
+        res.status(403).send("関連支払いの表示ページを編集する権限がありません。");
+        return;
+      }
+
+      const page = await prisma.ledgerPage.findFirst({
+        where: {
+          id: pageId,
+          groupId,
+          userId: null,
+          pageType: "GROUP_PAYMENT",
+        },
+        select: { id: true },
+      });
+
+      if (!page) {
+        res.redirect(
+          buildGroupPaymentsUrl(groupId, {
+            error: "編集対象のページが見つかりません。",
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      if (validationError) {
+        res.redirect(
+          buildGroupPaymentsUrl(groupId, {
+            pageId,
+            error: validationError,
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      await prisma.ledgerPage.update({
+        where: { id: pageId },
+        data: {
+          name,
+          startDate: startDate.value,
+          endDate: endDate.value,
+        },
+      });
+
+      res.redirect(
+        buildGroupPaymentsUrl(groupId, {
+          pageId,
+          success: "関連支払いの表示ページを更新しました。",
+          contextState,
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.post(
+  "/groups/:groupId/payments/pages/:pageId/delete",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const pageId = parsePositiveInteger(req.params.pageId);
+    const contextState = parsePaymentContextState(req.body.contextState);
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    if (!pageId) {
+      res.redirect(
+        buildGroupPaymentsUrl(groupId, {
+          error: "削除対象のページが正しくありません。",
+          contextState,
+        }),
+      );
+      return;
+    }
+
+    try {
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true },
+      });
+
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const adminMembership = await findActiveGroupAdminMembership(
+        operatorUserId,
+        groupId,
+      );
+
+      if (!adminMembership) {
+        res.status(403).send("関連支払いの表示ページを削除する権限がありません。");
+        return;
+      }
+
+      const page = await prisma.ledgerPage.findFirst({
+        where: {
+          id: pageId,
+          groupId,
+          userId: null,
+          pageType: "GROUP_PAYMENT",
+        },
+        select: {
+          id: true,
+          isInitial: true,
+        },
+      });
+
+      if (!page) {
+        res.redirect(
+          buildGroupPaymentsUrl(groupId, {
+            error: "削除対象のページが見つかりません。",
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      if (page.isInitial) {
+        res.redirect(
+          buildGroupPaymentsUrl(groupId, {
+            pageId,
+            error: "初期ページは削除できません。",
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      await prisma.ledgerPage.delete({
+        where: { id: pageId },
+      });
+
+      const fallbackPage = await prisma.ledgerPage.findFirst({
+        where: {
+          groupId,
+          userId: null,
+          pageType: "GROUP_PAYMENT",
+        },
+        orderBy: [{ isInitial: "desc" }, { sortOrder: "asc" }, { id: "asc" }],
+        select: { id: true },
+      });
+
+      res.redirect(
+        buildGroupPaymentsUrl(groupId, {
+          pageId: fallbackPage?.id,
+          success: "関連支払いの表示ページを削除しました。Transactionは削除されていません。",
+          contextState,
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 
 app.get("/groups/:groupId/fund", requireAuthentication, async (req, res, next) => {

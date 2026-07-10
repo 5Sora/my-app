@@ -75,7 +75,7 @@
               <dd><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong></dd>
             </div>
           </dl>
-          <p class="payments-stage-note">第7-1-1では表示基盤を実装します。支払い入力は第7-2で有効化します。</p>
+          <p class="payments-stage-note">表示ページの追加・編集・削除に対応しています。支払い入力は第7-2で有効化します。</p>
         </div>
 
         <div class="payments-method-area" aria-labelledby="calculation-method-heading">
@@ -199,9 +199,30 @@
               aria-label="左領域を閉じる"
               title="左領域を閉じる"
             >←</button>
-            <button type="button" disabled aria-disabled="true" aria-label="選択ページを編集（第7-1-2で実装）" title="選択ページを編集（第7-1-2で実装）">⚙</button>
-            <button type="button" disabled aria-disabled="true" aria-label="ページを追加（第7-1-2で実装）" title="ページを追加（第7-1-2で実装）">＋</button>
-            <button type="button" disabled aria-disabled="true" aria-label="選択ページを削除（第7-1-2で実装）" title="選択ページを削除（第7-1-2で実装）">−</button>
+            <button
+              type="button"
+              data-open-payment-dialog="payments-page-edit-dialog"
+              <%= isAdmin ? "" : "disabled" %>
+              aria-disabled="<%= String(!isAdmin) %>"
+              aria-label="<%= isAdmin ? '選択中LedgerPageを編集' : 'LedgerPage編集はグループ管理者のみ可能です' %>"
+              title="<%= isAdmin ? '選択中LedgerPageを編集' : 'LedgerPage編集はグループ管理者のみ可能です' %>"
+            >⚙</button>
+            <button
+              type="button"
+              data-open-payment-dialog="payments-page-add-dialog"
+              <%= isAdmin ? "" : "disabled" %>
+              aria-disabled="<%= String(!isAdmin) %>"
+              aria-label="<%= isAdmin ? 'LedgerPageを追加' : 'LedgerPage追加はグループ管理者のみ可能です' %>"
+              title="<%= isAdmin ? 'LedgerPageを追加' : 'LedgerPage追加はグループ管理者のみ可能です' %>"
+            >＋</button>
+            <button
+              type="submit"
+              form="payments-delete-page-form"
+              <%= !isAdmin || selectedPage.isInitial ? "disabled" : "" %>
+              aria-disabled="<%= String(!isAdmin || selectedPage.isInitial) %>"
+              aria-label="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>"
+              title="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>"
+            >−</button>
           </aside>
 
           <section class="panel payments-collapsed-summary" aria-hidden="true">
@@ -348,12 +369,98 @@
     </aside>
   </main>
 
+  <% if (isAdmin) { %>
+    <dialog class="payments-page-dialog" id="payments-page-add-dialog" aria-labelledby="payments-page-add-title">
+      <form action="/groups/<%= group.id %>/payments/pages" method="post" class="page-form payments-dialog-form">
+        <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
+        <input type="hidden" name="contextState" value="<%= contextState ?? '' %>" data-payment-context-state>
+
+        <div class="payments-dialog-heading">
+          <div>
+            <p class="eyebrow">LedgerPage管理</p>
+            <h2 id="payments-page-add-title">表示ページを追加</h2>
+          </div>
+          <button type="button" class="payments-dialog-close" data-close-payment-dialog aria-label="閉じる" title="閉じる">×</button>
+        </div>
+
+        <label>
+          <span>ページ名</span>
+          <input type="text" name="name" maxlength="100" required>
+        </label>
+
+        <div class="date-pair">
+          <label>
+            <span>開始日</span>
+            <input type="date" name="startDate">
+          </label>
+          <label>
+            <span>終了日</span>
+            <input type="date" name="endDate">
+          </label>
+        </div>
+
+        <p class="form-help">日付を空欄にすると、その方向の期間を制限しません。</p>
+        <div class="payments-dialog-actions">
+          <button type="button" class="secondary-button" data-close-payment-dialog>キャンセル</button>
+          <button type="submit" class="primary-button">ページを追加</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="payments-page-dialog" id="payments-page-edit-dialog" aria-labelledby="payments-page-edit-title">
+      <form action="/groups/<%= group.id %>/payments/pages/<%= selectedPage.id %>" method="post" class="page-form payments-dialog-form">
+        <input type="hidden" name="contextState" value="<%= contextState ?? '' %>" data-payment-context-state>
+
+        <div class="payments-dialog-heading">
+          <div>
+            <p class="eyebrow">LedgerPage管理</p>
+            <h2 id="payments-page-edit-title">選択中ページを編集</h2>
+          </div>
+          <button type="button" class="payments-dialog-close" data-close-payment-dialog aria-label="閉じる" title="閉じる">×</button>
+        </div>
+
+        <label>
+          <span>ページ名</span>
+          <input type="text" name="name" value="<%= selectedPage.name %>" maxlength="100" required>
+        </label>
+
+        <div class="date-pair">
+          <label>
+            <span>開始日</span>
+            <input type="date" name="startDate" value="<%= selectedPageForm.startDate %>">
+          </label>
+          <label>
+            <span>終了日</span>
+            <input type="date" name="endDate" value="<%= selectedPageForm.endDate %>">
+          </label>
+        </div>
+
+        <p class="form-help">初期ページも名前と期間を編集できます。初期ページの属性と削除不可状態は維持されます。</p>
+        <div class="payments-dialog-actions">
+          <button type="button" class="secondary-button" data-close-payment-dialog>キャンセル</button>
+          <button type="submit" class="primary-button">変更を保存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <form
+      id="payments-delete-page-form"
+      action="/groups/<%= group.id %>/payments/pages/<%= selectedPage.id %>/delete"
+      method="post"
+      class="payments-hidden-form"
+      onsubmit="return confirm('選択中の表示ページを削除しますか？関連支払いTransaction自体は削除されません。');"
+    >
+      <input type="hidden" name="contextState" value="<%= contextState ?? '' %>" data-payment-context-state>
+    </form>
+  <% } %>
+
   <script>
     (() => {
       const lowerArea = document.querySelector("[data-payment-lower]");
       const toggle = document.querySelector("[data-payment-context-toggle]");
       const contextPanel = document.getElementById("payment-context-panel");
       const contextLinks = document.querySelectorAll("[data-payment-context-link]");
+      const contextStateInputs = document.querySelectorAll("[data-payment-context-state]");
 
       const setContextOpen = (isOpen, persistInLinks = true) => {
         if (!(lowerArea instanceof HTMLElement) || !(toggle instanceof HTMLButtonElement) || !(contextPanel instanceof HTMLElement)) return;
@@ -365,6 +472,11 @@
         toggle.setAttribute("aria-label", isOpen ? "左領域を閉じる" : "左領域を開く");
         toggle.setAttribute("title", isOpen ? "左領域を閉じる" : "左領域を開く");
         contextPanel.setAttribute("aria-hidden", String(!isOpen));
+
+        const contextState = isOpen ? "open" : "closed";
+        contextStateInputs.forEach((input) => {
+          if (input instanceof HTMLInputElement) input.value = contextState;
+        });
 
         if (!persistInLinks) return;
         contextLinks.forEach((link) => {
@@ -417,6 +529,51 @@
           document.querySelectorAll(".payments-method-list p").forEach((item) => { item.hidden = true; });
           description.hidden = !willOpen;
           button.setAttribute("aria-expanded", String(willOpen));
+        });
+      });
+
+      document.querySelectorAll("[data-open-payment-dialog]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const dialogId = button.getAttribute("data-open-payment-dialog");
+          const dialog = dialogId ? document.getElementById(dialogId) : null;
+          if (dialog instanceof HTMLDialogElement) dialog.showModal();
+        });
+      });
+
+      document.querySelectorAll("[data-close-payment-dialog]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const dialog = button.closest("dialog");
+          if (dialog instanceof HTMLDialogElement) dialog.close();
+        });
+      });
+
+      document.querySelectorAll(".payments-page-dialog").forEach((dialog) => {
+        dialog.addEventListener("click", (event) => {
+          if (event.target === dialog && dialog instanceof HTMLDialogElement) dialog.close();
+        });
+      });
+
+      document.querySelectorAll("form[method='post']").forEach((form) => {
+        form.addEventListener("submit", (event) => {
+          if (event.defaultPrevented) return;
+
+          if (form.dataset.submitting === "true") {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+          }
+
+          form.dataset.submitting = "true";
+          form.setAttribute("aria-busy", "true");
+          form.querySelectorAll("button[type='submit'], input[type='submit']").forEach((control) => {
+            if (control instanceof HTMLButtonElement) {
+              control.textContent = "処理中…";
+              control.disabled = true;
+            } else if (control instanceof HTMLInputElement) {
+              control.value = "処理中…";
+              control.disabled = true;
+            }
+          });
         });
       });
 
