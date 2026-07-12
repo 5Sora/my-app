@@ -505,9 +505,10 @@
   </main>
 
   <dialog class="payments-page-dialog payments-transaction-dialog" id="payments-transaction-add-dialog" aria-labelledby="payments-transaction-add-title">
-    <form action="/groups/<%= group.id %>/payments/transactions" method="post" class="page-form payments-dialog-form">
+    <form action="/groups/<%= group.id %>/payments/transactions" method="post" class="page-form payments-dialog-form" data-ai-classification-form data-ai-target="GROUP_PAYMENT" data-ai-group-id="<%= group.id %>">
       <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
       <input type="hidden" name="contextState" value="<%= contextState ?? '' %>" data-payment-context-state>
+      <input type="hidden" name="suggestionToken" value="" data-ai-suggestion-token>
 
       <div class="payments-dialog-heading">
         <div>
@@ -543,8 +544,18 @@
 
       <label>
         <span>内容・名目</span>
-        <textarea name="rawText" maxlength="500" rows="4" placeholder="例：部活動の会場利用料" required></textarea>
+        <textarea name="rawText" maxlength="500" rows="4" placeholder="例：昨日部活動の会場利用料を3000円払った" required data-ai-raw-text></textarea>
       </label>
+
+      <div class="ai-classification-actions">
+        <button type="button" class="secondary-button" data-ai-classify-button>AIで推定</button>
+        <p class="form-help">押すと、この内容だけを外部AI（OpenAI）へ送信します。候補は自動保存されません。</p>
+      </div>
+      <section class="ai-suggestion-panel" data-ai-suggestion-panel hidden aria-live="polite">
+        <p class="ai-suggestion-message" data-ai-message></p>
+        <dl class="ai-field-status" data-ai-field-status></dl>
+        <ul class="ai-warning-list" data-ai-warnings hidden></ul>
+      </section>
 
       <p class="form-help">登録する1件のTransactionを、本人の個人家計簿とこのグループの関連支払い履歴から参照します。</p>
       <div class="payments-dialog-actions">
@@ -857,6 +868,59 @@
       document.querySelectorAll(".payments-page-dialog").forEach((dialog) => {
         dialog.addEventListener("click", (event) => {
           if (event.target === dialog && dialog instanceof HTMLDialogElement) dialog.close();
+        });
+      });
+
+      const statusLabels = { EXPLICIT: "入力に明記", INFERRED: "AI・規則で推定", DEFAULTED: "画面の既定値", MISSING: "要入力" };
+      document.querySelectorAll("[data-ai-classification-form]").forEach((form) => {
+        if (!(form instanceof HTMLFormElement)) return;
+        const button = form.querySelector("[data-ai-classify-button]");
+        const rawText = form.elements.namedItem("rawText");
+        const amount = form.elements.namedItem("amount");
+        const date = form.elements.namedItem("transactionDate");
+        const category = form.elements.namedItem("category");
+        const token = form.querySelector("[data-ai-suggestion-token]");
+        const panel = form.querySelector("[data-ai-suggestion-panel]");
+        const message = form.querySelector("[data-ai-message]");
+        const statuses = form.querySelector("[data-ai-field-status]");
+        const warnings = form.querySelector("[data-ai-warnings]");
+        button?.addEventListener("click", async () => {
+          if (!(button instanceof HTMLButtonElement) || !(rawText instanceof HTMLTextAreaElement)) return;
+          const text = rawText.value.trim();
+          if (!text) { rawText.setCustomValidity("AIで推定する内容を入力してください。"); rawText.reportValidity(); rawText.setCustomValidity(""); return; }
+          button.disabled = true; button.textContent = "推定中…"; form.setAttribute("aria-busy", "true");
+          if (panel instanceof HTMLElement) panel.hidden = false;
+          if (message instanceof HTMLElement) message.textContent = "AIで候補を作成しています。";
+          try {
+            const response = await fetch("/api/ai/classify-transaction", {
+              method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" }, credentials: "same-origin",
+              body: JSON.stringify({ target: form.dataset.aiTarget, groupId: Number(form.dataset.aiGroupId), rawText: text }),
+            });
+            const payload = await response.json().catch(() => null);
+            if (!payload?.suggestion) throw new Error(payload?.message || "AI候補を取得できませんでした。");
+            const suggestion = payload.suggestion;
+            if (amount instanceof HTMLInputElement && suggestion.amount !== null) amount.value = String(suggestion.amount);
+            if (date instanceof HTMLInputElement) date.value = suggestion.transactionDate || payload.referenceDate || date.value;
+            if (category instanceof HTMLSelectElement) category.value = suggestion.category || "";
+            if (payload.source === "AI" && suggestion.summary) rawText.value = suggestion.summary;
+            if (token instanceof HTMLInputElement) token.value = payload.suggestionToken || "";
+            if (message instanceof HTMLElement) { message.textContent = payload.message || "候補を表示しました。"; message.dataset.source = payload.source || ""; }
+            if (statuses instanceof HTMLElement) {
+              statuses.replaceChildren();
+              [["種類", suggestion.fieldStatus?.transactionType], ["金額", suggestion.fieldStatus?.amount], ["取引日", suggestion.transactionDate ? suggestion.fieldStatus?.transactionDate : "DEFAULTED"], ["カテゴリ", suggestion.fieldStatus?.category]].forEach(([label, status]) => {
+                const dt = document.createElement("dt"); dt.textContent = label;
+                const dd = document.createElement("dd"); dd.textContent = statusLabels[status] || "要確認"; dd.dataset.status = status || "";
+                statuses.append(dt, dd);
+              });
+            }
+            if (warnings instanceof HTMLUListElement) {
+              warnings.replaceChildren();
+              (Array.isArray(suggestion.warnings) ? suggestion.warnings : []).forEach((value) => { const li = document.createElement("li"); li.textContent = String(value); warnings.append(li); });
+              warnings.hidden = warnings.children.length === 0;
+            }
+          } catch (error) {
+            if (message instanceof HTMLElement) { message.textContent = error instanceof Error ? error.message : "AI候補を取得できませんでした。"; message.dataset.source = "ERROR"; }
+          } finally { button.disabled = false; button.textContent = "AIで推定"; form.removeAttribute("aria-busy"); }
         });
       });
 

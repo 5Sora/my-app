@@ -1,18 +1,24 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { personalTransactionClassificationSchema } from "./transaction-classification.js";
+import {
+  CLASSIFICATION_TARGET_VALUES,
+  transactionClassificationTokenSchema,
+  type ClassificationTarget,
+} from "./transaction-classification.js";
 
-const TOKEN_VERSION = 1;
+const TOKEN_VERSION = 2;
 export const AI_SUGGESTION_LIFETIME_MS = 30 * 60 * 1000;
 
 const suggestionTokenPayloadSchema = z
   .object({
     version: z.literal(TOKEN_VERSION),
+    target: z.enum(CLASSIFICATION_TARGET_VALUES),
+    groupId: z.number().int().positive().nullable(),
     source: z.enum(["AI", "KEYWORD"]),
     issuedAt: z.number().int().nonnegative(),
     expiresAt: z.number().int().positive(),
     model: z.string().trim().min(1).max(100).nullable(),
-    suggestion: personalTransactionClassificationSchema,
+    suggestion: transactionClassificationTokenSchema,
   })
   .strict();
 
@@ -21,6 +27,8 @@ export type SuggestionTokenPayload = z.infer<typeof suggestionTokenPayloadSchema
 export function createSuggestionToken(input: {
   userId: number;
   secret: string;
+  target?: ClassificationTarget;
+  groupId?: number | null;
   source: "AI" | "KEYWORD";
   model: string | null;
   suggestion: SuggestionTokenPayload["suggestion"];
@@ -29,6 +37,8 @@ export function createSuggestionToken(input: {
   const issuedAt = input.now ?? Date.now();
   const payload: SuggestionTokenPayload = {
     version: TOKEN_VERSION,
+    target: input.target ?? "PERSONAL",
+    groupId: input.groupId ?? null,
     source: input.source,
     issuedAt,
     expiresAt: issuedAt + AI_SUGGESTION_LIFETIME_MS,
@@ -48,17 +58,10 @@ export function verifySuggestionToken(input: {
 }): SuggestionTokenPayload | null {
   const [encodedPayload, providedSignature, extra] = input.token.split(".");
   if (!encodedPayload || !providedSignature || extra !== undefined) return null;
-
   const expectedSignature = signToken(encodedPayload, input.userId, input.secret);
   const expectedBuffer = Buffer.from(expectedSignature, "utf8");
   const providedBuffer = Buffer.from(providedSignature, "utf8");
-  if (
-    expectedBuffer.length !== providedBuffer.length ||
-    !timingSafeEqual(expectedBuffer, providedBuffer)
-  ) {
-    return null;
-  }
-
+  if (expectedBuffer.length !== providedBuffer.length || !timingSafeEqual(expectedBuffer, providedBuffer)) return null;
   try {
     const decoded = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
     const parsed = suggestionTokenPayloadSchema.safeParse(decoded);
@@ -72,42 +75,38 @@ export function verifySuggestionToken(input: {
 }
 
 function signToken(payload: string, userId: number, secret: string): string {
-  return createHmac("sha256", secret)
-    .update(`${userId}.${payload}`)
-    .digest("base64url");
+  return createHmac("sha256", secret).update(`${userId}.${payload}`).digest("base64url");
 }
 
-export function resolvePersonalTransactionClassification(input: {
+export function resolveTransactionClassification(input: {
   payload: SuggestionTokenPayload | null;
+  expectedTarget: ClassificationTarget;
+  expectedGroupId: number | null;
   selectedCategory: string;
+  allowAutomaticKeyword?: boolean;
   finalKind: "income" | "expense";
   finalAmount: number;
   finalTransactionDate: string;
   finalCategory: string;
   finalRawText: string;
 }) {
+  const payload = input.payload && input.payload.target === input.expectedTarget && input.payload.groupId === input.expectedGroupId
+    ? input.payload
+    : null;
   let classificationSource: "MANUAL" | "KEYWORD" | "AI";
-  if (!input.selectedCategory) {
+  if (input.allowAutomaticKeyword && !input.selectedCategory) {
     classificationSource = "KEYWORD";
-  } else if (
-    input.payload?.source === "AI" &&
-    input.payload.suggestion.category === input.finalCategory
-  ) {
+  } else if (payload?.source === "AI" && payload.suggestion.category === input.finalCategory) {
     classificationSource = "AI";
-  } else if (
-    input.payload?.source === "KEYWORD" &&
-    input.payload.suggestion.category === input.finalCategory
-  ) {
+  } else if (payload?.source === "KEYWORD" && payload.suggestion.category === input.finalCategory) {
     classificationSource = "KEYWORD";
   } else {
     classificationSource = "MANUAL";
   }
 
-  if (input.payload?.source !== "AI") {
-    return { classificationSource, aiResult: null };
-  }
+  if (payload?.source !== "AI") return { classificationSource, aiResult: null };
 
-  const suggested = input.payload.suggestion;
+  const suggested = payload.suggestion;
   const finalTransactionType = input.finalKind === "income" ? "INCOME" : "EXPENSE";
   const modifiedFields: string[] = [];
   if (suggested.transactionType !== finalTransactionType) modifiedFields.push("transactionType");
@@ -121,7 +120,7 @@ export function resolvePersonalTransactionClassification(input: {
     aiResult: {
       schemaVersion: 1,
       provider: "OPENAI",
-      model: input.payload.model,
+      model: payload.model,
       feature: "TRANSACTION_CLASSIFICATION",
       suggested: {
         transactionType: suggested.transactionType,
@@ -136,4 +135,21 @@ export function resolvePersonalTransactionClassification(input: {
       categoryModified: suggested.category !== input.finalCategory,
     },
   };
+}
+
+export function resolvePersonalTransactionClassification(input: {
+  payload: SuggestionTokenPayload | null;
+  selectedCategory: string;
+  finalKind: "income" | "expense";
+  finalAmount: number;
+  finalTransactionDate: string;
+  finalCategory: string;
+  finalRawText: string;
+}) {
+  return resolveTransactionClassification({
+    ...input,
+    expectedTarget: "PERSONAL",
+    expectedGroupId: null,
+    allowAutomaticKeyword: true,
+  });
 }

@@ -10,12 +10,16 @@ import {
   AiError,
   AiFoundation,
   classifyPersonalTransactionWithAi,
+  classifyTransactionWithAi,
   createSuggestionToken,
   loadAiConfig,
   resolvePersonalTransactionClassification,
+  resolveTransactionClassification,
   toPublicAiError,
   verifySuggestionToken,
+  type ClassificationTarget,
   type PersonalTransactionClassification,
+  type TransactionClassification,
 } from "./src/ai/index.js";
 import {
   PERSONAL_EXPENSE_CATEGORIES,
@@ -24,6 +28,19 @@ import {
   isAllowedPersonalCategory,
   type PersonalTransactionKind,
 } from "./src/transactions/personal-categories.js";
+import {
+  GROUP_PAYMENT_CATEGORIES,
+  classifyGroupPaymentKeyword,
+  isGroupPaymentCategory,
+} from "./src/transactions/group-payment-categories.js";
+import {
+  FUND_EXPENSE_CATEGORIES,
+  FUND_INCOME_CATEGORIES,
+  classifyFundExpenseKeyword,
+  classifyFundIncomeKeyword,
+  isFundExpenseCategory,
+  isFundIncomeCategory,
+} from "./src/transactions/fund-categories.js";
 
 type CalculationMethodValue =
   | "EQUAL"
@@ -295,6 +312,35 @@ function buildKeywordFallbackSuggestion(
   };
 }
 
+function buildTargetKeywordFallbackSuggestion(input: {
+  target: ClassificationTarget;
+  rawText: string;
+  fallbackKind: PersonalTransactionKind;
+}): TransactionClassification {
+  if (input.target === "PERSONAL") return buildKeywordFallbackSuggestion(input.rawText, input.fallbackKind);
+  const category = input.target === "GROUP_PAYMENT"
+    ? classifyGroupPaymentKeyword(input.rawText)
+    : input.target === "FUND_INCOME"
+      ? classifyFundIncomeKeyword(input.rawText)
+      : classifyFundExpenseKeyword(input.rawText);
+  const transactionType = input.target === "FUND_INCOME" ? "INCOME" : "EXPENSE";
+  return {
+    transactionType,
+    amount: null,
+    transactionDate: null,
+    category,
+    summary: input.rawText.slice(0, 100),
+    fieldStatus: {
+      transactionType: "DEFAULTED",
+      amount: "MISSING",
+      transactionDate: "MISSING",
+      category: "INFERRED",
+    },
+    missingFields: ["amount", "transactionDate"],
+    warnings: ["AIを利用できないため、キーワード分類による候補を表示しています。"],
+  };
+}
+
 type OptionalDateResult = {
   value: Date | null;
   isValid: boolean;
@@ -370,21 +416,9 @@ function validateLedgerPageInput(input: {
 }
 
 
-const groupPaymentCategories = [
-  "飲食費",
-  "交通費",
-  "宿泊費",
-  "会場費",
-  "備品費",
-  "活動費",
-  "その他グループ支出",
-] as const;
-
-type GroupPaymentCategory = (typeof groupPaymentCategories)[number];
-
-function isGroupPaymentCategory(value: string): value is GroupPaymentCategory {
-  return groupPaymentCategories.includes(value as GroupPaymentCategory);
-}
+const groupPaymentCategories = GROUP_PAYMENT_CATEGORIES;
+const fundIncomeCategories = FUND_INCOME_CATEGORIES;
+const fundExpenseCategories = FUND_EXPENSE_CATEGORIES;
 
 function isFutureTransactionDate(date: Date): boolean {
   const today = parseDateOnly(getTokyoDateInputValue());
@@ -397,58 +431,13 @@ function validateGroupPaymentInput(input: {
   rawText: string;
   category: string;
 }): string | null {
-  if (!input.transactionDate) {
-    return "取引日を正しい日付で入力してください。";
-  }
-
-  if (isFutureTransactionDate(input.transactionDate)) {
-    return "取引日は本日以前の日付を入力してください。";
-  }
-
-  if (!input.amount) {
-    return "金額は1円以上の整数で入力してください。";
-  }
-
-  if (!input.rawText) {
-    return "内容を入力してください。";
-  }
-
-  if (input.rawText.length > 500) {
-    return "内容は500文字以内で入力してください。";
-  }
-
-  if (!isGroupPaymentCategory(input.category)) {
-    return "グループ関連支出のカテゴリを選択してください。";
-  }
-
+  if (!input.transactionDate) return "取引日を正しい日付で入力してください。";
+  if (isFutureTransactionDate(input.transactionDate)) return "取引日は本日以前の日付を入力してください。";
+  if (!input.amount) return "金額は1円以上の整数で入力してください。";
+  if (!input.rawText) return "内容を入力してください。";
+  if (input.rawText.length > 500) return "内容は500文字以内で入力してください。";
+  if (!isGroupPaymentCategory(input.category)) return "グループ関連支出のカテゴリを選択してください。";
   return null;
-}
-
-const fundIncomeCategories = [
-  "外部寄付",
-  "助成金",
-  "イベント収益",
-  "その他基金収入",
-] as const;
-
-const fundExpenseCategories = [
-  "備品費",
-  "会場費",
-  "交通費",
-  "飲食費",
-  "活動費",
-  "その他基金支出",
-] as const;
-
-type FundIncomeCategory = (typeof fundIncomeCategories)[number];
-type FundExpenseCategory = (typeof fundExpenseCategories)[number];
-
-function isFundIncomeCategory(value: string): value is FundIncomeCategory {
-  return fundIncomeCategories.includes(value as FundIncomeCategory);
-}
-
-function isFundExpenseCategory(value: string): value is FundExpenseCategory {
-  return fundExpenseCategories.includes(value as FundExpenseCategory);
 }
 
 function validateFundIncomeInput(input: {
@@ -459,30 +448,13 @@ function validateFundIncomeInput(input: {
   relatedUserIdText: string;
   relatedUserId: number | null;
 }): string | null {
-  if (!input.transactionDate) {
-    return "取引日を正しい日付で入力してください。";
-  }
-
-  if (!input.amount) {
-    return "金額は1円以上の整数で入力してください。";
-  }
-
-  if (!input.rawText) {
-    return "内容を入力してください。";
-  }
-
-  if (input.rawText.length > 500) {
-    return "内容は500文字以内で入力してください。";
-  }
-
-  if (!isFundIncomeCategory(input.category)) {
-    return "基金収入のカテゴリを選択してください。";
-  }
-
-  if (input.relatedUserIdText && !input.relatedUserId) {
-    return "関係者が正しくありません。";
-  }
-
+  if (!input.transactionDate) return "取引日を正しい日付で入力してください。";
+  if (isFutureTransactionDate(input.transactionDate)) return "取引日は本日以前の日付を入力してください。";
+  if (!input.amount) return "金額は1円以上の整数で入力してください。";
+  if (!input.rawText) return "内容を入力してください。";
+  if (input.rawText.length > 500) return "内容は500文字以内で入力してください。";
+  if (!isFundIncomeCategory(input.category)) return "基金収入のカテゴリを選択してください。";
+  if (input.relatedUserIdText && !input.relatedUserId) return "関係者が正しくありません。";
   return null;
 }
 
@@ -494,30 +466,13 @@ function validateFundExpenseInput(input: {
   relatedUserIdText: string;
   relatedUserId: number | null;
 }): string | null {
-  if (!input.transactionDate) {
-    return "取引日を正しい日付で入力してください。";
-  }
-
-  if (!input.amount) {
-    return "金額は1円以上の整数で入力してください。";
-  }
-
-  if (!input.rawText) {
-    return "内容を入力してください。";
-  }
-
-  if (input.rawText.length > 500) {
-    return "内容は500文字以内で入力してください。";
-  }
-
-  if (!isFundExpenseCategory(input.category)) {
-    return "基金支出のカテゴリを選択してください。";
-  }
-
-  if (input.relatedUserIdText && !input.relatedUserId) {
-    return "関係者が正しくありません。";
-  }
-
+  if (!input.transactionDate) return "取引日を正しい日付で入力してください。";
+  if (isFutureTransactionDate(input.transactionDate)) return "取引日は本日以前の日付を入力してください。";
+  if (!input.amount) return "金額は1円以上の整数で入力してください。";
+  if (!input.rawText) return "内容を入力してください。";
+  if (input.rawText.length > 500) return "内容は500文字以内で入力してください。";
+  if (!isFundExpenseCategory(input.category)) return "基金支出のカテゴリを選択してください。";
+  if (input.relatedUserIdText && !input.relatedUserId) return "関係者が正しくありません。";
   return null;
 }
 
@@ -2013,7 +1968,7 @@ app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, nex
       calculationMethodOptions,
       groupPaymentCategories,
       currentUserDisplayName: user.displayName,
-      today: formatDateInputValue(new Date()),
+      today: getTokyoDateInputValue(),
       contextState,
       isContextOpen: contextState !== "closed",
       selectedPageForm: {
@@ -2027,7 +1982,7 @@ app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, nex
       isCalculationMode: false,
       splitDraft: {
         totalAmount: "",
-        transactionDate: formatDateInputValue(new Date()),
+        transactionDate: getTokyoDateInputValue(),
         rawText: "",
         category: "",
         participantIds: pageData.activeMembers.map((member) => member.userId),
@@ -2147,7 +2102,7 @@ app.post(
         calculationMethodOptions,
         groupPaymentCategories,
         currentUserDisplayName: user.displayName,
-        today: formatDateInputValue(new Date()),
+        today: getTokyoDateInputValue(),
         contextState: "open" as PaymentContextState,
         isContextOpen: true,
         selectedPageForm: {
@@ -2258,7 +2213,7 @@ app.post(
           calculationMethodOptions,
           groupPaymentCategories,
           currentUserDisplayName: operator.displayName,
-          today: formatDateInputValue(new Date()),
+          today: getTokyoDateInputValue(),
           contextState: "open" as PaymentContextState,
           isContextOpen: true,
           selectedPageForm: {
@@ -2307,7 +2262,7 @@ app.post(
           calculationMethodOptions,
           groupPaymentCategories,
           currentUserDisplayName: operator.displayName,
-          today: formatDateInputValue(new Date()),
+          today: getTokyoDateInputValue(),
           contextState: "open" as PaymentContextState,
           isContextOpen: true,
           selectedPageForm: {
@@ -2866,6 +2821,7 @@ app.post(
     const amount = parsePositiveInteger(req.body.amount);
     const rawText = String(req.body.rawText ?? "").trim();
     const category = String(req.body.category ?? "").trim();
+    const suggestionToken = String(req.body.suggestionToken ?? "").trim();
     const requestedUserIdText = String(req.body.userId ?? "").trim();
     const requestedUserId = requestedUserIdText
       ? parsePositiveInteger(requestedUserIdText)
@@ -2913,6 +2869,21 @@ app.post(
         return;
       }
 
+      const verifiedSuggestion = suggestionToken
+        ? verifySuggestionToken({ token: suggestionToken, userId: operatorUserId, secret: sessionSecret })
+        : null;
+      const { classificationSource, aiResult } = resolveTransactionClassification({
+        payload: verifiedSuggestion,
+        expectedTarget: "GROUP_PAYMENT",
+        expectedGroupId: groupId,
+        selectedCategory: category,
+        finalKind: "expense",
+        finalAmount: amount!,
+        finalTransactionDate: String(req.body.transactionDate ?? "").trim(),
+        finalCategory: category,
+        finalRawText: rawText,
+      });
+
       await prisma.transaction.create({
         data: {
           userId: operatorUserId,
@@ -2925,8 +2896,8 @@ app.post(
           transactionDate: transactionDate!,
           paymentBatchId: null,
           calculationMethod: null,
-          classificationSource: "MANUAL",
-          aiResult: null,
+          classificationSource,
+          aiResult,
         },
       });
 
@@ -3132,7 +3103,7 @@ app.get("/groups/:groupId/fund", requireAuthentication, async (req, res, next) =
       canCreateFundTransaction: fund.isActive,
       fundIncomeCategories,
       fundExpenseCategories,
-      today: formatDateInputValue(new Date()),
+      today: getTokyoDateInputValue(),
       contextState,
       isContextOpen: contextState === "open",
       selectedPageForm: {
@@ -3626,6 +3597,7 @@ app.post(
     const amount = parsePositiveInteger(req.body.amount);
     const rawText = String(req.body.rawText ?? "").trim();
     const category = String(req.body.category ?? "").trim();
+    const suggestionToken = String(req.body.suggestionToken ?? "").trim();
     const relatedUserIdText = String(req.body.relatedUserId ?? "").trim();
     const relatedUserId = relatedUserIdText
       ? parsePositiveInteger(relatedUserIdText)
@@ -3709,6 +3681,21 @@ app.post(
         }
       }
 
+      const verifiedSuggestion = suggestionToken
+        ? verifySuggestionToken({ token: suggestionToken, userId: operatorUserId, secret: sessionSecret })
+        : null;
+      const { classificationSource, aiResult } = resolveTransactionClassification({
+        payload: verifiedSuggestion,
+        expectedTarget: "FUND_INCOME",
+        expectedGroupId: groupId,
+        selectedCategory: category,
+        finalKind: "income",
+        finalAmount: amount!,
+        finalTransactionDate: String(req.body.transactionDate ?? "").trim(),
+        finalCategory: category,
+        finalRawText: rawText,
+      });
+
       await prisma.transaction.create({
         data: {
           userId: relatedUserId,
@@ -3721,8 +3708,8 @@ app.post(
           transactionDate: transactionDate!,
           paymentBatchId: null,
           calculationMethod: null,
-          classificationSource: "MANUAL",
-          aiResult: null,
+          classificationSource,
+          aiResult,
         },
       });
 
@@ -3763,6 +3750,7 @@ app.post(
     const amount = parsePositiveInteger(req.body.amount);
     const rawText = String(req.body.rawText ?? "").trim();
     const category = String(req.body.category ?? "").trim();
+    const suggestionToken = String(req.body.suggestionToken ?? "").trim();
     const relatedUserIdText = String(req.body.relatedUserId ?? "").trim();
     const relatedUserId = relatedUserIdText
       ? parsePositiveInteger(relatedUserIdText)
@@ -3846,6 +3834,21 @@ app.post(
         }
       }
 
+      const verifiedSuggestion = suggestionToken
+        ? verifySuggestionToken({ token: suggestionToken, userId: operatorUserId, secret: sessionSecret })
+        : null;
+      const { classificationSource, aiResult } = resolveTransactionClassification({
+        payload: verifiedSuggestion,
+        expectedTarget: "FUND_EXPENSE",
+        expectedGroupId: groupId,
+        selectedCategory: category,
+        finalKind: "expense",
+        finalAmount: amount!,
+        finalTransactionDate: String(req.body.transactionDate ?? "").trim(),
+        finalCategory: category,
+        finalRawText: rawText,
+      });
+
       await prisma.transaction.create({
         data: {
           userId: relatedUserId,
@@ -3858,8 +3861,8 @@ app.post(
           transactionDate: transactionDate!,
           paymentBatchId: null,
           calculationMethod: null,
-          classificationSource: "MANUAL",
-          aiResult: null,
+          classificationSource,
+          aiResult,
         },
       });
 
@@ -4683,83 +4686,68 @@ app.post(
       res.status(401).json({ ok: false, message: "ログインしてください。" });
       return;
     }
-
     if (!isSameOriginAiRequest(req)) {
       res.status(403).json({ ok: false, message: "この操作は許可されていません。" });
       return;
     }
 
     const rawText = String(req.body?.rawText ?? "").trim();
+    const targetInput = String(req.body?.target ?? "PERSONAL").trim();
+    const target: ClassificationTarget | null = ["PERSONAL", "GROUP_PAYMENT", "FUND_INCOME", "FUND_EXPENSE"].includes(targetInput)
+      ? targetInput as ClassificationTarget
+      : null;
+    const groupId = target && target !== "PERSONAL" ? parsePositiveInteger(req.body?.groupId) : null;
     const fallbackKindInput = String(req.body?.fallbackKind ?? "").trim();
-    const fallbackKind: PersonalTransactionKind | null =
-      fallbackKindInput === "income" || fallbackKindInput === "expense"
-        ? fallbackKindInput
-        : null;
+    const personalKindIsValid = fallbackKindInput === "income" || fallbackKindInput === "expense";
+    const fallbackKind: PersonalTransactionKind = target === "FUND_INCOME" || fallbackKindInput === "income" ? "income" : "expense";
 
-    if (!rawText || rawText.length > 500 || !fallbackKind) {
-      res.status(400).json({
-        ok: false,
-        message: "内容は1文字以上500文字以内で入力し、収入または支出を選択してください。",
-      });
+    if (!rawText || rawText.length > 500 || !target || (target === "PERSONAL" && !personalKindIsValid) || (target !== "PERSONAL" && !groupId)) {
+      res.status(400).json({ ok: false, message: "分類対象と内容を正しく入力してください。" });
       return;
     }
 
-    const fallbackSuggestion = buildKeywordFallbackSuggestion(rawText, fallbackKind);
+    const fallbackSuggestion = buildTargetKeywordFallbackSuggestion({ target, rawText, fallbackKind });
     const referenceDate = getTokyoDateInputValue();
 
     try {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { isActive: true },
-      });
-
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { isActive: true } });
       if (!user?.isActive) {
         res.status(401).json({ ok: false, message: "このアカウントは利用できません。" });
         return;
       }
-
-      if (!aiFoundation) {
-        throw new AiError("CONFIGURATION_ERROR");
+      if (target !== "PERSONAL") {
+        const membership = await findActiveGroupMembership(userId, groupId!);
+        if (!membership) {
+          res.status(403).json({ ok: false, message: "このグループでAI分類を利用する権限がありません。" });
+          return;
+        }
+        if (target === "FUND_INCOME" || target === "FUND_EXPENSE") {
+          const fund = await prisma.groupFund.findUnique({ where: { groupId: groupId! }, select: { isActive: true } });
+          if (!fund?.isActive) {
+            res.status(409).json({ ok: false, message: "有効なグループ基金がありません。" });
+            return;
+          }
+        }
       }
+      if (!aiFoundation) throw new AiError("CONFIGURATION_ERROR");
 
-      const result = await classifyPersonalTransactionWithAi({
-        foundation: aiFoundation,
-        userId,
-        rawText,
-        referenceDate,
-      });
+      const result = target === "PERSONAL"
+        ? await classifyPersonalTransactionWithAi({ foundation: aiFoundation, userId, rawText, referenceDate })
+        : await classifyTransactionWithAi({ foundation: aiFoundation, userId, rawText, referenceDate, target, personalKind: fallbackKind });
       const suggestionToken = createSuggestionToken({
-        userId,
-        secret: sessionSecret,
-        source: "AI",
-        model: result.model,
-        suggestion: result.data,
+        userId, secret: sessionSecret, target, groupId, source: "AI", model: result.model, suggestion: result.data,
       });
-
       res.json({
-        ok: true,
-        source: "AI",
-        suggestion: result.data,
-        suggestionToken,
-        referenceDate,
+        ok: true, source: "AI", suggestion: result.data, suggestionToken, referenceDate,
         message: "AIによる候補を表示しました。内容を確認してから登録してください。",
       });
     } catch (error) {
       const publicError = toPublicAiError(error);
       const suggestionToken = createSuggestionToken({
-        userId,
-        secret: sessionSecret,
-        source: "KEYWORD",
-        model: null,
-        suggestion: fallbackSuggestion,
+        userId, secret: sessionSecret, target, groupId, source: "KEYWORD", model: null, suggestion: fallbackSuggestion,
       });
-
       res.status(publicError.status).json({
-        ok: false,
-        source: "KEYWORD",
-        suggestion: fallbackSuggestion,
-        suggestionToken,
-        referenceDate,
+        ok: false, source: "KEYWORD", suggestion: fallbackSuggestion, suggestionToken, referenceDate,
         message: `${publicError.message} キーワード分類による候補を表示しました。`,
       });
     }
