@@ -75,7 +75,7 @@
               <dd><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong></dd>
             </div>
           </dl>
-          <p class="payments-stage-note">表示ページの追加・編集・削除に対応しています。支払い入力は第7-2で有効化します。</p>
+          <p class="payments-stage-note">表示ページ管理と、本人名義の個別支払い登録に対応しています。</p>
         </div>
 
         <div class="payments-method-area" aria-labelledby="calculation-method-heading">
@@ -242,10 +242,9 @@
             <button
               type="button"
               class="payments-history-add"
-              disabled
-              aria-disabled="true"
-              aria-label="個別支払いを登録（第7-2で実装）"
-              title="個別支払いを登録（第7-2で実装）"
+              data-open-payment-dialog="payments-transaction-add-dialog"
+              aria-label="個別支払いを登録"
+              title="個別支払いを登録"
             >＋</button>
           </div>
 
@@ -368,6 +367,56 @@
       <% } %>
     </aside>
   </main>
+
+  <dialog class="payments-page-dialog payments-transaction-dialog" id="payments-transaction-add-dialog" aria-labelledby="payments-transaction-add-title">
+    <form action="/groups/<%= group.id %>/payments/transactions" method="post" class="page-form payments-dialog-form">
+      <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
+      <input type="hidden" name="contextState" value="<%= contextState ?? '' %>" data-payment-context-state>
+
+      <div class="payments-dialog-heading">
+        <div>
+          <p class="eyebrow">個別支払い</p>
+          <h2 id="payments-transaction-add-title">関連支払いを登録</h2>
+        </div>
+        <button type="button" class="payments-dialog-close" data-close-payment-dialog aria-label="閉じる" title="閉じる">×</button>
+      </div>
+
+      <p class="form-help payments-self-payment-note">
+        <strong><%= currentUserDisplayName %></strong>さん本人が、自分の財布から支払った金額として登録します。他人名義では登録できません。
+      </p>
+
+      <label>
+        <span>実際の取引日</span>
+        <input type="date" name="transactionDate" value="<%= today %>" max="<%= today %>" required>
+      </label>
+
+      <label>
+        <span>金額</span>
+        <input type="number" name="amount" min="1" step="1" inputmode="numeric" required>
+      </label>
+
+      <label>
+        <span>カテゴリ</span>
+        <select name="category" required>
+          <option value="">選択してください</option>
+          <% groupPaymentCategories.forEach(category => { %>
+            <option value="<%= category %>"><%= category %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label>
+        <span>内容・名目</span>
+        <textarea name="rawText" maxlength="500" rows="4" placeholder="例：部活動の会場利用料" required></textarea>
+      </label>
+
+      <p class="form-help">登録する1件のTransactionを、本人の個人家計簿とこのグループの関連支払い履歴から参照します。</p>
+      <div class="payments-dialog-actions">
+        <button type="button" class="secondary-button" data-close-payment-dialog>キャンセル</button>
+        <button type="submit" class="primary-button">個別支払いを登録</button>
+      </div>
+    </form>
+  </dialog>
 
   <% if (isAdmin) { %>
     <dialog class="payments-page-dialog" id="payments-page-add-dialog" aria-labelledby="payments-page-add-title">

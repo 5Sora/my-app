@@ -265,12 +265,19 @@
   width: 42px;
   height: 42px;
   border: 1px solid var(--border);
-  color: #aaa39c;
-  background: #ebe7e2;
+  color: var(--text);
+  background: var(--surface);
   font: inherit;
   font-size: 1.35rem;
   font-weight: 900;
-  cursor: not-allowed;
+  cursor: pointer;
+}
+
+.payments-history-add:hover,
+.payments-history-add:focus-visible {
+  color: #fff;
+  border-color: var(--text);
+  background: var(--text);
 }
 
 .payments-history-tabs {
@@ -585,4 +592,16 @@
   .payments-dialog-actions .primary-button {
     width: 100%;
   }
+}
+
+.payments-self-payment-note {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted, #f7f5f2);
+}
+
+.payments-transaction-dialog textarea {
+  resize: vertical;
+  min-height: 96px;
 }

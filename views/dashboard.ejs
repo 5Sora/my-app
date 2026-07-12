@@ -348,13 +348,15 @@
                 <%
                   const isIncome =
                     transaction.kind === "PERSONAL_INCOME" || transaction.kind === "FUND_REFUND";
-                  const kindLabel = transaction.kind === "FUND_CONTRIBUTION"
-                    ? "基金拠出"
-                    : transaction.kind === "FUND_REFUND"
-                      ? "基金返金"
-                      : isIncome
-                        ? "収入"
-                        : "支出";
+                  const kindLabel = transaction.kind === "GROUP_PAYMENT"
+                    ? "グループ関連支出"
+                    : transaction.kind === "FUND_CONTRIBUTION"
+                      ? "基金拠出"
+                      : transaction.kind === "FUND_REFUND"
+                        ? "基金返金"
+                        : isIncome
+                          ? "収入"
+                          : "支出";
                   const classificationLabel = transaction.classificationSource === "MANUAL"
                     ? "手動"
                     : transaction.classificationSource === "AI"

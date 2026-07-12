@@ -234,6 +234,60 @@ function validateLedgerPageInput(input: {
 }
 
 
+const groupPaymentCategories = [
+  "飲食費",
+  "交通費",
+  "宿泊費",
+  "会場費",
+  "備品費",
+  "活動費",
+  "その他グループ支出",
+] as const;
+
+type GroupPaymentCategory = (typeof groupPaymentCategories)[number];
+
+function isGroupPaymentCategory(value: string): value is GroupPaymentCategory {
+  return groupPaymentCategories.includes(value as GroupPaymentCategory);
+}
+
+function isFutureTransactionDate(date: Date): boolean {
+  const today = parseDateOnly(formatDateInputValue(new Date()));
+  return today ? date > today : false;
+}
+
+function validateGroupPaymentInput(input: {
+  transactionDate: Date | null;
+  amount: number | null;
+  rawText: string;
+  category: string;
+}): string | null {
+  if (!input.transactionDate) {
+    return "取引日を正しい日付で入力してください。";
+  }
+
+  if (isFutureTransactionDate(input.transactionDate)) {
+    return "取引日は本日以前の日付を入力してください。";
+  }
+
+  if (!input.amount) {
+    return "金額は1円以上の整数で入力してください。";
+  }
+
+  if (!input.rawText) {
+    return "内容を入力してください。";
+  }
+
+  if (input.rawText.length > 500) {
+    return "内容は500文字以内で入力してください。";
+  }
+
+  if (!isGroupPaymentCategory(input.category)) {
+    return "グループ関連支出のカテゴリを選択してください。";
+  }
+
+  return null;
+}
+
 const fundIncomeCategories = [
   "外部寄付",
   "助成金",
@@ -851,7 +905,7 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
       prisma.transaction.findMany({
         where: {
           userId,
-          kind: { in: ["PERSONAL_INCOME", "PERSONAL_EXPENSE", "FUND_CONTRIBUTION", "FUND_REFUND"] },
+          kind: { in: ["PERSONAL_INCOME", "PERSONAL_EXPENSE", "GROUP_PAYMENT", "FUND_CONTRIBUTION", "FUND_REFUND"] },
           ...(Object.keys(transactionDateFilter).length > 0
             ? { transactionDate: transactionDateFilter }
             : {}),
@@ -867,7 +921,7 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
         ? prisma.transaction.findMany({
             where: {
               userId,
-              kind: { in: ["PERSONAL_INCOME", "PERSONAL_EXPENSE", "FUND_CONTRIBUTION", "FUND_REFUND"] },
+              kind: { in: ["PERSONAL_INCOME", "PERSONAL_EXPENSE", "GROUP_PAYMENT", "FUND_CONTRIBUTION", "FUND_REFUND"] },
               transactionDate: { lt: selectedPage.startDate },
             },
             select: { kind: true, amount: true },
@@ -886,6 +940,7 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
       .filter(
         (transaction) =>
           transaction.kind === "PERSONAL_EXPENSE" ||
+          transaction.kind === "GROUP_PAYMENT" ||
           transaction.kind === "FUND_CONTRIBUTION",
       )
       .reduce((sum, transaction) => sum + transaction.amount, 0);
@@ -1357,7 +1412,7 @@ app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, nex
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { isActive: true },
+      select: { isActive: true, displayName: true },
     });
 
     if (!user?.isActive) {
@@ -1538,6 +1593,9 @@ app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, nex
       historyTotal,
       latestBatch,
       calculationMethodOptions,
+      groupPaymentCategories,
+      currentUserDisplayName: user.displayName,
+      today: formatDateInputValue(new Date()),
       contextState,
       isContextOpen: contextState !== "closed",
       selectedPageForm: {
@@ -1865,6 +1923,107 @@ app.post(
         buildGroupPaymentsUrl(groupId, {
           pageId: fallbackPage?.id,
           success: "関連支払いの表示ページを削除しました。Transactionは削除されていません。",
+          contextState,
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+
+app.post(
+  "/groups/:groupId/payments/transactions",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const currentPageId = parsePositiveInteger(req.body.currentPageId);
+    const contextState = parsePaymentContextState(req.body.contextState);
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    const transactionDate = parseDateOnly(req.body.transactionDate);
+    const amount = parsePositiveInteger(req.body.amount);
+    const rawText = String(req.body.rawText ?? "").trim();
+    const category = String(req.body.category ?? "").trim();
+    const requestedUserIdText = String(req.body.userId ?? "").trim();
+    const requestedUserId = requestedUserIdText
+      ? parsePositiveInteger(requestedUserIdText)
+      : operatorUserId;
+    const validationError = validateGroupPaymentInput({
+      transactionDate,
+      amount,
+      rawText,
+      category,
+    });
+
+    try {
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true },
+      });
+
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const membership = await findActiveGroupMembership(operatorUserId, groupId);
+
+      if (!membership) {
+        res.status(403).send("このグループへ関連支払いを登録する権限がありません。");
+        return;
+      }
+
+      if (requestedUserId !== operatorUserId) {
+        res.status(403).send("他人名義の関連支払いは登録できません。");
+        return;
+      }
+
+      if (validationError) {
+        res.redirect(
+          buildGroupPaymentsUrl(groupId, {
+            pageId: currentPageId,
+            error: validationError,
+            contextState,
+          }),
+        );
+        return;
+      }
+
+      await prisma.transaction.create({
+        data: {
+          userId: operatorUserId,
+          groupId,
+          groupFundId: null,
+          kind: "GROUP_PAYMENT",
+          amount: amount!,
+          category,
+          rawText,
+          transactionDate: transactionDate!,
+          paymentBatchId: null,
+          calculationMethod: null,
+          classificationSource: "MANUAL",
+          aiResult: null,
+        },
+      });
+
+      res.redirect(
+        buildGroupPaymentsUrl(groupId, {
+          pageId: currentPageId,
+          success: "個別の関連支払いを登録しました。個人家計簿にも反映されています。",
           contextState,
         }),
       );
