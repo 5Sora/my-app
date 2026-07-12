@@ -1,9 +1,6 @@
 import { z } from "zod";
 import type { AiFoundation, AiStructuredResult } from "./client.js";
-import {
-  hasWarningEvidence,
-  type PersonalLedgerAnalysisAggregate,
-} from "../transactions/personal-ledger-summary.js";
+import type { PersonalLedgerAnalysisAggregate } from "../transactions/personal-ledger-summary.js";
 
 export const ANALYSIS_LEVEL_VALUES = ["INFO", "NOTICE", "WARNING"] as const;
 export const FINANCIAL_ANALYSIS_DISCLAIMER =
@@ -73,9 +70,9 @@ export async function analyzePersonalLedgerWithAi(input: {
 
 export function normalizeFinancialAnalysis(
   analysis: FinancialAnalysis,
-  aggregate: PersonalLedgerAnalysisAggregate,
+  aggregate: { warningFlags: { warningReasons: string[] } },
 ): FinancialAnalysisDisplay {
-  const warningAllowed = hasWarningEvidence(aggregate.warningFlags);
+  const warningAllowed = aggregate.warningFlags.warningReasons.length > 0;
   const limitations = uniqueStrings([
     "この分析は集計値だけを使用しており、個別取引の事情は考慮していません。",
     ...analysis.limitations,

@@ -48,3 +48,8 @@ export type {
   FinancialAnalysisDisplay,
   FinancialAnalysisResult,
 } from "./financial-analysis.js";
+export {
+  analyzeGroupPaymentsWithAi,
+  buildGroupPaymentAnalysisInstructions,
+  buildGroupPaymentAutomaticSummary,
+} from "./group-payment-analysis.js";

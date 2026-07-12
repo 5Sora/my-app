@@ -1,0 +1,49 @@
+<dialog
+  class="dashboard-dialog ai-analysis-dialog"
+  id="<%= analysisDialog.id %>"
+  data-ai-analysis-dialog
+  aria-labelledby="<%= analysisDialog.id %>-title"
+>
+  <section class="dashboard-dialog-form ai-analysis-content">
+    <div class="dashboard-dialog-heading">
+      <div>
+        <p class="eyebrow"><%= analysisDialog.eyebrow %></p>
+        <h2 id="<%= analysisDialog.id %>-title"><%= analysisDialog.title %></h2>
+      </div>
+      <button type="button" class="dashboard-dialog-close" data-close-ai-analysis-dialog aria-label="閉じる" title="閉じる">×</button>
+    </div>
+
+    <div class="ai-analysis-meta">
+      <p><strong>対象:</strong> <span data-ai-analysis-page-name><%= analysisDialog.pageName %></span></p>
+      <p><strong>期間:</strong> <span data-ai-analysis-period>集計中</span></p>
+    </div>
+
+    <p class="ai-analysis-status" data-ai-analysis-status role="status" aria-live="polite">AI分析を開始します。</p>
+    <span class="ai-analysis-source" data-ai-analysis-source hidden></span>
+
+    <section class="ai-analysis-section">
+      <h3>概要</h3>
+      <p data-ai-analysis-overview>集計中です。</p>
+    </section>
+
+    <section class="ai-analysis-section">
+      <h3>気づき</h3>
+      <div class="ai-analysis-observations" data-ai-analysis-observations></div>
+    </section>
+
+    <section class="ai-analysis-section">
+      <h3>確認候補</h3>
+      <ul data-ai-analysis-suggestions></ul>
+    </section>
+
+    <section class="ai-analysis-section ai-analysis-limitations">
+      <h3>この分析の制約</h3>
+      <ul data-ai-analysis-limitations></ul>
+    </section>
+
+    <p class="ai-analysis-disclaimer" data-ai-analysis-disclaimer></p>
+    <div class="dashboard-dialog-actions">
+      <button type="button" class="secondary-button" data-close-ai-analysis-dialog>閉じる</button>
+    </div>
+  </section>
+</dialog>

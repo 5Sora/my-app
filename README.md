@@ -77,3 +77,24 @@ Names, login IDs, user/page/transaction IDs, group names, transaction descriptio
 Analysis output is displayed temporarily in a dialog and is not written to the database, `Transaction.aiResult`, or the session. If analysis is disabled, rate-limited, times out, or fails validation/provider processing, the same dialog displays an application-generated summary clearly labeled `自動集計（AI分析ではありません）`.
 
 Application warning evidence is calculated before the AI call. The initial warning conditions are a negative period net, an expense increase of at least 20 percent from the comparison period, and a single expense category representing at least 50 percent of expenses. An AI `WARNING` without application evidence is downgraded to `NOTICE` before display.
+
+## Stage 8-5: group payment AI analysis
+
+The selected `GROUP_PAYMENT` LedgerPage can be analyzed through an explicit `AI分析` action available to active group members. The server verifies the active user, membership, group and page before calculating the aggregate in TypeScript.
+
+The analysis input contains aggregate values only:
+
+- period and optional immediately preceding equal-length comparison period
+- total amount and Transaction row count
+- individual payment count
+- distinct confirmed payment batch count
+- payment event count (`individual payments + distinct batches`)
+- average Transaction amount
+- category totals and shares
+- application-calculated warning flags
+
+Names, login IDs, user/group/page IDs, `paymentBatchId` values, transaction descriptions, participant lists, participant shares and individual member payment totals are not sent to OpenAI. Fairness, contribution, responsibility, relationships, payment ability and personal economic circumstances are explicitly outside the analysis scope.
+
+The personal and group-payment analysis screens use the same temporary dialog renderer. Analysis output is not saved to the database, `Transaction.aiResult`, or the session. Provider failure, timeout, limits, configuration failure or feature disablement produces an application-generated aggregate summary clearly labeled `自動集計（AI分析ではありません）`.
+
+Application warning evidence for group payments is limited to a total increase of at least 20 percent from the comparison period and a single category representing at least 50 percent of the total. An unsupported AI `WARNING` is downgraded to `NOTICE` before display.

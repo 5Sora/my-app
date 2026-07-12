@@ -75,6 +75,22 @@
               <dd><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong></dd>
             </div>
           </dl>
+          <section class="ai-analysis-launch payments-ai-analysis-launch" aria-label="関連支払いAI分析">
+            <div>
+              <p class="eyebrow">集計説明</p>
+              <p class="ai-analysis-launch-copy">選択中ページの総額・件数・カテゴリ構成だけを外部AI（OpenAI）へ送り、関連支払いの傾向を説明します。氏名や個人別支払額は送りません。</p>
+            </div>
+            <button
+              type="button"
+              class="secondary-button"
+              data-ai-analysis-button
+              data-endpoint="/api/ai/analyze-group-payments"
+              data-group-id="<%= group.id %>"
+              data-page-id="<%= selectedPage.id %>"
+              data-page-name="<%= selectedPage.name %>"
+              data-loading-message="選択中の関連支払いページを集計し、AIへ分析を依頼しています。"
+            >AI分析</button>
+          </section>
           <form
             id="split-preview-form"
             action="/groups/<%= group.id %>/payments/preview"
@@ -650,6 +666,15 @@
     </form>
   <% } %>
 
+  <%- include("partials/ai-analysis-dialog", {
+    analysisDialog: {
+      id: "group-payment-ai-analysis-dialog",
+      eyebrow: "関連支払い",
+      title: "関連支払い分析",
+      pageName: selectedPage.name,
+    },
+  }) %>
+
   <script>
     (() => {
       const lowerArea = document.querySelector("[data-payment-lower]");
@@ -993,5 +1018,6 @@
       window.addEventListener("scroll", hideTooltip, { passive: true, capture: true });
     })();
   </script>
+  <script src="/js/ai-analysis-dialog.js" defer></script>
 </body>
 </html>

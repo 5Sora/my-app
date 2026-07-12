@@ -81,7 +81,7 @@ export class AiFoundation {
     let attempts = 0;
     let usage = emptyUsage();
     let anonymousUserKey = "ai_unavailable";
-    let releaseLock = () => undefined;
+    let releaseLock: () => void = () => undefined;
 
     try {
       this.assertAvailable(request.feature);

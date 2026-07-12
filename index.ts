@@ -9,7 +9,9 @@ import { PrismaClient } from "./generated/prisma/client";
 import {
   AiError,
   AiFoundation,
+  analyzeGroupPaymentsWithAi,
   analyzePersonalLedgerWithAi,
+  buildGroupPaymentAutomaticSummary,
   buildPersonalLedgerAutomaticSummary,
   classifyPersonalTransactionWithAi,
   classifyTransactionWithAi,
@@ -49,6 +51,9 @@ import {
   buildPersonalLedgerAnalysisAggregate,
   type PersonalLedgerTransactionKind,
 } from "./src/transactions/personal-ledger-summary.js";
+import {
+  buildGroupPaymentAnalysisAggregate,
+} from "./src/transactions/group-payment-summary.js";
 
 type CalculationMethodValue =
   | "EQUAL"
@@ -4780,6 +4785,106 @@ app.post(
       res.status(500).json({
         ok: false,
         message: "収支集計を作成できませんでした。時間をおいてお試しください。",
+      });
+    }
+  },
+);
+
+app.post(
+  "/api/ai/analyze-group-payments",
+  requireAuthentication,
+  express.json({ limit: "2kb" }),
+  async (req, res) => {
+    const userId = req.session.userId;
+    if (!userId) {
+      res.status(401).json({ ok: false, message: "ログインしてください。" });
+      return;
+    }
+    if (!isSameOriginAiRequest(req)) {
+      res.status(403).json({ ok: false, message: "この操作は許可されていません。" });
+      return;
+    }
+
+    const groupId = parsePositiveInteger(req.body?.groupId);
+    const pageId = parsePositiveInteger(req.body?.pageId);
+    if (!groupId || !pageId) {
+      res.status(400).json({ ok: false, message: "分析対象を正しく指定してください。" });
+      return;
+    }
+
+    try {
+      const [user, membership, page] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: userId },
+          select: { isActive: true },
+        }),
+        findActiveGroupMembership(userId, groupId),
+        prisma.ledgerPage.findFirst({
+          where: { id: pageId, groupId, pageType: "GROUP_PAYMENT" },
+          select: { id: true, name: true, startDate: true, endDate: true },
+        }),
+      ]);
+
+      if (!user?.isActive) {
+        res.status(401).json({ ok: false, message: "このアカウントは利用できません。" });
+        return;
+      }
+      if (!membership) {
+        res.status(403).json({ ok: false, message: "このグループの関連支払いを分析する権限がありません。" });
+        return;
+      }
+      if (!page) {
+        res.status(404).json({ ok: false, message: "分析対象の関連支払いページが見つかりません。" });
+        return;
+      }
+
+      const transactions = await prisma.transaction.findMany({
+        where: { groupId, kind: "GROUP_PAYMENT" },
+        select: {
+          amount: true,
+          category: true,
+          transactionDate: true,
+          paymentBatchId: true,
+        },
+      });
+
+      const aggregate = buildGroupPaymentAnalysisAggregate({
+        transactions,
+        period: { startDate: page.startDate, endDate: page.endDate },
+      });
+      const automaticSummary = buildGroupPaymentAutomaticSummary(aggregate);
+
+      try {
+        if (!aiFoundation) throw new AiError("CONFIGURATION_ERROR");
+        const result = await analyzeGroupPaymentsWithAi({
+          foundation: aiFoundation,
+          userId,
+          aggregate,
+        });
+        res.json({
+          ok: true,
+          source: "AI",
+          pageName: page.name,
+          period: aggregate.period,
+          analysis: normalizeFinancialAnalysis(result.data, aggregate),
+          message: "AI分析を表示しました。個人別情報を含まない集計値に基づく参考情報です。",
+        });
+      } catch (error) {
+        const publicError = toPublicAiError(error);
+        res.status(publicError.status).json({
+          ok: false,
+          source: "AUTOMATIC_SUMMARY",
+          pageName: page.name,
+          period: aggregate.period,
+          analysis: automaticSummary,
+          message: `${publicError.message} AI分析の代わりに自動集計を表示しました。`,
+        });
+      }
+    } catch (error) {
+      console.error("[AI] Group payment aggregate could not be calculated.");
+      res.status(500).json({
+        ok: false,
+        message: "関連支払い集計を作成できませんでした。時間をおいてお試しください。",
       });
     }
   },

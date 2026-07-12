@@ -67,8 +67,10 @@
     <button
       type="button"
       class="secondary-button"
-      data-personal-ai-analysis-button
+      data-ai-analysis-button
+      data-endpoint="/api/ai/analyze-personal-ledger"
       data-page-id="<%= selectedPage.id %>"
+      data-page-name="<%= selectedPage.name %>"
     >AI分析</button>
   </section>
 
@@ -456,50 +458,14 @@
     </form>
   </dialog>
 
-  <dialog class="dashboard-dialog ai-analysis-dialog" id="personal-ai-analysis-dialog" aria-labelledby="personal-ai-analysis-title">
-    <section class="dashboard-dialog-form ai-analysis-content">
-      <div class="dashboard-dialog-heading">
-        <div>
-          <p class="eyebrow">個人家計簿</p>
-          <h2 id="personal-ai-analysis-title">収支分析</h2>
-        </div>
-        <button type="button" class="dashboard-dialog-close" data-close-ai-analysis-dialog aria-label="閉じる" title="閉じる">×</button>
-      </div>
-
-      <div class="ai-analysis-meta">
-        <p><strong>対象:</strong> <span data-ai-analysis-page-name><%= selectedPage.name %></span></p>
-        <p><strong>期間:</strong> <span data-ai-analysis-period>集計中</span></p>
-      </div>
-
-      <p class="ai-analysis-status" data-ai-analysis-status role="status" aria-live="polite">AI分析を開始します。</p>
-      <span class="ai-analysis-source" data-ai-analysis-source hidden></span>
-
-      <section class="ai-analysis-section">
-        <h3>概要</h3>
-        <p data-ai-analysis-overview>集計中です。</p>
-      </section>
-
-      <section class="ai-analysis-section">
-        <h3>気づき</h3>
-        <div class="ai-analysis-observations" data-ai-analysis-observations></div>
-      </section>
-
-      <section class="ai-analysis-section">
-        <h3>確認候補</h3>
-        <ul data-ai-analysis-suggestions></ul>
-      </section>
-
-      <section class="ai-analysis-section ai-analysis-limitations">
-        <h3>この分析の制約</h3>
-        <ul data-ai-analysis-limitations></ul>
-      </section>
-
-      <p class="ai-analysis-disclaimer" data-ai-analysis-disclaimer></p>
-      <div class="dashboard-dialog-actions">
-        <button type="button" class="secondary-button" data-close-ai-analysis-dialog>閉じる</button>
-      </div>
-    </section>
-  </dialog>
+  <%- include("partials/ai-analysis-dialog", {
+    analysisDialog: {
+      id: "personal-ai-analysis-dialog",
+      eyebrow: "個人家計簿",
+      title: "収支分析",
+      pageName: selectedPage.name,
+    },
+  }) %>
 
   <script>
     (() => {
@@ -518,150 +484,6 @@
 
       dialog?.addEventListener("click", (event) => {
         if (event.target === dialog && dialog instanceof HTMLDialogElement) dialog.close();
-      });
-
-      const analysisDialog = document.getElementById("personal-ai-analysis-dialog");
-      const analysisButton = document.querySelector("[data-personal-ai-analysis-button]");
-      const analysisStatus = document.querySelector("[data-ai-analysis-status]");
-      const analysisSource = document.querySelector("[data-ai-analysis-source]");
-      const analysisPageName = document.querySelector("[data-ai-analysis-page-name]");
-      const analysisPeriod = document.querySelector("[data-ai-analysis-period]");
-      const analysisOverview = document.querySelector("[data-ai-analysis-overview]");
-      const analysisObservations = document.querySelector("[data-ai-analysis-observations]");
-      const analysisSuggestions = document.querySelector("[data-ai-analysis-suggestions]");
-      const analysisLimitations = document.querySelector("[data-ai-analysis-limitations]");
-      const analysisDisclaimer = document.querySelector("[data-ai-analysis-disclaimer]");
-
-      const clearAnalysisList = (element) => {
-        if (element instanceof HTMLElement) element.replaceChildren();
-      };
-
-      const setAnalysisLoading = () => {
-        if (analysisStatus instanceof HTMLElement) {
-          analysisStatus.textContent = "選択中のページを集計し、AIへ分析を依頼しています。";
-          analysisStatus.dataset.source = "LOADING";
-        }
-        if (analysisSource instanceof HTMLElement) analysisSource.hidden = true;
-        if (analysisPeriod instanceof HTMLElement) analysisPeriod.textContent = "集計中";
-        if (analysisOverview instanceof HTMLElement) analysisOverview.textContent = "集計中です。";
-        if (analysisDisclaimer instanceof HTMLElement) analysisDisclaimer.textContent = "";
-        clearAnalysisList(analysisObservations);
-        clearAnalysisList(analysisSuggestions);
-        clearAnalysisList(analysisLimitations);
-      };
-
-      const renderAnalysis = (payload) => {
-        const analysis = payload?.analysis;
-        if (!analysis) throw new Error(payload?.message || "分析結果を取得できませんでした。");
-
-        if (analysisStatus instanceof HTMLElement) {
-          analysisStatus.textContent = payload.message || "分析結果を表示しました。";
-          analysisStatus.dataset.source = payload.source || "";
-        }
-        if (analysisSource instanceof HTMLElement) {
-          analysisSource.textContent = analysis.sourceLabel || (payload.source === "AI" ? "AI分析" : "自動集計（AI分析ではありません）");
-          analysisSource.dataset.source = payload.source || "";
-          analysisSource.hidden = false;
-        }
-        if (analysisPageName instanceof HTMLElement) analysisPageName.textContent = payload.pageName || "選択中ページ";
-        if (analysisPeriod instanceof HTMLElement) analysisPeriod.textContent = payload.period?.label || "全期間";
-        if (analysisOverview instanceof HTMLElement) analysisOverview.textContent = analysis.overview || "表示できる概要がありません。";
-
-        clearAnalysisList(analysisObservations);
-        if (analysisObservations instanceof HTMLElement) {
-          const observations = Array.isArray(analysis.observations) ? analysis.observations : [];
-          observations.forEach((observation) => {
-            const article = document.createElement("article");
-            article.className = "ai-analysis-observation";
-            article.dataset.level = observation.level || "INFO";
-            const heading = document.createElement("h4");
-            heading.textContent = observation.title || "集計結果";
-            const description = document.createElement("p");
-            description.textContent = observation.description || "";
-            article.append(heading, description);
-            analysisObservations.append(article);
-          });
-          if (observations.length === 0) {
-            const empty = document.createElement("p");
-            empty.className = "form-help";
-            empty.textContent = "表示できる気づきはありません。";
-            analysisObservations.append(empty);
-          }
-        }
-
-        clearAnalysisList(analysisSuggestions);
-        if (analysisSuggestions instanceof HTMLElement) {
-          const suggestions = Array.isArray(analysis.suggestions) ? analysis.suggestions : [];
-          suggestions.forEach((suggestion) => {
-            const item = document.createElement("li");
-            const title = document.createElement("strong");
-            title.textContent = suggestion.title || "確認候補";
-            const description = document.createElement("span");
-            description.textContent = suggestion.description || "";
-            item.append(title, description);
-            analysisSuggestions.append(item);
-          });
-        }
-
-        clearAnalysisList(analysisLimitations);
-        if (analysisLimitations instanceof HTMLElement) {
-          const limitations = Array.isArray(analysis.limitations) ? analysis.limitations : [];
-          limitations.forEach((limitation) => {
-            const item = document.createElement("li");
-            item.textContent = String(limitation);
-            analysisLimitations.append(item);
-          });
-        }
-        if (analysisDisclaimer instanceof HTMLElement) analysisDisclaimer.textContent = analysis.disclaimer || "";
-      };
-
-      analysisButton?.addEventListener("click", async () => {
-        if (!(analysisButton instanceof HTMLButtonElement)) return;
-        const pageId = Number(analysisButton.dataset.pageId);
-        if (!Number.isSafeInteger(pageId) || pageId <= 0) return;
-
-        setAnalysisLoading();
-        if (analysisDialog instanceof HTMLDialogElement) analysisDialog.showModal();
-        analysisButton.disabled = true;
-        analysisButton.textContent = "分析中…";
-
-        try {
-          const response = await fetch("/api/ai/analyze-personal-ledger", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Accept": "application/json" },
-            credentials: "same-origin",
-            body: JSON.stringify({ pageId }),
-          });
-          const payload = await response.json().catch(() => null);
-          if (payload?.analysis) {
-            renderAnalysis(payload);
-          } else {
-            throw new Error(payload?.message || "分析結果を取得できませんでした。");
-          }
-        } catch (error) {
-          if (analysisStatus instanceof HTMLElement) {
-            analysisStatus.textContent = error instanceof Error
-              ? error.message
-              : "分析結果を取得できませんでした。";
-            analysisStatus.dataset.source = "ERROR";
-          }
-          if (analysisOverview instanceof HTMLElement) {
-            analysisOverview.textContent = "ページを再読み込みせず、時間をおいてもう一度お試しください。";
-          }
-        } finally {
-          analysisButton.disabled = false;
-          analysisButton.textContent = "AI分析";
-        }
-      });
-
-      document.querySelectorAll("[data-close-ai-analysis-dialog]").forEach((button) => {
-        button.addEventListener("click", () => {
-          if (analysisDialog instanceof HTMLDialogElement) analysisDialog.close();
-        });
-      });
-
-      analysisDialog?.addEventListener("click", (event) => {
-        if (event.target === analysisDialog && analysisDialog instanceof HTMLDialogElement) analysisDialog.close();
       });
 
       const personalForm = document.querySelector("[data-personal-transaction-form]");
@@ -846,5 +668,6 @@
       });
     })();
   </script>
+  <script src="/js/ai-analysis-dialog.js" defer></script>
 </body>
 </html>
