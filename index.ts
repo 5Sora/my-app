@@ -685,6 +685,293 @@ function getCalculationMethodLabel(value: string | null): string {
   );
 }
 
+
+type CalculationMethodValue = (typeof calculationMethodOptions)[number]["value"];
+
+type SplitPreviewDraft = {
+  totalAmount: string;
+  transactionDate: string;
+  rawText: string;
+  category: string;
+  participantIds: number[];
+  calculationMethod: CalculationMethodValue | "";
+};
+
+type SplitPreviewAllocation = {
+  userId: number;
+  displayName: string;
+  ratioPercent: number;
+  exactAmount: number;
+  amount: number;
+};
+
+type SplitPreviewResult = {
+  selectedMethod: CalculationMethodValue;
+  selectedMethodLabel: string;
+  usedMethod: CalculationMethodValue;
+  usedMethodLabel: string;
+  fallbackReason: string | null;
+  totalAmount: number;
+  allocations: SplitPreviewAllocation[];
+};
+
+function isCalculationMethod(value: string): value is CalculationMethodValue {
+  return calculationMethodOptions.some((method) => method.value === value);
+}
+
+function parseParticipantIds(value: unknown): { values: number[]; isValid: boolean } {
+  const source = Array.isArray(value) ? value : value === undefined ? [] : [value];
+  const parsed = source.map(parsePositiveInteger);
+  return {
+    values: [...new Set(parsed.filter((id): id is number => id !== null))].sort(
+      (left, right) => left - right,
+    ),
+    isValid: parsed.every((id) => id !== null),
+  };
+}
+
+function validateSplitPreviewInput(input: {
+  transactionDate: Date | null;
+  totalAmount: number | null;
+  rawText: string;
+  category: string;
+  participantIds: number[];
+  participantIdsValid: boolean;
+  calculationMethod: string;
+  activeMemberIds: Set<number>;
+}): string | null {
+  const paymentError = validateGroupPaymentInput({
+    transactionDate: input.transactionDate,
+    amount: input.totalAmount,
+    rawText: input.rawText,
+    category: input.category,
+  });
+  if (paymentError) return paymentError;
+
+  if (!input.participantIdsValid) {
+    return "参加者の指定が正しくありません。";
+  }
+
+  if (input.participantIds.length === 0) {
+    return "今回の参加者を1人以上選択してください。";
+  }
+
+  if (input.participantIds.some((userId) => !input.activeMemberIds.has(userId))) {
+    return "選択した参加者に、現在有効ではないメンバーが含まれています。";
+  }
+
+  if (!isCalculationMethod(input.calculationMethod)) {
+    return "算出方法を1つ選択してください。";
+  }
+
+  return null;
+}
+
+function allocateByLargestRemainder(
+  totalAmount: number,
+  participants: Array<{ userId: number; displayName: string; weight: number }>,
+): SplitPreviewAllocation[] {
+  const weightTotal = participants.reduce((sum, participant) => sum + participant.weight, 0);
+  if (weightTotal <= 0) {
+    throw new Error("Allocation weight total must be positive.");
+  }
+
+  const rows = participants.map((participant) => {
+    const exactAmount = (totalAmount * participant.weight) / weightTotal;
+    const floorAmount = Math.floor(exactAmount);
+    return {
+      ...participant,
+      exactAmount,
+      floorAmount,
+      fraction: exactAmount - floorAmount,
+      amount: floorAmount,
+    };
+  });
+
+  let remainder = totalAmount - rows.reduce((sum, row) => sum + row.floorAmount, 0);
+  const remainderOrder = [...rows].sort(
+    (left, right) => right.fraction - left.fraction || left.userId - right.userId,
+  );
+
+  for (let index = 0; index < remainder; index += 1) {
+    remainderOrder[index % remainderOrder.length].amount += 1;
+  }
+
+  return rows
+    .sort((left, right) => left.userId - right.userId)
+    .map((row) => ({
+      userId: row.userId,
+      displayName: row.displayName,
+      ratioPercent: totalAmount > 0 ? (row.exactAmount / totalAmount) * 100 : 0,
+      exactAmount: row.exactAmount,
+      amount: row.amount,
+    }));
+}
+
+function calculateBalanceAdjustmentWeights(
+  totalAmount: number,
+  participants: Array<{ userId: number; displayName: string; historicalAmount: number }>,
+): Array<{ userId: number; displayName: string; weight: number }> {
+  const sorted = [...participants].sort(
+    (left, right) => left.historicalAmount - right.historicalAmount || left.userId - right.userId,
+  );
+  const allocations = new Map<number, number>(sorted.map((participant) => [participant.userId, 0]));
+  let remaining = totalAmount;
+  let groupEnd = 1;
+
+  while (remaining > 0 && groupEnd < sorted.length) {
+    const currentLevel = sorted[groupEnd - 1].historicalAmount;
+    const nextLevel = sorted[groupEnd].historicalAmount;
+    const levelDifference = nextLevel - currentLevel;
+
+    if (levelDifference <= 0) {
+      groupEnd += 1;
+      continue;
+    }
+
+    const required = levelDifference * groupEnd;
+    if (remaining >= required) {
+      for (let index = 0; index < groupEnd; index += 1) {
+        const userId = sorted[index].userId;
+        allocations.set(userId, (allocations.get(userId) ?? 0) + levelDifference);
+      }
+      remaining -= required;
+      groupEnd += 1;
+      continue;
+    }
+
+    const share = remaining / groupEnd;
+    for (let index = 0; index < groupEnd; index += 1) {
+      const userId = sorted[index].userId;
+      allocations.set(userId, (allocations.get(userId) ?? 0) + share);
+    }
+    remaining = 0;
+  }
+
+  if (remaining > 0) {
+    const share = remaining / sorted.length;
+    for (const participant of sorted) {
+      allocations.set(participant.userId, (allocations.get(participant.userId) ?? 0) + share);
+    }
+  }
+
+  return participants.map((participant) => ({
+    userId: participant.userId,
+    displayName: participant.displayName,
+    weight: allocations.get(participant.userId) ?? 0,
+  }));
+}
+
+async function calculateGroupPaymentPreview(input: {
+  groupId: number;
+  totalAmount: number;
+  participantIds: number[];
+  calculationMethod: CalculationMethodValue;
+  activeMembers: Array<{ userId: number; user: { displayName: string } }>;
+}): Promise<SplitPreviewResult> {
+  const selectedParticipants = input.participantIds.map((userId) => {
+    const member = input.activeMembers.find((candidate) => candidate.userId === userId);
+    if (!member) throw new Error("Preview participant is not active.");
+    return { userId, displayName: member.user.displayName };
+  });
+
+  const historyTransactions = await prisma.transaction.findMany({
+    where: {
+      groupId: input.groupId,
+      kind: "GROUP_PAYMENT",
+    },
+    select: {
+      userId: true,
+      amount: true,
+      paymentBatchId: true,
+    },
+  });
+
+  const historyTotals = new Map<number, number>(input.participantIds.map((userId) => [userId, 0]));
+  for (const transaction of historyTransactions) {
+    if (transaction.userId && historyTotals.has(transaction.userId)) {
+      historyTotals.set(
+        transaction.userId,
+        (historyTotals.get(transaction.userId) ?? 0) + transaction.amount,
+      );
+    }
+  }
+
+  let usedMethod: CalculationMethodValue = input.calculationMethod;
+  let fallbackReason: string | null = null;
+  let weights: Array<{ userId: number; displayName: string; weight: number }>;
+
+  if (input.calculationMethod === "EQUAL") {
+    weights = selectedParticipants.map((participant) => ({ ...participant, weight: 1 }));
+  } else if (input.calculationMethod === "HISTORY_ALL") {
+    weights = selectedParticipants.map((participant) => ({
+      ...participant,
+      weight: historyTotals.get(participant.userId) ?? 0,
+    }));
+    if (weights.reduce((sum, participant) => sum + participant.weight, 0) === 0) {
+      usedMethod = "EQUAL";
+      fallbackReason = "選択参加者の確定済み支払い履歴がないため、均等割を使用しました。";
+      weights = selectedParticipants.map((participant) => ({ ...participant, weight: 1 }));
+    }
+  } else if (input.calculationMethod === "HISTORY_SAME_PARTICIPANTS") {
+    const batches = new Map<string, Array<{ userId: number; amount: number }>>();
+    for (const transaction of historyTransactions) {
+      if (!transaction.paymentBatchId || !transaction.userId) continue;
+      const rows = batches.get(transaction.paymentBatchId) ?? [];
+      rows.push({ userId: transaction.userId, amount: transaction.amount });
+      batches.set(transaction.paymentBatchId, rows);
+    }
+
+    const selectedKey = [...input.participantIds].sort((left, right) => left - right).join(",");
+    const matchingTotals = new Map<number, number>(input.participantIds.map((userId) => [userId, 0]));
+    let matchingBatchCount = 0;
+
+    for (const rows of batches.values()) {
+      const batchParticipantIds = [...new Set(rows.map((row) => row.userId))].sort(
+        (left, right) => left - right,
+      );
+      if (batchParticipantIds.join(",") !== selectedKey) continue;
+      matchingBatchCount += 1;
+      for (const row of rows) {
+        matchingTotals.set(row.userId, (matchingTotals.get(row.userId) ?? 0) + row.amount);
+      }
+    }
+
+    weights = selectedParticipants.map((participant) => ({
+      ...participant,
+      weight: matchingTotals.get(participant.userId) ?? 0,
+    }));
+    const weightTotal = weights.reduce((sum, participant) => sum + participant.weight, 0);
+    if (matchingBatchCount === 0 || weightTotal === 0) {
+      usedMethod = "EQUAL";
+      fallbackReason =
+        matchingBatchCount === 0
+          ? "同じ参加者構成の確定済みbatchがないため、均等割を使用しました。"
+          : "同じ参加者構成の過去負担額合計が0円のため、均等割を使用しました。";
+      weights = selectedParticipants.map((participant) => ({ ...participant, weight: 1 }));
+    }
+  } else {
+    weights = calculateBalanceAdjustmentWeights(
+      input.totalAmount,
+      selectedParticipants.map((participant) => ({
+        ...participant,
+        historicalAmount: historyTotals.get(participant.userId) ?? 0,
+      })),
+    );
+  }
+
+  const allocations = allocateByLargestRemainder(input.totalAmount, weights);
+  return {
+    selectedMethod: input.calculationMethod,
+    selectedMethodLabel: getCalculationMethodLabel(input.calculationMethod),
+    usedMethod,
+    usedMethodLabel: getCalculationMethodLabel(usedMethod),
+    fallbackReason,
+    totalAmount: input.totalAmount,
+    allocations,
+  };
+}
+
 async function findActiveGroupMembership(userId: number, groupId: number) {
   const membership = await prisma.groupMember.findUnique({
     where: {
@@ -1395,6 +1682,155 @@ app.get("/groups/:groupId", requireAuthentication, async (req, res, next) => {
 });
 
 
+async function loadGroupPaymentsPageData(groupId: number, requestedPageId: number | null) {
+  const [pages, activeMembers] = await Promise.all([
+    prisma.ledgerPage.findMany({
+      where: {
+        groupId,
+        pageType: "GROUP_PAYMENT",
+        userId: null,
+      },
+      orderBy: [{ isInitial: "desc" }, { sortOrder: "asc" }, { id: "asc" }],
+    }),
+    prisma.groupMember.findMany({
+      where: {
+        groupId,
+        isActive: true,
+        user: { isActive: true },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+          },
+        },
+      },
+      orderBy: [{ role: "desc" }, { joinedAt: "asc" }, { userId: "asc" }],
+    }),
+  ]);
+
+  const selectedPage = pages.find((page) => page.id === requestedPageId) ?? pages[0] ?? null;
+  if (!selectedPage) return null;
+
+  const transactionDateFilter = buildTransactionDateFilter(
+    selectedPage.startDate,
+    selectedPage.endDate,
+  );
+
+  const [transactions, latestBatchTransaction] = await Promise.all([
+    prisma.transaction.findMany({
+      where: {
+        groupId,
+        kind: "GROUP_PAYMENT",
+        ...(Object.keys(transactionDateFilter).length > 0
+          ? { transactionDate: transactionDateFilter }
+          : {}),
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+          },
+        },
+      },
+      orderBy: [
+        { transactionDate: "desc" },
+        { createdAt: "desc" },
+        { id: "desc" },
+      ],
+    }),
+    prisma.transaction.findFirst({
+      where: {
+        groupId,
+        kind: "GROUP_PAYMENT",
+        paymentBatchId: { not: null },
+      },
+      select: { paymentBatchId: true },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    }),
+  ]);
+
+  const latestBatchTransactions = latestBatchTransaction?.paymentBatchId
+    ? await prisma.transaction.findMany({
+        where: {
+          groupId,
+          kind: "GROUP_PAYMENT",
+          paymentBatchId: latestBatchTransaction.paymentBatchId,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              displayName: true,
+            },
+          },
+        },
+        orderBy: [{ userId: "asc" }, { id: "asc" }],
+      })
+    : [];
+
+  const perPersonMap = new Map<
+    number,
+    { userId: number; displayName: string; totalAmount: number; paymentCount: number }
+  >();
+
+  for (const transaction of transactions) {
+    if (!transaction.userId) continue;
+    const current = perPersonMap.get(transaction.userId) ?? {
+      userId: transaction.userId,
+      displayName: transaction.user?.displayName ?? "不明なユーザー",
+      totalAmount: 0,
+      paymentCount: 0,
+    };
+    current.totalAmount += transaction.amount;
+    current.paymentCount += 1;
+    perPersonMap.set(transaction.userId, current);
+  }
+
+  const perPersonRows = [...perPersonMap.values()].sort(
+    (left, right) =>
+      right.totalAmount - left.totalAmount ||
+      left.displayName.localeCompare(right.displayName, "ja") ||
+      left.userId - right.userId,
+  );
+  const historyTotal = transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+
+  const latestBatch = latestBatchTransactions.length
+    ? {
+        paymentBatchId: latestBatchTransactions[0].paymentBatchId,
+        transactionDate: latestBatchTransactions[0].transactionDate,
+        rawText: latestBatchTransactions[0].rawText,
+        category: latestBatchTransactions[0].category,
+        calculationMethod: latestBatchTransactions[0].calculationMethod,
+        calculationMethodLabel: getCalculationMethodLabel(
+          latestBatchTransactions[0].calculationMethod,
+        ),
+        totalAmount: latestBatchTransactions.reduce(
+          (sum, transaction) => sum + transaction.amount,
+          0,
+        ),
+        allocations: latestBatchTransactions.map((transaction) => ({
+          transactionId: transaction.id,
+          userId: transaction.userId,
+          displayName: transaction.user?.displayName ?? "不明なユーザー",
+          amount: transaction.amount,
+        })),
+      }
+    : null;
+
+  return {
+    pages,
+    selectedPage,
+    activeMembers,
+    transactions,
+    perPersonRows,
+    historyTotal,
+    latestBatch,
+  };
+}
+
 app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, next) => {
   const userId = req.session.userId;
   const groupId = parsePositiveInteger(req.params.groupId);
@@ -1403,7 +1839,6 @@ app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, nex
     res.redirect("/?error=ログインしてください。");
     return;
   }
-
   if (!groupId) {
     res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
     return;
@@ -1414,7 +1849,6 @@ app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, nex
       where: { id: userId },
       select: { isActive: true, displayName: true },
     });
-
     if (!user?.isActive) {
       await destroySession(req);
       res.clearCookie(sessionCookieName);
@@ -1423,175 +1857,27 @@ app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, nex
     }
 
     const membership = await findActiveGroupMembership(userId, groupId);
-
     if (!membership) {
       res.status(403).send("このグループの関連支払いを表示する権限がありません。");
       return;
     }
 
-    const [pages, activeMembers] = await Promise.all([
-      prisma.ledgerPage.findMany({
-        where: {
-          groupId,
-          pageType: "GROUP_PAYMENT",
-          userId: null,
-        },
-        orderBy: [{ isInitial: "desc" }, { sortOrder: "asc" }, { id: "asc" }],
-      }),
-      prisma.groupMember.findMany({
-        where: {
-          groupId,
-          isActive: true,
-          user: { isActive: true },
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              displayName: true,
-            },
-          },
-        },
-        orderBy: [{ role: "desc" }, { joinedAt: "asc" }, { userId: "asc" }],
-      }),
-    ]);
-
-    const requestedPageId = parsePositiveInteger(req.query.pageId);
-    const selectedPage =
-      pages.find((page) => page.id === requestedPageId) ?? pages[0] ?? null;
-
-    if (!selectedPage) {
+    const pageData = await loadGroupPaymentsPageData(
+      groupId,
+      parsePositiveInteger(req.query.pageId),
+    );
+    if (!pageData) {
       res.status(500).send("関連支払いの表示ページが見つかりません。");
       return;
     }
 
-    const transactionDateFilter = buildTransactionDateFilter(
-      selectedPage.startDate,
-      selectedPage.endDate,
-    );
-
-    const [transactions, latestBatchTransaction] = await Promise.all([
-      prisma.transaction.findMany({
-        where: {
-          groupId,
-          kind: "GROUP_PAYMENT",
-          ...(Object.keys(transactionDateFilter).length > 0
-            ? { transactionDate: transactionDateFilter }
-            : {}),
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              displayName: true,
-            },
-          },
-        },
-        orderBy: [
-          { transactionDate: "desc" },
-          { createdAt: "desc" },
-          { id: "desc" },
-        ],
-      }),
-      prisma.transaction.findFirst({
-        where: {
-          groupId,
-          kind: "GROUP_PAYMENT",
-          paymentBatchId: { not: null },
-        },
-        select: { paymentBatchId: true },
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      }),
-    ]);
-
-    const latestBatchTransactions = latestBatchTransaction?.paymentBatchId
-      ? await prisma.transaction.findMany({
-          where: {
-            groupId,
-            kind: "GROUP_PAYMENT",
-            paymentBatchId: latestBatchTransaction.paymentBatchId,
-          },
-          include: {
-            user: {
-              select: {
-                id: true,
-                displayName: true,
-              },
-            },
-          },
-          orderBy: [{ userId: "asc" }, { id: "asc" }],
-        })
-      : [];
-
-    const perPersonMap = new Map<
-      number,
-      { userId: number; displayName: string; totalAmount: number; paymentCount: number }
-    >();
-
-    for (const transaction of transactions) {
-      if (!transaction.userId) continue;
-
-      const current = perPersonMap.get(transaction.userId) ?? {
-        userId: transaction.userId,
-        displayName: transaction.user?.displayName ?? "不明なユーザー",
-        totalAmount: 0,
-        paymentCount: 0,
-      };
-      current.totalAmount += transaction.amount;
-      current.paymentCount += 1;
-      perPersonMap.set(transaction.userId, current);
-    }
-
-    const perPersonRows = [...perPersonMap.values()].sort(
-      (left, right) =>
-        right.totalAmount - left.totalAmount ||
-        left.displayName.localeCompare(right.displayName, "ja") ||
-        left.userId - right.userId,
-    );
-    const historyTotal = transactions.reduce(
-      (sum, transaction) => sum + transaction.amount,
-      0,
-    );
-
-    const latestBatch = latestBatchTransactions.length
-      ? {
-          paymentBatchId: latestBatchTransactions[0].paymentBatchId,
-          transactionDate: latestBatchTransactions[0].transactionDate,
-          rawText: latestBatchTransactions[0].rawText,
-          category: latestBatchTransactions[0].category,
-          calculationMethod: latestBatchTransactions[0].calculationMethod,
-          calculationMethodLabel: getCalculationMethodLabel(
-            latestBatchTransactions[0].calculationMethod,
-          ),
-          totalAmount: latestBatchTransactions.reduce(
-            (sum, transaction) => sum + transaction.amount,
-            0,
-          ),
-          allocations: latestBatchTransactions.map((transaction) => ({
-            transactionId: transaction.id,
-            userId: transaction.userId,
-            displayName: transaction.user?.displayName ?? "不明なユーザー",
-            amount: transaction.amount,
-          })),
-        }
-      : null;
-
     const contextState = parsePaymentContextState(req.query.context);
-    const error = typeof req.query.error === "string" ? req.query.error : null;
-    const success = typeof req.query.success === "string" ? req.query.success : null;
-
     res.render("payments", {
       currentUserId: userId,
       group: membership.group,
       membership,
       isAdmin: membership.role === "ADMIN",
-      pages,
-      selectedPage,
-      activeMembers,
-      transactions,
-      perPersonRows,
-      historyTotal,
-      latestBatch,
+      ...pageData,
       calculationMethodOptions,
       groupPaymentCategories,
       currentUserDisplayName: user.displayName,
@@ -1599,21 +1885,147 @@ app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, nex
       contextState,
       isContextOpen: contextState !== "closed",
       selectedPageForm: {
-        startDate: selectedPage.startDate
-          ? selectedPage.startDate.toISOString().slice(0, 10)
+        startDate: pageData.selectedPage.startDate
+          ? pageData.selectedPage.startDate.toISOString().slice(0, 10)
           : "",
-        endDate: selectedPage.endDate
-          ? selectedPage.endDate.toISOString().slice(0, 10)
+        endDate: pageData.selectedPage.endDate
+          ? pageData.selectedPage.endDate.toISOString().slice(0, 10)
           : "",
       },
-      error,
-      success,
+      isCalculationMode: false,
+      splitDraft: {
+        totalAmount: "",
+        transactionDate: formatDateInputValue(new Date()),
+        rawText: "",
+        category: "",
+        participantIds: pageData.activeMembers.map((member) => member.userId),
+        calculationMethod: "",
+      } satisfies SplitPreviewDraft,
+      preview: null,
+      error: typeof req.query.error === "string" ? req.query.error : null,
+      success: typeof req.query.success === "string" ? req.query.success : null,
       buildGroupPaymentsUrl,
     });
   } catch (error) {
     next(error);
   }
 });
+
+app.post(
+  "/groups/:groupId/payments/preview",
+  requireAuthentication,
+  async (req, res, next) => {
+    const userId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const currentPageId = parsePositiveInteger(req.body.currentPageId);
+
+    if (!userId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { isActive: true, displayName: true },
+      });
+      if (!user?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const membership = await findActiveGroupMembership(userId, groupId);
+      if (!membership) {
+        res.status(403).send("このグループで割り勘を算出する権限がありません。");
+        return;
+      }
+
+      const pageData = await loadGroupPaymentsPageData(groupId, currentPageId);
+      if (!pageData) {
+        res.status(500).send("関連支払いの表示ページが見つかりません。");
+        return;
+      }
+
+      const totalAmountText = String(req.body.totalAmount ?? "").trim();
+      const transactionDateText = String(req.body.transactionDate ?? "").trim();
+      const rawText = String(req.body.rawText ?? "").trim();
+      const category = String(req.body.category ?? "").trim();
+      const participantIdResult = parseParticipantIds(req.body.participantIds);
+      const participantIds = participantIdResult.values;
+      const calculationMethodText = String(req.body.calculationMethod ?? "").trim();
+      const splitDraft: SplitPreviewDraft = {
+        totalAmount: totalAmountText,
+        transactionDate: transactionDateText,
+        rawText,
+        category,
+        participantIds,
+        calculationMethod: isCalculationMethod(calculationMethodText)
+          ? calculationMethodText
+          : "",
+      };
+
+      const transactionDate = parseDateOnly(transactionDateText);
+      const totalAmount = parsePositiveInteger(totalAmountText);
+      const activeMemberIds = new Set(pageData.activeMembers.map((member) => member.userId));
+      const validationError = validateSplitPreviewInput({
+        transactionDate,
+        totalAmount,
+        rawText,
+        category,
+        participantIds,
+        participantIdsValid: participantIdResult.isValid,
+        calculationMethod: calculationMethodText,
+        activeMemberIds,
+      });
+
+      const preview = validationError
+        ? null
+        : await calculateGroupPaymentPreview({
+            groupId,
+            totalAmount: totalAmount!,
+            participantIds,
+            calculationMethod: calculationMethodText as CalculationMethodValue,
+            activeMembers: pageData.activeMembers,
+          });
+
+      res.status(validationError ? 400 : 200).render("payments", {
+        currentUserId: userId,
+        group: membership.group,
+        membership,
+        isAdmin: membership.role === "ADMIN",
+        ...pageData,
+        calculationMethodOptions,
+        groupPaymentCategories,
+        currentUserDisplayName: user.displayName,
+        today: formatDateInputValue(new Date()),
+        contextState: "open" as PaymentContextState,
+        isContextOpen: true,
+        selectedPageForm: {
+          startDate: pageData.selectedPage.startDate
+            ? pageData.selectedPage.startDate.toISOString().slice(0, 10)
+            : "",
+          endDate: pageData.selectedPage.endDate
+            ? pageData.selectedPage.endDate.toISOString().slice(0, 10)
+            : "",
+        },
+        isCalculationMode: true,
+        splitDraft,
+        preview,
+        error: validationError,
+        success: null,
+        buildGroupPaymentsUrl,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 
 app.post(

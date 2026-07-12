@@ -605,3 +605,223 @@
   resize: vertical;
   min-height: 96px;
 }
+
+/* 第7-3: 割り勘試算 */
+.payments-split-form {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  background: #f8f6f3;
+}
+
+.payments-split-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.payments-split-fields label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.payments-split-fields label > span {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.payments-split-fields input,
+.payments-split-fields textarea,
+.payments-split-fields select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.payments-split-fields textarea {
+  resize: vertical;
+  min-height: 82px;
+}
+
+.payments-split-wide {
+  grid-column: 1 / -1;
+}
+
+.payments-method-action {
+  width: 38px;
+  min-height: 34px;
+  display: grid;
+  place-items: center;
+}
+
+.payments-method-radio {
+  display: none;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  cursor: pointer;
+}
+
+.payments-method-radio input,
+.payments-member-checkbox input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--text);
+  cursor: pointer;
+}
+
+.payments-method-summary {
+  min-height: 52px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: #f8f6f3;
+  line-height: 1.55;
+}
+
+.payments-calculation-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.payments-calculation-actions[hidden] {
+  display: none;
+}
+
+.payments-calculation-actions .button-link {
+  display: inline-grid;
+  place-items: center;
+}
+
+.payments-member-checkbox {
+  display: none;
+  min-height: 32px;
+  place-items: center;
+  cursor: pointer;
+}
+
+.is-calculation-mode .payments-method-help,
+.is-calculation-mode .payments-member-history-label {
+  display: none;
+}
+
+.is-calculation-mode .payments-method-radio,
+.is-calculation-mode .payments-member-checkbox {
+  display: grid;
+}
+
+.is-calculation-mode .payments-method-description {
+  display: none !important;
+}
+
+.is-calculation-mode .payments-method-area,
+.is-calculation-mode .payments-member-panel {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.payments-method-list li.is-selected,
+.payments-member-list li.is-selected {
+  border-color: var(--text);
+  background: #f1eee9;
+  box-shadow: inset 4px 0 0 var(--text);
+}
+
+.is-calculation-mode .payments-operation-rail button[data-calculation-lock-toggle]:disabled {
+  color: var(--muted);
+  background: #ebe7e2;
+  cursor: not-allowed;
+}
+
+.payments-fallback-message {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--text);
+  background: #f8f6f3;
+  line-height: 1.55;
+}
+
+.payments-preview-allocation-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.payments-preview-allocation-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+}
+
+.payments-preview-allocation-list li > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.payments-preview-allocation-list small {
+  color: var(--muted);
+}
+
+.payments-preview-allocation-list li > strong {
+  white-space: nowrap;
+}
+
+.payments-preview-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 13px 12px;
+  border-top: 2px solid var(--text);
+  background: #f8f6f3;
+}
+
+.payments-preview-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.payments-preview-actions .button-link {
+  display: grid;
+  place-items: center;
+}
+
+@media (max-width: 520px) {
+  .payments-split-fields,
+  .payments-calculation-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .payments-split-wide {
+    grid-column: auto;
+  }
+}
+
+.payments-previous-batch-during-calculation {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: #f8f6f3;
+  opacity: .78;
+}
+
+.payments-previous-batch-during-calculation summary {
+  color: var(--text);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.payments-previous-batch-during-calculation p {
+  margin: 10px 0 0;
+}
