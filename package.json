@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "tsx index.ts"
+    "start": "tsx index.ts",
+    "test:ai": "tsx --test tests/ai-foundation.test.ts"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
@@ -21,6 +22,8 @@
     "ejs": "^6.0.1",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
-    "pg": "^8.22.0"
+    "openai": "6.46.0",
+    "pg": "^8.22.0",
+    "zod": "4.4.3"
   }
 }
