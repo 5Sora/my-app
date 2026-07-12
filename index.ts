@@ -9,10 +9,13 @@ import { PrismaClient } from "./generated/prisma/client";
 import {
   AiError,
   AiFoundation,
+  analyzePersonalLedgerWithAi,
+  buildPersonalLedgerAutomaticSummary,
   classifyPersonalTransactionWithAi,
   classifyTransactionWithAi,
   createSuggestionToken,
   loadAiConfig,
+  normalizeFinancialAnalysis,
   resolvePersonalTransactionClassification,
   resolveTransactionClassification,
   toPublicAiError,
@@ -41,6 +44,11 @@ import {
   isFundExpenseCategory,
   isFundIncomeCategory,
 } from "./src/transactions/fund-categories.js";
+import {
+  PERSONAL_LEDGER_TRANSACTION_KINDS,
+  buildPersonalLedgerAnalysisAggregate,
+  type PersonalLedgerTransactionKind,
+} from "./src/transactions/personal-ledger-summary.js";
 
 type CalculationMethodValue =
   | "EQUAL"
@@ -4675,6 +4683,107 @@ app.post("/app/fund-contributions", requireAuthentication, async (req, res, next
     next(error);
   }
 });
+
+
+app.post(
+  "/api/ai/analyze-personal-ledger",
+  requireAuthentication,
+  express.json({ limit: "2kb" }),
+  async (req, res) => {
+    const userId = req.session.userId;
+    if (!userId) {
+      res.status(401).json({ ok: false, message: "ログインしてください。" });
+      return;
+    }
+    if (!isSameOriginAiRequest(req)) {
+      res.status(403).json({ ok: false, message: "この操作は許可されていません。" });
+      return;
+    }
+
+    const pageId = parsePositiveInteger(req.body?.pageId);
+    if (!pageId) {
+      res.status(400).json({ ok: false, message: "分析対象ページを正しく指定してください。" });
+      return;
+    }
+
+    try {
+      const [user, page] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: userId },
+          select: { isActive: true },
+        }),
+        prisma.ledgerPage.findFirst({
+          where: { id: pageId, userId, pageType: "PERSONAL" },
+          select: { id: true, name: true, startDate: true, endDate: true },
+        }),
+      ]);
+
+      if (!user?.isActive) {
+        res.status(401).json({ ok: false, message: "このアカウントは利用できません。" });
+        return;
+      }
+      if (!page) {
+        res.status(404).json({ ok: false, message: "分析対象の個人家計簿ページが見つかりません。" });
+        return;
+      }
+
+      const transactions = await prisma.transaction.findMany({
+        where: {
+          userId,
+          kind: { in: [...PERSONAL_LEDGER_TRANSACTION_KINDS] },
+        },
+        select: {
+          kind: true,
+          amount: true,
+          category: true,
+          transactionDate: true,
+        },
+      });
+
+      const aggregate = buildPersonalLedgerAnalysisAggregate({
+        transactions: transactions.map((transaction) => ({
+          ...transaction,
+          kind: transaction.kind as PersonalLedgerTransactionKind,
+        })),
+        period: { startDate: page.startDate, endDate: page.endDate },
+      });
+      const automaticSummary = buildPersonalLedgerAutomaticSummary(aggregate);
+
+      try {
+        if (!aiFoundation) throw new AiError("CONFIGURATION_ERROR");
+        const result = await analyzePersonalLedgerWithAi({
+          foundation: aiFoundation,
+          userId,
+          aggregate,
+        });
+        res.json({
+          ok: true,
+          source: "AI",
+          pageName: page.name,
+          period: aggregate.period,
+          analysis: normalizeFinancialAnalysis(result.data, aggregate),
+          message: "AI分析を表示しました。集計値に基づく参考情報として確認してください。",
+        });
+      } catch (error) {
+        const publicError = toPublicAiError(error);
+        res.status(publicError.status).json({
+          ok: false,
+          source: "AUTOMATIC_SUMMARY",
+          pageName: page.name,
+          period: aggregate.period,
+          analysis: automaticSummary,
+          message: `${publicError.message} AI分析の代わりに自動集計を表示しました。`,
+        });
+      }
+    } catch (error) {
+      console.error("[AI] Personal ledger aggregate could not be calculated.");
+      res.status(500).json({
+        ok: false,
+        message: "収支集計を作成できませんでした。時間をおいてお試しください。",
+      });
+    }
+  },
+);
 
 app.post(
   "/api/ai/classify-transaction",

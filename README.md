@@ -58,3 +58,22 @@ Stage 8-2 covers personal income and expense. Stage 8-3 extends the same foundat
 The classification request sends only the natural-language text plus application-owned instructions such as the Asia/Tokyo reference date and the allowed category list. Names, login IDs, group names, database IDs, membership lists and transaction history are not sent to OpenAI.
 
 Signed suggestion tokens are bound to the user, classification target and group. They expire after 30 minutes. An invalid or mismatched token does not block normal registration; the saved source falls back to manual handling and no AI audit data is stored.
+
+## Stage 8-4: personal ledger AI analysis
+
+The selected personal LedgerPage can be analyzed through an explicit `AI分析` action. The server verifies that the page belongs to the authenticated active user, retrieves only the transaction fields required for aggregation, and calculates all totals in TypeScript before calling OpenAI.
+
+The analysis input contains aggregate values only:
+
+- page period and optional immediately preceding equal-length comparison period
+- carryover, income, expense, net and closing balance
+- income and expense counts
+- category totals and shares
+- `GROUP_PAYMENT` and `FUND_CONTRIBUTION` totals
+- application-calculated warning flags
+
+Names, login IDs, user/page/transaction IDs, group names, transaction descriptions and individual transaction rows are not sent to OpenAI. The route uses the analysis model and strict Structured Outputs with `store: false`.
+
+Analysis output is displayed temporarily in a dialog and is not written to the database, `Transaction.aiResult`, or the session. If analysis is disabled, rate-limited, times out, or fails validation/provider processing, the same dialog displays an application-generated summary clearly labeled `自動集計（AI分析ではありません）`.
+
+Application warning evidence is calculated before the AI call. The initial warning conditions are a negative period net, an expense increase of at least 20 percent from the comparison period, and a single expense category representing at least 50 percent of expenses. An AI `WARNING` without application evidence is downgraded to `NOTICE` before display.

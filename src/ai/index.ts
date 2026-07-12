@@ -34,3 +34,17 @@ export {
   verifySuggestionToken,
 } from "./suggestion-token.js";
 export type { SuggestionTokenPayload } from "./suggestion-token.js";
+export {
+  ANALYSIS_LEVEL_VALUES,
+  FINANCIAL_ANALYSIS_DISCLAIMER,
+  analyzePersonalLedgerWithAi,
+  buildPersonalLedgerAnalysisInstructions,
+  buildPersonalLedgerAutomaticSummary,
+  financialAnalysisSchema,
+  normalizeFinancialAnalysis,
+} from "./financial-analysis.js";
+export type {
+  FinancialAnalysis,
+  FinancialAnalysisDisplay,
+  FinancialAnalysisResult,
+} from "./financial-analysis.js";
