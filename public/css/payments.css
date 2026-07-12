@@ -825,3 +825,65 @@
 .payments-previous-batch-during-calculation p {
   margin: 10px 0 0;
 }
+
+.payments-confirm-layout {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.payments-confirm-summary,
+.payments-confirm-allocation {
+  min-width: 0;
+}
+
+.payments-confirm-warning {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-left: 4px solid var(--text);
+  background: #f8f6f3;
+  line-height: 1.65;
+}
+
+.payments-confirm-definition > div {
+  grid-template-columns: 120px minmax(0, 1fr);
+}
+
+.payments-confirm-allocation-list {
+  max-height: 52vh;
+  overflow-y: auto;
+}
+
+.payments-confirm-allocation-list .is-zero-allocation {
+  border-style: dashed;
+  background: #f8f6f3;
+}
+
+.payments-confirm-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.payments-confirm-actions form,
+.payments-confirm-actions button,
+.payments-confirm-actions .button-link {
+  width: 100%;
+}
+
+@media (max-width: 760px) {
+  .payments-confirm-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .payments-confirm-definition > div {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+
+  .payments-confirm-allocation-list {
+    max-height: none;
+  }
+}

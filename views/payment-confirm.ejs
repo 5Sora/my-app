@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= group.name %> - 割り勘確認</title>
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/ledger.css">
+  <link rel="stylesheet" href="/css/group.css">
+  <link rel="stylesheet" href="/css/payments.css">
+</head>
+<body class="ledger-body payments-body payments-confirm-body">
+  <header class="ledger-header">
+    <div>
+      <p class="eyebrow">グループ関連支払い</p>
+      <h1>割り勘の確定前確認</h1>
+      <p class="period-label"><strong><%= group.name %></strong>・<%= selectedPage.name %></p>
+    </div>
+
+    <nav class="header-actions group-header-nav" aria-label="確認画面ナビゲーション">
+      <a
+        href="<%= buildGroupPaymentsUrl(group.id, { pageId: selectedPage.id, contextState: confirmation.contextState }) %>"
+        class="secondary-button button-link group-nav-item"
+      >算出を中止</a>
+      <form action="/logout" method="post" class="group-nav-logout">
+        <button type="submit" class="secondary-button group-nav-item">ログアウト</button>
+      </form>
+    </nav>
+  </header>
+
+  <main class="payments-confirm-layout">
+    <section class="panel payments-confirm-summary" aria-labelledby="confirm-summary-heading">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">確定内容</p>
+          <h2 id="confirm-summary-heading">支払い情報</h2>
+        </div>
+        <span><%= confirmation.allocations.length %> 人</span>
+      </div>
+
+      <p class="payments-confirm-warning">
+        確定すると、参加者全員分のTransactionを一括作成します。確定済みbatchの個別編集・取消は初期実装の対象外です。
+      </p>
+
+      <dl class="payments-batch-definition payments-confirm-definition">
+        <div><dt>対象グループ</dt><dd><%= group.name %></dd></div>
+        <div><dt>実際の取引日</dt><dd><%= new Date(confirmation.transactionDate + "T00:00:00Z").toLocaleDateString("ja-JP") %></dd></div>
+        <div><dt>内容</dt><dd><span tabindex="0" data-payment-tooltip="<%= confirmation.rawText %>"><%= confirmation.rawText %></span></dd></div>
+        <div><dt>カテゴリ</dt><dd><%= confirmation.category %></dd></div>
+        <div><dt>支払い総額</dt><dd><strong><%= confirmation.totalAmount.toLocaleString("ja-JP") %> 円</strong></dd></div>
+        <div><dt>選択方式</dt><dd><%= selectedMethodLabel %></dd></div>
+        <% if (confirmation.usedMethod !== confirmation.selectedMethod) { %>
+          <div><dt>実使用方式</dt><dd><strong><%= usedMethodLabel %></strong></dd></div>
+        <% } %>
+        <div><dt>fallback</dt><dd><%= confirmation.fallbackReason ?? "なし" %></dd></div>
+      </dl>
+    </section>
+
+    <section class="panel payments-confirm-allocation" aria-labelledby="confirm-allocation-heading">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">参加者</p>
+          <h2 id="confirm-allocation-heading">端数処理後の負担額</h2>
+        </div>
+        <strong><%= confirmation.totalAmount.toLocaleString("ja-JP") %> 円</strong>
+      </div>
+
+      <ul class="payments-preview-allocation-list payments-confirm-allocation-list">
+        <% confirmation.allocations.forEach(allocation => { %>
+          <li class="<%= allocation.amount === 0 ? 'is-zero-allocation' : '' %>">
+            <div>
+              <strong><%= allocation.displayName %></strong>
+              <small>算出前比率 <%= allocation.ratioPercent.toLocaleString("ja-JP", { maximumFractionDigits: 2 }) %>%</small>
+              <% if (allocation.amount === 0) { %><small>参加・負担0円</small><% } %>
+            </div>
+            <strong><%= allocation.amount.toLocaleString("ja-JP") %> 円</strong>
+          </li>
+        <% }) %>
+      </ul>
+
+      <div class="payments-preview-total">
+        <span>合計</span>
+        <strong><%= confirmation.allocations.reduce((sum, allocation) => sum + allocation.amount, 0).toLocaleString("ja-JP") %> 円</strong>
+      </div>
+
+      <div class="payments-confirm-actions">
+        <form
+          action="/groups/<%= group.id %>/payments/confirm/commit"
+          method="post"
+          data-confirm-payment-form
+        >
+          <input type="hidden" name="token" value="<%= token %>">
+          <button type="submit" class="primary-button">この内容で一括確定</button>
+        </form>
+
+        <form action="/groups/<%= group.id %>/payments/preview" method="post">
+          <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
+          <input type="hidden" name="contextState" value="<%= confirmation.contextState %>">
+          <input type="hidden" name="totalAmount" value="<%= confirmation.totalAmount %>">
+          <input type="hidden" name="transactionDate" value="<%= confirmation.transactionDate %>">
+          <input type="hidden" name="rawText" value="<%= confirmation.rawText %>">
+          <input type="hidden" name="category" value="<%= confirmation.category %>">
+          <input type="hidden" name="calculationMethod" value="<%= confirmation.selectedMethod %>">
+          <% confirmation.allocations.forEach(allocation => { %>
+            <input type="hidden" name="participantIds" value="<%= allocation.userId %>">
+          <% }) %>
+          <button type="submit" class="secondary-button">条件を修正</button>
+        </form>
+
+        <a
+          href="<%= buildGroupPaymentsUrl(group.id, { pageId: selectedPage.id, contextState: confirmation.contextState }) %>"
+          class="secondary-button button-link"
+        >算出を中止</a>
+      </div>
+      <p class="form-help">確認tokenの有効期限は30分です。確定ボタンは一度だけ使用できます。</p>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      document.querySelectorAll("form[method='post']").forEach((form) => {
+        form.addEventListener("submit", (event) => {
+          if (event.defaultPrevented) return;
+          if (form.dataset.submitting === "true") {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+          }
+          form.dataset.submitting = "true";
+          form.setAttribute("aria-busy", "true");
+          form.querySelectorAll("button[type='submit'], input[type='submit']").forEach((control) => {
+            if (control instanceof HTMLButtonElement) {
+              control.textContent = "処理中…";
+              control.disabled = true;
+            } else if (control instanceof HTMLInputElement) {
+              control.value = "処理中…";
+              control.disabled = true;
+            }
+          });
+        });
+      });
+
+      const tooltip = document.createElement("div");
+      tooltip.className = "payments-tooltip";
+      tooltip.setAttribute("role", "tooltip");
+      tooltip.hidden = true;
+      document.body.append(tooltip);
+
+      const hideTooltip = () => {
+        tooltip.hidden = true;
+        tooltip.textContent = "";
+      };
+      const showTooltip = (target) => {
+        if (!(target instanceof HTMLElement)) return;
+        const text = target.dataset.paymentTooltip;
+        if (!text || target.scrollWidth <= target.clientWidth) {
+          hideTooltip();
+          return;
+        }
+        tooltip.textContent = text;
+        tooltip.hidden = false;
+        const rect = target.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        const padding = 12;
+        const left = Math.max(padding, Math.min(rect.left, window.innerWidth - tooltipRect.width - padding));
+        let top = rect.bottom + 8;
+        if (top + tooltipRect.height > window.innerHeight - padding) {
+          top = Math.max(padding, rect.top - tooltipRect.height - 8);
+        }
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      };
+      document.querySelectorAll("[data-payment-tooltip]").forEach((target) => {
+        target.addEventListener("mouseenter", () => showTooltip(target));
+        target.addEventListener("mouseleave", hideTooltip);
+        target.addEventListener("focus", () => showTooltip(target));
+        target.addEventListener("blur", hideTooltip);
+        target.addEventListener("click", () => tooltip.hidden ? showTooltip(target) : hideTooltip());
+      });
+    })();
+  </script>
+</body>
+</html>

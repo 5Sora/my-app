@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { createHmac, randomUUID } from "node:crypto";
 import express, { type NextFunction, type Request, type Response } from "express";
 import session from "express-session";
 import bcrypt from "bcryptjs";
@@ -6,9 +7,40 @@ import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "./generated/prisma/client";
 
+type CalculationMethodValue =
+  | "EQUAL"
+  | "HISTORY_ALL"
+  | "HISTORY_SAME_PARTICIPANTS"
+  | "BALANCE_ADJUSTMENT";
+
+type PaymentConfirmationAllocation = {
+  userId: number;
+  displayName: string;
+  ratioPercent: number;
+  exactAmount: number;
+  amount: number;
+};
+
+type PaymentConfirmationSession = {
+  groupId: number;
+  operatorUserId: number;
+  pageId: number;
+  contextState: "open" | "closed";
+  createdAt: number;
+  transactionDate: string;
+  rawText: string;
+  category: string;
+  totalAmount: number;
+  selectedMethod: CalculationMethodValue;
+  usedMethod: CalculationMethodValue;
+  fallbackReason: string | null;
+  allocations: PaymentConfirmationAllocation[];
+};
+
 declare module "express-session" {
   interface SessionData {
     userId?: number;
+    paymentConfirmations?: Record<string, PaymentConfirmationSession>;
   }
 }
 
@@ -30,6 +62,9 @@ const app = express();
 const port = Number(process.env.PORT || 8888);
 const isProduction = process.env.NODE_ENV === "production";
 const sessionCookieName = "my_app_sid";
+const paymentConfirmationLifetimeMs = 30 * 60 * 1000;
+const maxPendingPaymentConfirmations = 10;
+const consumedPaymentConfirmationTokens = new Map<string, number>();
 
 if (isProduction) app.set("trust proxy", 1);
 
@@ -93,6 +128,57 @@ function saveSession(req: Request): Promise<void> {
   return new Promise((resolve, reject) => {
     req.session.save((error) => (error ? reject(error) : resolve()));
   });
+}
+
+function buildSplitPreviewSignature(input: {
+  groupId: number;
+  transactionDate: string;
+  rawText: string;
+  category: string;
+  totalAmount: number;
+  participantIds: number[];
+  preview: SplitPreviewResult;
+}): string {
+  const payload = JSON.stringify({
+    groupId: input.groupId,
+    transactionDate: input.transactionDate,
+    rawText: input.rawText,
+    category: input.category,
+    totalAmount: input.totalAmount,
+    participantIds: [...input.participantIds].sort((left, right) => left - right),
+    selectedMethod: input.preview.selectedMethod,
+    usedMethod: input.preview.usedMethod,
+    fallbackReason: input.preview.fallbackReason,
+    allocations: [...input.preview.allocations]
+      .map((allocation) => ({ userId: allocation.userId, amount: allocation.amount }))
+      .sort((left, right) => left.userId - right.userId),
+  });
+  return createHmac("sha256", sessionSecret).update(payload).digest("hex");
+}
+
+function prunePaymentConfirmationState(req: Request): void {
+  const now = Date.now();
+  const pending = req.session.paymentConfirmations ?? {};
+
+  for (const [token, confirmation] of Object.entries(pending)) {
+    if (now - confirmation.createdAt > paymentConfirmationLifetimeMs) {
+      delete pending[token];
+    }
+  }
+
+  const ordered = Object.entries(pending).sort(
+    ([, left], [, right]) => right.createdAt - left.createdAt,
+  );
+  for (const [token] of ordered.slice(maxPendingPaymentConfirmations)) {
+    delete pending[token];
+  }
+  req.session.paymentConfirmations = pending;
+
+  for (const [token, consumedAt] of consumedPaymentConfirmationTokens) {
+    if (now - consumedAt > paymentConfirmationLifetimeMs) {
+      consumedPaymentConfirmationTokens.delete(token);
+    }
+  }
 }
 
 function destroySession(req: Request): Promise<void> {
@@ -686,8 +772,6 @@ function getCalculationMethodLabel(value: string | null): string {
 }
 
 
-type CalculationMethodValue = (typeof calculationMethodOptions)[number]["value"];
-
 type SplitPreviewDraft = {
   totalAmount: string;
   transactionDate: string;
@@ -697,13 +781,7 @@ type SplitPreviewDraft = {
   calculationMethod: CalculationMethodValue | "";
 };
 
-type SplitPreviewAllocation = {
-  userId: number;
-  displayName: string;
-  ratioPercent: number;
-  exactAmount: number;
-  amount: number;
-};
+type SplitPreviewAllocation = PaymentConfirmationAllocation;
 
 type SplitPreviewResult = {
   selectedMethod: CalculationMethodValue;
@@ -1902,6 +1980,7 @@ app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, nex
         calculationMethod: "",
       } satisfies SplitPreviewDraft,
       preview: null,
+      previewSignature: null,
       error: typeof req.query.error === "string" ? req.query.error : null,
       success: typeof req.query.success === "string" ? req.query.success : null,
       buildGroupPaymentsUrl,
@@ -1993,6 +2072,17 @@ app.post(
             calculationMethod: calculationMethodText as CalculationMethodValue,
             activeMembers: pageData.activeMembers,
           });
+      const previewSignature = preview
+        ? buildSplitPreviewSignature({
+            groupId,
+            transactionDate: transactionDateText,
+            rawText,
+            category,
+            totalAmount: totalAmount!,
+            participantIds,
+            preview,
+          })
+        : null;
 
       res.status(validationError ? 400 : 200).render("payments", {
         currentUserId: userId,
@@ -2017,10 +2107,364 @@ app.post(
         isCalculationMode: true,
         splitDraft,
         preview,
+        previewSignature,
         error: validationError,
         success: null,
         buildGroupPaymentsUrl,
       });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+
+
+app.post(
+  "/groups/:groupId/payments/confirm",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const currentPageId = parsePositiveInteger(req.body.currentPageId);
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+
+    try {
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true, displayName: true },
+      });
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const membership = await findActiveGroupMembership(operatorUserId, groupId);
+      if (!membership) {
+        res.status(403).send("このグループの割り勘確認画面を表示する権限がありません。");
+        return;
+      }
+
+      const pageData = await loadGroupPaymentsPageData(groupId, currentPageId);
+      if (!pageData) {
+        res.status(500).send("関連支払いの表示ページが見つかりません。");
+        return;
+      }
+
+      const totalAmountText = String(req.body.totalAmount ?? "").trim();
+      const transactionDateText = String(req.body.transactionDate ?? "").trim();
+      const rawText = String(req.body.rawText ?? "").trim();
+      const category = String(req.body.category ?? "").trim();
+      const participantIdResult = parseParticipantIds(req.body.participantIds);
+      const participantIds = participantIdResult.values;
+      const calculationMethodText = String(req.body.calculationMethod ?? "").trim();
+      const submittedPreviewSignature = String(req.body.previewSignature ?? "").trim();
+      const splitDraft: SplitPreviewDraft = {
+        totalAmount: totalAmountText,
+        transactionDate: transactionDateText,
+        rawText,
+        category,
+        participantIds,
+        calculationMethod: isCalculationMethod(calculationMethodText)
+          ? calculationMethodText
+          : "",
+      };
+
+      const transactionDate = parseDateOnly(transactionDateText);
+      const totalAmount = parsePositiveInteger(totalAmountText);
+      const activeMemberIds = new Set(pageData.activeMembers.map((member) => member.userId));
+      const validationError = validateSplitPreviewInput({
+        transactionDate,
+        totalAmount,
+        rawText,
+        category,
+        participantIds,
+        participantIdsValid: participantIdResult.isValid,
+        calculationMethod: calculationMethodText,
+        activeMemberIds,
+      });
+
+      if (validationError) {
+        res.status(400).render("payments", {
+          currentUserId: operatorUserId,
+          group: membership.group,
+          membership,
+          isAdmin: membership.role === "ADMIN",
+          ...pageData,
+          calculationMethodOptions,
+          groupPaymentCategories,
+          currentUserDisplayName: operator.displayName,
+          today: formatDateInputValue(new Date()),
+          contextState: "open" as PaymentContextState,
+          isContextOpen: true,
+          selectedPageForm: {
+            startDate: pageData.selectedPage.startDate
+              ? pageData.selectedPage.startDate.toISOString().slice(0, 10)
+              : "",
+            endDate: pageData.selectedPage.endDate
+              ? pageData.selectedPage.endDate.toISOString().slice(0, 10)
+              : "",
+          },
+          isCalculationMode: true,
+          splitDraft,
+          preview: null,
+          previewSignature: null,
+          error: validationError,
+          success: null,
+          buildGroupPaymentsUrl,
+        });
+        return;
+      }
+
+      const preview = await calculateGroupPaymentPreview({
+        groupId,
+        totalAmount: totalAmount!,
+        participantIds,
+        calculationMethod: calculationMethodText as CalculationMethodValue,
+        activeMembers: pageData.activeMembers,
+      });
+      const expectedPreviewSignature = buildSplitPreviewSignature({
+        groupId,
+        transactionDate: transactionDateText,
+        rawText,
+        category,
+        totalAmount: totalAmount!,
+        participantIds,
+        preview,
+      });
+
+      if (!submittedPreviewSignature || submittedPreviewSignature !== expectedPreviewSignature) {
+        res.status(409).render("payments", {
+          currentUserId: operatorUserId,
+          group: membership.group,
+          membership,
+          isAdmin: membership.role === "ADMIN",
+          ...pageData,
+          calculationMethodOptions,
+          groupPaymentCategories,
+          currentUserDisplayName: operator.displayName,
+          today: formatDateInputValue(new Date()),
+          contextState: "open" as PaymentContextState,
+          isContextOpen: true,
+          selectedPageForm: {
+            startDate: pageData.selectedPage.startDate
+              ? pageData.selectedPage.startDate.toISOString().slice(0, 10)
+              : "",
+            endDate: pageData.selectedPage.endDate
+              ? pageData.selectedPage.endDate.toISOString().slice(0, 10)
+              : "",
+          },
+          isCalculationMode: true,
+          splitDraft,
+          preview,
+          previewSignature: expectedPreviewSignature,
+          error: "試算後に条件または履歴が変化しました。表示中の試算結果を確認してから、もう一度『確認へ進む』を押してください。",
+          success: null,
+          buildGroupPaymentsUrl,
+        });
+        return;
+      }
+
+      prunePaymentConfirmationState(req);
+      const token = randomUUID();
+      const confirmation: PaymentConfirmationSession = {
+        groupId,
+        operatorUserId,
+        pageId: pageData.selectedPage.id,
+        contextState: "open",
+        createdAt: Date.now(),
+        transactionDate: transactionDateText,
+        rawText,
+        category,
+        totalAmount: totalAmount!,
+        selectedMethod: preview.selectedMethod,
+        usedMethod: preview.usedMethod,
+        fallbackReason: preview.fallbackReason,
+        allocations: preview.allocations,
+      };
+      req.session.paymentConfirmations = {
+        ...(req.session.paymentConfirmations ?? {}),
+        [token]: confirmation,
+      };
+      prunePaymentConfirmationState(req);
+      await saveSession(req);
+
+      res.render("payment-confirm", {
+        group: membership.group,
+        membership,
+        selectedPage: pageData.selectedPage,
+        confirmation,
+        token,
+        selectedMethodLabel: getCalculationMethodLabel(confirmation.selectedMethod),
+        usedMethodLabel: getCalculationMethodLabel(confirmation.usedMethod),
+        buildGroupPaymentsUrl,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.post(
+  "/groups/:groupId/payments/confirm/commit",
+  requireAuthentication,
+  async (req, res, next) => {
+    const operatorUserId = req.session.userId;
+    const groupId = parsePositiveInteger(req.params.groupId);
+    const token = String(req.body.token ?? "").trim();
+
+    if (!operatorUserId) {
+      res.redirect("/?error=ログインしてください。");
+      return;
+    }
+    if (!groupId) {
+      res.redirect(buildAppUrl({ error: "グループが正しくありません。" }));
+      return;
+    }
+    if (!token) {
+      res.status(409).send("一括確定tokenがありません。もう一度試算からやり直してください。");
+      return;
+    }
+
+    try {
+      prunePaymentConfirmationState(req);
+      if (consumedPaymentConfirmationTokens.has(token)) {
+        res.status(409).send("この確認内容は既に確定処理済みです。重複登録は行われませんでした。");
+        return;
+      }
+
+      const confirmation = req.session.paymentConfirmations?.[token];
+      if (!confirmation) {
+        res.status(409).send("確認内容が見つからないか、有効期限が切れています。もう一度試算してください。");
+        return;
+      }
+      if (
+        confirmation.groupId !== groupId ||
+        confirmation.operatorUserId !== operatorUserId
+      ) {
+        res.status(403).send("この割り勘確認内容を確定する権限がありません。");
+        return;
+      }
+      if (Date.now() - confirmation.createdAt > paymentConfirmationLifetimeMs) {
+        delete req.session.paymentConfirmations?.[token];
+        await saveSession(req);
+        res.status(409).send("確認内容の有効期限が切れています。もう一度試算してください。");
+        return;
+      }
+
+      const operator = await prisma.user.findUnique({
+        where: { id: operatorUserId },
+        select: { isActive: true },
+      });
+      if (!operator?.isActive) {
+        await destroySession(req);
+        res.clearCookie(sessionCookieName);
+        res.redirect("/?error=このアカウントは利用できません。");
+        return;
+      }
+
+      const membership = await findActiveGroupMembership(operatorUserId, groupId);
+      if (!membership) {
+        res.status(403).send("このグループの割り勘を確定する権限がありません。");
+        return;
+      }
+
+      const participantIds = confirmation.allocations.map((allocation) => allocation.userId);
+      const uniqueParticipantIds = [...new Set(participantIds)];
+      const activeParticipants = await prisma.groupMember.findMany({
+        where: {
+          groupId,
+          userId: { in: uniqueParticipantIds },
+          isActive: true,
+          user: { isActive: true },
+        },
+        select: { userId: true },
+      });
+      const activeParticipantIds = new Set(activeParticipants.map((participant) => participant.userId));
+
+      const transactionDate = parseDateOnly(confirmation.transactionDate);
+      const allocationTotal = confirmation.allocations.reduce(
+        (sum, allocation) => sum + allocation.amount,
+        0,
+      );
+      const confirmationIsValid =
+        transactionDate !== null &&
+        !isFutureTransactionDate(transactionDate) &&
+        Number.isSafeInteger(confirmation.totalAmount) &&
+        confirmation.totalAmount >= 1 &&
+        confirmation.rawText.trim().length >= 1 &&
+        confirmation.rawText.length <= 500 &&
+        isGroupPaymentCategory(confirmation.category) &&
+        isCalculationMethod(confirmation.selectedMethod) &&
+        isCalculationMethod(confirmation.usedMethod) &&
+        confirmation.allocations.length >= 1 &&
+        uniqueParticipantIds.length === confirmation.allocations.length &&
+        uniqueParticipantIds.every((participantId) => activeParticipantIds.has(participantId)) &&
+        confirmation.allocations.every(
+          (allocation) =>
+            Number.isSafeInteger(allocation.userId) &&
+            allocation.userId > 0 &&
+            Number.isSafeInteger(allocation.amount) &&
+            allocation.amount >= 0,
+        ) &&
+        allocationTotal === confirmation.totalAmount;
+
+      if (!confirmationIsValid) {
+        delete req.session.paymentConfirmations?.[token];
+        await saveSession(req);
+        res.status(409).send(
+          "確認後に参加者または入力条件が変わったため確定できません。もう一度試算してください。",
+        );
+        return;
+      }
+
+      // 認可・参加者再確認中に同じtokenの別リクエストが先行していないか、
+      // DB処理の直前でもう一度同期的に確認する。
+      if (consumedPaymentConfirmationTokens.has(token)) {
+        res.status(409).send("この確認内容は既に確定処理済みです。重複登録は行われませんでした。");
+        return;
+      }
+      consumedPaymentConfirmationTokens.set(token, Date.now());
+      delete req.session.paymentConfirmations?.[token];
+      await saveSession(req);
+
+      const paymentBatchId = randomUUID();
+      await prisma.$transaction(async (transactionClient) => {
+        await transactionClient.transaction.createMany({
+          data: confirmation.allocations.map((allocation) => ({
+            userId: allocation.userId,
+            groupId,
+            groupFundId: null,
+            kind: "GROUP_PAYMENT" as const,
+            amount: allocation.amount,
+            category: confirmation.category,
+            rawText: confirmation.rawText,
+            transactionDate: transactionDate!,
+            paymentBatchId,
+            calculationMethod: confirmation.usedMethod,
+            classificationSource: "MANUAL" as const,
+            aiResult: null,
+          })),
+        });
+      });
+
+      res.redirect(
+        buildGroupPaymentsUrl(groupId, {
+          pageId: confirmation.pageId,
+          contextState: confirmation.contextState,
+          success: `割り勘を一括確定しました。${confirmation.allocations.length}人分を個人家計簿とグループ履歴へ反映しました。`,
+        }),
+      );
     } catch (error) {
       next(error);
     }

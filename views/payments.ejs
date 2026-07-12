@@ -433,11 +433,25 @@
           <% }) %>
         </ul>
         <div class="payments-preview-total"><span>合計</span><strong><%= preview.allocations.reduce((sum, allocation) => sum + allocation.amount, 0).toLocaleString("ja-JP") %> 円</strong></div>
+        <form id="split-confirm-form" action="/groups/<%= group.id %>/payments/confirm" method="post" hidden>
+          <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
+          <input type="hidden" name="contextState" value="open">
+          <input type="hidden" name="totalAmount" value="<%= splitDraft.totalAmount %>">
+          <input type="hidden" name="transactionDate" value="<%= splitDraft.transactionDate %>">
+          <input type="hidden" name="rawText" value="<%= splitDraft.rawText %>">
+          <input type="hidden" name="category" value="<%= splitDraft.category %>">
+          <input type="hidden" name="calculationMethod" value="<%= splitDraft.calculationMethod %>">
+          <input type="hidden" name="previewSignature" value="<%= previewSignature ?? '' %>">
+          <% splitDraft.participantIds.forEach(participantId => { %>
+            <input type="hidden" name="participantIds" value="<%= participantId %>">
+          <% }) %>
+        </form>
         <div class="payments-preview-actions">
-          <button type="button" class="primary-button" disabled aria-disabled="true" title="第7-4で有効化します">確認へ進む</button>
+          <button type="submit" form="split-confirm-form" class="primary-button" data-preview-confirm-button>確認へ進む</button>
           <button type="button" class="secondary-button" data-edit-split-conditions>条件を修正</button>
           <a href="<%= buildGroupPaymentsUrl(group.id, { pageId: selectedPage.id, contextState: 'open' }) %>" class="secondary-button button-link">算出を中止</a>
         </div>
+        <p class="form-help" data-preview-stale-message hidden>条件を変更したため、この試算結果は古くなりました。もう一度「負担額を試算」してください。</p>
         <p class="form-help">この試算結果はまだDBへ保存されていません。</p>
       <% } else if (isCalculationMode) { %>
         <div class="panel-heading">
@@ -674,11 +688,20 @@
       const methodInputs = [...document.querySelectorAll("[data-calculation-method-input]")];
       const methodSummary = document.querySelector("[data-method-summary]");
       const resultColumn = document.querySelector("[data-payment-result-column]");
+      const previewConfirmButton = document.querySelector("[data-preview-confirm-button]");
+      const previewStaleMessage = document.querySelector("[data-preview-stale-message]");
       const previousBatchSummary = <%- JSON.stringify(latestBatch ? {
         totalAmount: latestBatch.totalAmount,
         calculationMethodLabel: latestBatch.calculationMethodLabel,
       } : null) %>;
       const methodDescriptions = <%- JSON.stringify(Object.fromEntries(calculationMethodOptions.map(method => [method.value, method.description]))) %>;
+
+      const invalidateRenderedPreview = () => {
+        if (!(previewConfirmButton instanceof HTMLButtonElement)) return;
+        previewConfirmButton.disabled = true;
+        previewConfirmButton.setAttribute("aria-disabled", "true");
+        if (previewStaleMessage instanceof HTMLElement) previewStaleMessage.hidden = false;
+      };
 
       const updateCalculationSelections = () => {
         participantInputs.forEach((input) => {
@@ -747,13 +770,21 @@
         input.addEventListener("change", () => {
           updateCalculationSelections();
           updatePreviewAvailability();
+          invalidateRenderedPreview();
         });
       });
       splitForm?.querySelectorAll("input, textarea, select").forEach((input) => {
-        input.addEventListener("input", updatePreviewAvailability);
-        input.addEventListener("change", updatePreviewAvailability);
+        input.addEventListener("input", () => {
+          updatePreviewAvailability();
+          invalidateRenderedPreview();
+        });
+        input.addEventListener("change", () => {
+          updatePreviewAvailability();
+          invalidateRenderedPreview();
+        });
       });
       document.querySelector("[data-edit-split-conditions]")?.addEventListener("click", () => {
+        invalidateRenderedPreview();
         const firstInput = splitForm?.querySelector("input:not([type='hidden'])");
         if (firstInput instanceof HTMLElement) firstInput.focus();
         splitForm?.scrollIntoView({ behavior: "smooth", block: "center" });
