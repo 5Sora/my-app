@@ -244,7 +244,9 @@ export function createSafetyIdentifier(
   const digest = createHmac("sha256", safetySalt)
     .update(String(userId))
     .digest("hex");
-  return `ai_${digest}`;
+  // OpenAI safety_identifier accepts at most 64 characters.
+  // Keep the readable prefix and truncate only the anonymous HMAC digest.
+  return `ai_${digest.slice(0, 61)}`;
 }
 
 function createOpenAiParser(apiKey: string): ResponsesParser {

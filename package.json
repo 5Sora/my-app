@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx index.ts",
-    "test:ai": "tsx --test tests/ai-foundation.test.ts"
+    "test:ai": "tsx --test tests/*.test.ts"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

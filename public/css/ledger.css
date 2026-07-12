@@ -520,3 +520,85 @@
     grid-template-columns: 1fr;
   }
 }
+
+.ai-classification-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-classification-actions .secondary-button {
+  width: 100%;
+}
+
+.ai-classification-actions .secondary-button:disabled {
+  border-color: var(--border);
+  color: #aaa39c;
+  background: #f4f1ed;
+  cursor: not-allowed;
+}
+
+.ai-suggestion-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  padding: 12px;
+  background: #f8f6f3;
+}
+
+.ai-suggestion-panel[hidden] {
+  display: none;
+}
+
+.ai-suggestion-message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ai-suggestion-message[data-source="AI"] {
+  border-left: 3px solid var(--income);
+  padding-left: 9px;
+}
+
+.ai-suggestion-message[data-source="KEYWORD"],
+.ai-suggestion-message[data-source="ERROR"] {
+  border-left: 3px solid var(--accent);
+  padding-left: 9px;
+}
+
+.ai-field-status {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.ai-field-status dt {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.ai-field-status dd {
+  margin: 0;
+}
+
+.ai-field-status dd[data-status="MISSING"] {
+  color: var(--expense);
+  font-weight: 800;
+}
+
+.ai-field-status dd[data-status="DEFAULTED"] {
+  color: #7a5a00;
+  font-weight: 800;
+}
+
+.ai-warning-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--expense);
+  font-size: 12px;
+  line-height: 1.5;
+}

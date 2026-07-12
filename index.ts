@@ -6,6 +6,24 @@ import bcrypt from "bcryptjs";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "./generated/prisma/client";
+import {
+  AiError,
+  AiFoundation,
+  classifyPersonalTransactionWithAi,
+  createSuggestionToken,
+  loadAiConfig,
+  resolvePersonalTransactionClassification,
+  toPublicAiError,
+  verifySuggestionToken,
+  type PersonalTransactionClassification,
+} from "./src/ai/index.js";
+import {
+  PERSONAL_EXPENSE_CATEGORIES,
+  PERSONAL_INCOME_CATEGORIES,
+  classifyPersonalTransactionKeyword,
+  isAllowedPersonalCategory,
+  type PersonalTransactionKind,
+} from "./src/transactions/personal-categories.js";
 
 type CalculationMethodValue =
   | "EQUAL"
@@ -65,6 +83,13 @@ const sessionCookieName = "my_app_sid";
 const paymentConfirmationLifetimeMs = 30 * 60 * 1000;
 const maxPendingPaymentConfirmations = 10;
 const consumedPaymentConfirmationTokens = new Map<string, number>();
+let aiFoundation: AiFoundation | null = null;
+
+try {
+  aiFoundation = new AiFoundation(loadAiConfig());
+} catch {
+  console.error("[AI] AI configuration is invalid. Existing non-AI features remain available.");
+}
 
 if (isProduction) app.set("trust proxy", 1);
 
@@ -215,34 +240,59 @@ function parseDateOnly(value: unknown): Date | null {
   return date.toISOString().slice(0, 10) === text ? date : null;
 }
 
-function classifyTransaction(rawText: string, kind: "income" | "expense"): string {
-  if (kind === "income") {
-    if (/給与|給料|バイト|アルバイト|報酬/.test(rawText)) return "給与・副業";
-    if (/仕送り/.test(rawText)) return "仕送り";
-    if (/返金|還付/.test(rawText)) return "返金・還付";
-    return "その他収入";
-  }
-
-  if (/コンビニ|スーパー|ご飯|食事|ランチ|カフェ|弁当/.test(rawText)) {
-    return "食費";
-  }
-  if (/電車|バス|タクシー|交通|切符|定期/.test(rawText)) {
-    return "交通費";
-  }
-  if (/本|参考書|文具|授業|学習/.test(rawText)) {
-    return "学習費";
-  }
-  if (/家賃|光熱|電気|ガス|水道|通信|携帯/.test(rawText)) {
-    return "維持費";
-  }
-  return "その他支出";
-}
-
 function formatDateInputValue(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getTokyoDateInputValue(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function isSameOriginAiRequest(req: Request): boolean {
+  const fetchSite = req.get("sec-fetch-site");
+  if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "same-site" && fetchSite !== "none") {
+    return false;
+  }
+
+  const origin = req.get("origin");
+  if (!origin) return true;
+  try {
+    const originUrl = new URL(origin);
+    return originUrl.host === req.get("host");
+  } catch {
+    return false;
+  }
+}
+
+function buildKeywordFallbackSuggestion(
+  rawText: string,
+  fallbackKind: PersonalTransactionKind,
+): PersonalTransactionClassification {
+  return {
+    transactionType: fallbackKind === "income" ? "INCOME" : "EXPENSE",
+    amount: null,
+    transactionDate: null,
+    category: classifyPersonalTransactionKeyword(rawText, fallbackKind),
+    summary: rawText.slice(0, 100),
+    fieldStatus: {
+      transactionType: "EXPLICIT",
+      amount: "MISSING",
+      transactionDate: "MISSING",
+      category: "INFERRED",
+    },
+    missingFields: ["amount", "transactionDate"],
+    warnings: ["AIを利用できないため、キーワード分類による候補を表示しています。"],
+  };
 }
 
 type OptionalDateResult = {
@@ -337,7 +387,7 @@ function isGroupPaymentCategory(value: string): value is GroupPaymentCategory {
 }
 
 function isFutureTransactionDate(date: Date): boolean {
-  const today = parseDateOnly(formatDateInputValue(new Date()));
+  const today = parseDateOnly(getTokyoDateInputValue());
   return today ? date > today : false;
 }
 
@@ -1335,7 +1385,11 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
       },
       error,
       success,
-      today: formatDateInputValue(new Date()),
+      today: getTokyoDateInputValue(),
+      personalCategories: {
+        income: PERSONAL_INCOME_CATEGORIES,
+        expense: PERSONAL_EXPENSE_CATEGORIES,
+      },
       selectedPageForm: {
         startDate: selectedPage.startDate
           ? selectedPage.startDate.toISOString().slice(0, 10)
@@ -4619,6 +4673,99 @@ app.post("/app/fund-contributions", requireAuthentication, async (req, res, next
   }
 });
 
+app.post(
+  "/api/ai/classify-transaction",
+  requireAuthentication,
+  express.json({ limit: "4kb" }),
+  async (req, res) => {
+    const userId = req.session.userId;
+    if (!userId) {
+      res.status(401).json({ ok: false, message: "ログインしてください。" });
+      return;
+    }
+
+    if (!isSameOriginAiRequest(req)) {
+      res.status(403).json({ ok: false, message: "この操作は許可されていません。" });
+      return;
+    }
+
+    const rawText = String(req.body?.rawText ?? "").trim();
+    const fallbackKindInput = String(req.body?.fallbackKind ?? "").trim();
+    const fallbackKind: PersonalTransactionKind | null =
+      fallbackKindInput === "income" || fallbackKindInput === "expense"
+        ? fallbackKindInput
+        : null;
+
+    if (!rawText || rawText.length > 500 || !fallbackKind) {
+      res.status(400).json({
+        ok: false,
+        message: "内容は1文字以上500文字以内で入力し、収入または支出を選択してください。",
+      });
+      return;
+    }
+
+    const fallbackSuggestion = buildKeywordFallbackSuggestion(rawText, fallbackKind);
+    const referenceDate = getTokyoDateInputValue();
+
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { isActive: true },
+      });
+
+      if (!user?.isActive) {
+        res.status(401).json({ ok: false, message: "このアカウントは利用できません。" });
+        return;
+      }
+
+      if (!aiFoundation) {
+        throw new AiError("CONFIGURATION_ERROR");
+      }
+
+      const result = await classifyPersonalTransactionWithAi({
+        foundation: aiFoundation,
+        userId,
+        rawText,
+        referenceDate,
+      });
+      const suggestionToken = createSuggestionToken({
+        userId,
+        secret: sessionSecret,
+        source: "AI",
+        model: result.model,
+        suggestion: result.data,
+      });
+
+      res.json({
+        ok: true,
+        source: "AI",
+        suggestion: result.data,
+        suggestionToken,
+        referenceDate,
+        message: "AIによる候補を表示しました。内容を確認してから登録してください。",
+      });
+    } catch (error) {
+      const publicError = toPublicAiError(error);
+      const suggestionToken = createSuggestionToken({
+        userId,
+        secret: sessionSecret,
+        source: "KEYWORD",
+        model: null,
+        suggestion: fallbackSuggestion,
+      });
+
+      res.status(publicError.status).json({
+        ok: false,
+        source: "KEYWORD",
+        suggestion: fallbackSuggestion,
+        suggestionToken,
+        referenceDate,
+        message: `${publicError.message} キーワード分類による候補を表示しました。`,
+      });
+    }
+  },
+);
+
 app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
   const userId = req.session.userId;
   if (!userId) {
@@ -4629,8 +4776,10 @@ app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
   const kindInput = String(req.body.kind ?? "").trim();
   const rawText = String(req.body.rawText ?? "").trim();
   const selectedCategory = String(req.body.category ?? "").trim();
+  const suggestionToken = String(req.body.suggestionToken ?? "").trim();
   const amount = parsePositiveInteger(req.body.amount);
-  const transactionDate = parseDateOnly(req.body.transactionDate);
+  const transactionDateInput = String(req.body.transactionDate ?? "").trim();
+  const transactionDate = parseDateOnly(transactionDateInput);
   const pageId = parsePositiveInteger(req.body.pageId);
 
   const inputKind = kindInput === "income" || kindInput === "expense" ? kindInput : null;
@@ -4655,6 +4804,26 @@ app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
     return;
   }
 
+  if (isFutureTransactionDate(transactionDate)) {
+    res.redirect(
+      buildAppUrl({
+        pageId,
+        error: "未来日の取引は登録できません。",
+      }),
+    );
+    return;
+  }
+
+  if (selectedCategory && !isAllowedPersonalCategory(inputKind, selectedCategory)) {
+    res.redirect(
+      buildAppUrl({
+        pageId,
+        error: "選択した種類に対応するカテゴリを選んでください。",
+      }),
+    );
+    return;
+  }
+
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -4668,8 +4837,24 @@ app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
       return;
     }
 
-    const category = selectedCategory || classifyTransaction(rawText, inputKind);
-    const classificationSource = selectedCategory ? "MANUAL" : "KEYWORD";
+    const category = selectedCategory || classifyPersonalTransactionKeyword(rawText, inputKind);
+    const verifiedSuggestion = suggestionToken
+      ? verifySuggestionToken({
+          token: suggestionToken,
+          userId,
+          secret: sessionSecret,
+        })
+      : null;
+
+    const { classificationSource, aiResult } = resolvePersonalTransactionClassification({
+      payload: verifiedSuggestion,
+      selectedCategory,
+      finalKind: inputKind,
+      finalAmount: amount,
+      finalTransactionDate: transactionDateInput,
+      finalCategory: category,
+      finalRawText: rawText,
+    });
 
     await prisma.transaction.create({
       data: {
@@ -4682,6 +4867,7 @@ app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
         rawText,
         transactionDate,
         classificationSource,
+        aiResult,
       },
     });
 

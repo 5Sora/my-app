@@ -78,7 +78,8 @@ test("createSafetyIdentifier is stable and does not expose the user id", () => {
   const other = createSafetyIdentifier(124, "stable-secret-salt");
   assert.equal(first, second);
   assert.notEqual(first, other);
-  assert.match(first, /^ai_[a-f0-9]{64}$/);
+  assert.match(first, /^ai_[a-f0-9]{61}$/);
+  assert.equal(first.length, 64);
   assert.equal(first.includes("123"), false);
 });
 
@@ -177,7 +178,8 @@ test("executeStructured sends store:false, a strict schema, model and safety ide
   assert.equal(calls[0].body.store, false);
   assert.equal(calls[0].body.model, "gpt-5.4-nano");
   assert.equal(calls[0].body.max_output_tokens, 500);
-  assert.match(String(calls[0].body.safety_identifier), /^ai_[a-f0-9]{64}$/);
+  assert.match(String(calls[0].body.safety_identifier), /^ai_[a-f0-9]{61}$/);
+  assert.equal(String(calls[0].body.safety_identifier).length, 64);
   const text = calls[0].body.text as {
     format?: { type?: string; strict?: boolean; name?: string };
   };

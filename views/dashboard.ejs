@@ -261,12 +261,13 @@
         <h2>取引を追加</h2>
 
 
-        <form action="/app/transactions" method="post" class="transaction-form">
+        <form action="/app/transactions" method="post" class="transaction-form" data-personal-transaction-form data-submit-lock>
           <input type="hidden" name="pageId" value="<%= selectedPage.id %>">
+          <input type="hidden" name="suggestionToken" value="" data-ai-suggestion-token>
 
           <label>
             <span>実際の取引日</span>
-            <input type="date" name="transactionDate" value="<%= today %>" required>
+            <input type="date" name="transactionDate" value="<%= today %>" max="<%= today %>" required>
           </label>
 
           <label>
@@ -284,20 +285,17 @@
 
           <label>
             <span>カテゴリ</span>
-            <select name="category">
-              <option value="">内容から自動分類</option>
-              <optgroup label="収入">
-                <option value="給与・副業">給与・副業</option>
-                <option value="仕送り">仕送り</option>
-                <option value="返金・還付">返金・還付</option>
-                <option value="その他収入">その他収入</option>
+            <select name="category" data-personal-category>
+              <option value="">内容からキーワード分類</option>
+              <optgroup label="収入" data-category-kind="income">
+                <% personalCategories.income.forEach(category => { %>
+                  <option value="<%= category %>"><%= category %></option>
+                <% }) %>
               </optgroup>
-              <optgroup label="支出">
-                <option value="食費">食費</option>
-                <option value="交通費">交通費</option>
-                <option value="学習費">学習費</option>
-                <option value="維持費">維持費</option>
-                <option value="その他支出">その他支出</option>
+              <optgroup label="支出" data-category-kind="expense">
+                <% personalCategories.expense.forEach(category => { %>
+                  <option value="<%= category %>"><%= category %></option>
+                <% }) %>
               </optgroup>
             </select>
           </label>
@@ -308,10 +306,22 @@
               name="rawText"
               maxlength="500"
               rows="3"
-              placeholder="例：コンビニで昼食"
+              placeholder="例：昨日コンビニで昼食を800円買った"
               required
+              data-ai-raw-text
             ></textarea>
           </label>
+
+          <div class="ai-classification-actions">
+            <button type="button" class="secondary-button" data-ai-classify-button>AIで推定</button>
+            <p class="form-help">押すと、この内容だけを外部AI（OpenAI）へ送信します。候補は自動保存されません。</p>
+          </div>
+
+          <section class="ai-suggestion-panel" data-ai-suggestion-panel hidden aria-live="polite">
+            <p class="ai-suggestion-message" data-ai-message></p>
+            <dl class="ai-field-status" data-ai-field-status></dl>
+            <ul class="ai-warning-list" data-ai-warnings hidden></ul>
+          </section>
 
           <button type="submit" class="primary-button">登録する</button>
         </form>
@@ -451,6 +461,163 @@
       dialog?.addEventListener("click", (event) => {
         if (event.target === dialog && dialog instanceof HTMLDialogElement) dialog.close();
       });
+
+      const personalForm = document.querySelector("[data-personal-transaction-form]");
+      if (personalForm instanceof HTMLFormElement) {
+        const kindSelect = personalForm.elements.namedItem("kind");
+        const amountInput = personalForm.elements.namedItem("amount");
+        const dateInput = personalForm.elements.namedItem("transactionDate");
+        const categorySelect = personalForm.elements.namedItem("category");
+        const rawTextInput = personalForm.elements.namedItem("rawText");
+        const suggestionTokenInput = personalForm.querySelector("[data-ai-suggestion-token]");
+        const classifyButton = personalForm.querySelector("[data-ai-classify-button]");
+        const suggestionPanel = personalForm.querySelector("[data-ai-suggestion-panel]");
+        const messageElement = personalForm.querySelector("[data-ai-message]");
+        const fieldStatusElement = personalForm.querySelector("[data-ai-field-status]");
+        const warningList = personalForm.querySelector("[data-ai-warnings]");
+
+        const statusLabels = {
+          EXPLICIT: "入力に明記",
+          INFERRED: "AI・規則で推定",
+          DEFAULTED: "画面の既定値",
+          MISSING: "要入力",
+        };
+
+        const updateCategoryOptions = () => {
+          if (!(kindSelect instanceof HTMLSelectElement) || !(categorySelect instanceof HTMLSelectElement)) return;
+          const selectedKind = kindSelect.value;
+          categorySelect.querySelectorAll("optgroup[data-category-kind]").forEach((group) => {
+            if (!(group instanceof HTMLOptGroupElement)) return;
+            const enabled = group.dataset.categoryKind === selectedKind;
+            group.disabled = !enabled;
+            group.hidden = !enabled;
+          });
+          const selectedOption = categorySelect.selectedOptions[0];
+          const selectedGroup = selectedOption?.parentElement;
+          if (selectedGroup instanceof HTMLOptGroupElement && selectedGroup.disabled) {
+            categorySelect.value = "";
+          }
+        };
+
+        const showSuggestion = (payload) => {
+          if (!(suggestionPanel instanceof HTMLElement)) return;
+          suggestionPanel.hidden = false;
+          if (messageElement instanceof HTMLElement) {
+            messageElement.textContent = payload.message || "候補を表示しました。";
+            messageElement.dataset.source = payload.source || "";
+          }
+
+          const suggestion = payload.suggestion;
+          if (!suggestion) return;
+
+          if (kindSelect instanceof HTMLSelectElement) {
+            if (suggestion.transactionType === "INCOME") kindSelect.value = "income";
+            if (suggestion.transactionType === "EXPENSE") kindSelect.value = "expense";
+            updateCategoryOptions();
+          }
+          if (amountInput instanceof HTMLInputElement && suggestion.amount !== null) {
+            amountInput.value = String(suggestion.amount);
+          }
+          if (dateInput instanceof HTMLInputElement) {
+            dateInput.value = suggestion.transactionDate || payload.referenceDate || dateInput.value;
+          }
+          if (categorySelect instanceof HTMLSelectElement) {
+            categorySelect.value = suggestion.category || "";
+          }
+          if (
+            payload.source === "AI" &&
+            rawTextInput instanceof HTMLTextAreaElement &&
+            suggestion.summary
+          ) {
+            rawTextInput.value = suggestion.summary;
+          }
+          if (suggestionTokenInput instanceof HTMLInputElement) {
+            suggestionTokenInput.value = payload.suggestionToken || "";
+          }
+
+          if (fieldStatusElement instanceof HTMLElement) {
+            fieldStatusElement.replaceChildren();
+            const fields = [
+              ["種類", suggestion.fieldStatus?.transactionType],
+              ["金額", suggestion.fieldStatus?.amount],
+              ["取引日", suggestion.transactionDate ? suggestion.fieldStatus?.transactionDate : "DEFAULTED"],
+              ["カテゴリ", suggestion.fieldStatus?.category],
+            ];
+            fields.forEach(([label, status]) => {
+              const term = document.createElement("dt");
+              term.textContent = label;
+              const description = document.createElement("dd");
+              description.textContent = statusLabels[status] || "要確認";
+              description.dataset.status = status || "";
+              fieldStatusElement.append(term, description);
+            });
+          }
+
+          if (warningList instanceof HTMLUListElement) {
+            warningList.replaceChildren();
+            const warnings = Array.isArray(suggestion.warnings) ? suggestion.warnings : [];
+            warnings.forEach((warning) => {
+              const item = document.createElement("li");
+              item.textContent = String(warning);
+              warningList.append(item);
+            });
+            warningList.hidden = warnings.length === 0;
+          }
+        };
+
+        kindSelect?.addEventListener("change", updateCategoryOptions);
+        updateCategoryOptions();
+
+        classifyButton?.addEventListener("click", async () => {
+          if (
+            !(classifyButton instanceof HTMLButtonElement) ||
+            !(kindSelect instanceof HTMLSelectElement) ||
+            !(rawTextInput instanceof HTMLTextAreaElement)
+          ) return;
+
+          const rawText = rawTextInput.value.trim();
+          if (!rawText) {
+            rawTextInput.focus();
+            rawTextInput.setCustomValidity("AIで推定する内容を入力してください。");
+            rawTextInput.reportValidity();
+            rawTextInput.setCustomValidity("");
+            return;
+          }
+
+          classifyButton.disabled = true;
+          classifyButton.textContent = "推定中…";
+          personalForm.setAttribute("aria-busy", "true");
+          if (suggestionPanel instanceof HTMLElement) suggestionPanel.hidden = false;
+          if (messageElement instanceof HTMLElement) messageElement.textContent = "AIで候補を作成しています。";
+
+          try {
+            const response = await fetch("/api/ai/classify-transaction", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Accept": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ rawText, fallbackKind: kindSelect.value }),
+            });
+            const payload = await response.json().catch(() => null);
+            if (payload?.suggestion) {
+              showSuggestion(payload);
+            } else {
+              throw new Error(payload?.message || "AI候補を取得できませんでした。");
+            }
+          } catch (error) {
+            if (suggestionPanel instanceof HTMLElement) suggestionPanel.hidden = false;
+            if (messageElement instanceof HTMLElement) {
+              messageElement.textContent = error instanceof Error
+                ? error.message
+                : "AI候補を取得できませんでした。手動で入力してください。";
+              messageElement.dataset.source = "ERROR";
+            }
+          } finally {
+            classifyButton.disabled = false;
+            classifyButton.textContent = "AIで推定";
+            personalForm.removeAttribute("aria-busy");
+          }
+        });
+      }
 
       document.querySelectorAll("form[data-submit-lock]").forEach((form) => {
         form.addEventListener("submit", (event) => {
