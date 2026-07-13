@@ -98,3 +98,15 @@ Names, login IDs, user/group/page IDs, `paymentBatchId` values, transaction desc
 The personal and group-payment analysis screens use the same temporary dialog renderer. Analysis output is not saved to the database, `Transaction.aiResult`, or the session. Provider failure, timeout, limits, configuration failure or feature disablement produces an application-generated aggregate summary clearly labeled `自動集計（AI分析ではありません）`.
 
 Application warning evidence for group payments is limited to a total increase of at least 20 percent from the comparison period and a single category representing at least 50 percent of the total. An unsupported AI `WARNING` is downgraded to `NOTICE` before display.
+
+
+## 第8-6: 基金AI分析
+
+基金画面の選択中LedgerPageで、基金収支、内部拠出、外部収入、返金、支出カテゴリ、匿名化したメンバー別拠出構造を分析できます。OpenAIには実名・userId・rawText・個別Transactionを送らず、リクエストごとに生成した一時的な `MEMBER_n` を使用します。表示前にサーバー側で実名へ戻し、対応表はDB・Session・ログへ保存しません。AIが利用できない場合は自動集計を表示します。
+
+
+### 第8-6表示補足
+
+基金AI分析では、AI文章とは別にアプリ計算の固定集計欄を表示します。
+拠出者数、有効メンバー数、内部拠出依存率、最大拠出割合、上位3名割合はAIが文章で省略しても必ず確認できます。
+AIには匿名化方式やmemberKey自体を説明させません。

@@ -9,8 +9,11 @@ import { PrismaClient } from "./generated/prisma/client";
 import {
   AiError,
   AiFoundation,
+  analyzeGroupFundWithAi,
   analyzeGroupPaymentsWithAi,
   analyzePersonalLedgerWithAi,
+  buildGroupFundAutomaticSummary,
+  buildGroupFundFixedMetrics,
   buildGroupPaymentAutomaticSummary,
   buildPersonalLedgerAutomaticSummary,
   classifyPersonalTransactionWithAi,
@@ -18,6 +21,7 @@ import {
   createSuggestionToken,
   loadAiConfig,
   normalizeFinancialAnalysis,
+  replaceFundMemberKeysInAnalysis,
   resolvePersonalTransactionClassification,
   resolveTransactionClassification,
   toPublicAiError,
@@ -54,6 +58,11 @@ import {
 import {
   buildGroupPaymentAnalysisAggregate,
 } from "./src/transactions/group-payment-summary.js";
+import {
+  GROUP_FUND_TRANSACTION_KINDS,
+  buildGroupFundAnalysisBundle,
+  type GroupFundTransactionKind,
+} from "./src/transactions/group-fund-summary.js";
 
 type CalculationMethodValue =
   | "EQUAL"
@@ -4885,6 +4894,159 @@ app.post(
       res.status(500).json({
         ok: false,
         message: "関連支払い集計を作成できませんでした。時間をおいてお試しください。",
+      });
+    }
+  },
+);
+
+app.post(
+  "/api/ai/analyze-group-fund",
+  requireAuthentication,
+  express.json({ limit: "2kb" }),
+  async (req, res) => {
+    const userId = req.session.userId;
+    if (!userId) {
+      res.status(401).json({ ok: false, message: "ログインしてください。" });
+      return;
+    }
+    if (!isSameOriginAiRequest(req)) {
+      res.status(403).json({ ok: false, message: "この操作は許可されていません。" });
+      return;
+    }
+
+    const groupId = parsePositiveInteger(req.body?.groupId);
+    const pageId = parsePositiveInteger(req.body?.pageId);
+    if (!groupId || !pageId) {
+      res.status(400).json({ ok: false, message: "分析対象を正しく指定してください。" });
+      return;
+    }
+
+    try {
+      const [user, membership, fund, page, activeMembers] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: userId },
+          select: { isActive: true },
+        }),
+        findActiveGroupMembership(userId, groupId),
+        prisma.groupFund.findUnique({
+          where: { groupId },
+          select: { id: true, isActive: true },
+        }),
+        prisma.ledgerPage.findFirst({
+          where: { id: pageId, groupId, pageType: "GROUP_FUND" },
+          select: { id: true, name: true, startDate: true, endDate: true },
+        }),
+        prisma.groupMember.findMany({
+          where: {
+            groupId,
+            isActive: true,
+            user: { isActive: true },
+          },
+          select: {
+            userId: true,
+            user: { select: { displayName: true } },
+          },
+        }),
+      ]);
+
+      if (!user?.isActive) {
+        res.status(401).json({ ok: false, message: "このアカウントは利用できません。" });
+        return;
+      }
+      if (!membership) {
+        res.status(403).json({ ok: false, message: "このグループの基金を分析する権限がありません。" });
+        return;
+      }
+      if (!fund?.isActive) {
+        res.status(409).json({ ok: false, message: "有効なグループ基金がありません。" });
+        return;
+      }
+      if (!page) {
+        res.status(404).json({ ok: false, message: "分析対象の基金ページが見つかりません。" });
+        return;
+      }
+
+      const transactions = await prisma.transaction.findMany({
+        where: {
+          groupFundId: fund.id,
+          kind: { in: [...GROUP_FUND_TRANSACTION_KINDS] },
+        },
+        select: {
+          kind: true,
+          amount: true,
+          category: true,
+          transactionDate: true,
+          userId: true,
+          user: { select: { displayName: true } },
+        },
+      });
+      const knownMembers = new Map<number, string>();
+      for (const transaction of transactions) {
+        if (transaction.userId !== null && transaction.user?.displayName) {
+          knownMembers.set(transaction.userId, transaction.user.displayName);
+        }
+      }
+      const bundle = buildGroupFundAnalysisBundle({
+        transactions: transactions.map((transaction) => ({
+          kind: transaction.kind as GroupFundTransactionKind,
+          amount: transaction.amount,
+          category: transaction.category,
+          transactionDate: transaction.transactionDate,
+          userId: transaction.userId,
+        })),
+        activeMembers: activeMembers.map((member) => ({
+          userId: member.userId,
+          displayName: member.user.displayName,
+        })),
+        knownMembers: [...knownMembers.entries()].map(([knownUserId, displayName]) => ({
+          userId: knownUserId,
+          displayName,
+        })),
+        period: { startDate: page.startDate, endDate: page.endDate },
+      });
+      const automaticSummary = buildGroupFundAutomaticSummary(
+        bundle.aggregate,
+        bundle.memberNamesByKey,
+      );
+      const fixedMetrics = buildGroupFundFixedMetrics(bundle.aggregate);
+
+      try {
+        if (!aiFoundation) throw new AiError("CONFIGURATION_ERROR");
+        const result = await analyzeGroupFundWithAi({
+          foundation: aiFoundation,
+          userId,
+          aggregate: bundle.aggregate,
+        });
+        const normalized = normalizeFinancialAnalysis(result.data, bundle.aggregate);
+        res.json({
+          ok: true,
+          source: "AI",
+          pageName: page.name,
+          period: bundle.aggregate.period,
+          analysis: replaceFundMemberKeysInAnalysis(
+            normalized,
+            bundle.memberNamesByKey,
+          ),
+          metrics: fixedMetrics,
+          message: "AI分析を表示しました。匿名化した基金集計に基づく参考情報です。",
+        });
+      } catch (error) {
+        const publicError = toPublicAiError(error);
+        res.status(publicError.status).json({
+          ok: false,
+          source: "AUTOMATIC_SUMMARY",
+          pageName: page.name,
+          period: bundle.aggregate.period,
+          analysis: automaticSummary,
+          metrics: fixedMetrics,
+          message: `${publicError.message} AI分析の代わりに自動集計を表示しました。`,
+        });
+      }
+    } catch (error) {
+      console.error("[AI] Group fund aggregate could not be calculated.");
+      res.status(500).json({
+        ok: false,
+        message: "基金集計を作成できませんでした。時間をおいてお試しください。",
       });
     }
   },

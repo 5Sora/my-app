@@ -53,3 +53,10 @@ export {
   buildGroupPaymentAnalysisInstructions,
   buildGroupPaymentAutomaticSummary,
 } from "./group-payment-analysis.js";
+export {
+  analyzeGroupFundWithAi,
+  buildGroupFundAnalysisInstructions,
+  buildGroupFundAutomaticSummary,
+  buildGroupFundFixedMetrics,
+  replaceFundMemberKeysInAnalysis,
+} from "./group-fund-analysis.js";

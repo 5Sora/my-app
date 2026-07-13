@@ -79,6 +79,23 @@
     </article>
   </section>
 
+  <section class="ai-analysis-launch fund-ai-analysis-launch" aria-label="基金AI分析">
+    <div>
+      <p class="eyebrow">集計説明</p>
+      <p class="ai-analysis-launch-copy">選択中ページの基金収支・内部拠出・外部収入・匿名化した拠出構造だけを外部AI（OpenAI）へ送り、基金の傾向を説明します。氏名やuserIdは送りません。</p>
+    </div>
+    <button
+      type="button"
+      class="secondary-button"
+      data-ai-analysis-button
+      data-endpoint="/api/ai/analyze-group-fund"
+      data-group-id="<%= group.id %>"
+      data-page-id="<%= selectedPage.id %>"
+      data-page-name="<%= selectedPage.name %>"
+      data-loading-message="選択中の基金ページを集計し、匿名化した拠出構造をAIへ分析依頼しています。"
+    >AI分析</button>
+  </section>
+
   <main class="fund-layout<%= isContextOpen ? '' : ' is-context-closed' %>" data-fund-layout>
     <aside
       class="fund-context-column"
@@ -677,6 +694,16 @@
   </dialog>
 
 
+
+  <%- include("partials/ai-analysis-dialog", {
+    analysisDialog: {
+      id: "group-fund-ai-analysis-dialog",
+      eyebrow: "基金集計",
+      title: "基金分析",
+      pageName: selectedPage.name
+    }
+  }) %>
+
   <script>
     (() => {
       const layout = document.querySelector("[data-fund-layout]");
@@ -902,5 +929,6 @@
       });
     })();
   </script>
+  <script src="/js/ai-analysis-dialog.js" defer></script>
 </body>
 </html>

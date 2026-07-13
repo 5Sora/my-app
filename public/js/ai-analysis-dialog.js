@@ -8,6 +8,8 @@
   const pageName = dialog.querySelector("[data-ai-analysis-page-name]");
   const period = dialog.querySelector("[data-ai-analysis-period]");
   const overview = dialog.querySelector("[data-ai-analysis-overview]");
+  const fixedSummary = dialog.querySelector("[data-ai-analysis-fixed-summary]");
+  const metrics = dialog.querySelector("[data-ai-analysis-metrics]");
   const observations = dialog.querySelector("[data-ai-analysis-observations]");
   const suggestions = dialog.querySelector("[data-ai-analysis-suggestions]");
   const limitations = dialog.querySelector("[data-ai-analysis-limitations]");
@@ -28,6 +30,8 @@
     if (period instanceof HTMLElement) period.textContent = "集計中";
     if (overview instanceof HTMLElement) overview.textContent = "集計中です。";
     if (disclaimer instanceof HTMLElement) disclaimer.textContent = "";
+    if (fixedSummary instanceof HTMLElement) fixedSummary.hidden = true;
+    clear(metrics);
     clear(observations);
     clear(suggestions);
     clear(limitations);
@@ -49,6 +53,21 @@
     if (pageName instanceof HTMLElement) pageName.textContent = payload.pageName || button.dataset.pageName || "選択中ページ";
     if (period instanceof HTMLElement) period.textContent = payload.period?.label || "全期間";
     if (overview instanceof HTMLElement) overview.textContent = analysis.overview || "表示できる概要がありません。";
+
+    clear(metrics);
+    const fixedMetrics = Array.isArray(payload?.metrics) ? payload.metrics : [];
+    if (fixedSummary instanceof HTMLElement) fixedSummary.hidden = fixedMetrics.length === 0;
+    if (metrics instanceof HTMLElement) {
+      for (const metric of fixedMetrics) {
+        const wrapper = document.createElement("div");
+        const label = document.createElement("dt");
+        const value = document.createElement("dd");
+        label.textContent = String(metric?.label || "集計項目");
+        value.textContent = String(metric?.value || "-");
+        wrapper.append(label, value);
+        metrics.append(wrapper);
+      }
+    }
 
     clear(observations);
     if (observations instanceof HTMLElement) {

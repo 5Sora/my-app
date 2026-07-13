@@ -703,6 +703,41 @@
   font-size: 16px;
 }
 
+.ai-analysis-fixed-summary {
+  border: 1px solid var(--border);
+  padding: 12px;
+  background: #f8f6f3;
+}
+
+.ai-analysis-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.ai-analysis-metrics > div {
+  border: 1px solid var(--border);
+  padding: 9px 10px;
+  background: var(--surface);
+}
+
+.ai-analysis-metrics dt,
+.ai-analysis-metrics dd {
+  margin: 0;
+}
+
+.ai-analysis-metrics dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ai-analysis-metrics dd {
+  margin-top: 3px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
 .ai-analysis-observations {
   display: grid;
   gap: 10px;
