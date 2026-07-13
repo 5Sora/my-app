@@ -153,6 +153,7 @@ export async function classifyTransactionWithAi(input: {
   const result = await input.foundation.executeStructured({
     feature: "classification",
     userId: input.userId,
+    fallbackOnError: true,
     schema,
     schemaName: `${input.target.toLowerCase()}_transaction_classification`,
     instructions: input.target === "PERSONAL"
@@ -172,6 +173,7 @@ export async function classifyPersonalTransactionWithAi(input: {
   const result = await input.foundation.executeStructured({
     feature: "classification",
     userId: input.userId,
+    fallbackOnError: true,
     schema: personalTransactionClassificationSchema,
     schemaName: "personal_transaction_classification",
     instructions: buildPersonalTransactionClassificationInstructions(input.referenceDate),

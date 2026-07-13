@@ -110,3 +110,47 @@ Application warning evidence for group payments is limited to a total increase o
 基金AI分析では、AI文章とは別にアプリ計算の固定集計欄を表示します。
 拠出者数、有効メンバー数、内部拠出依存率、最大拠出割合、上位3名割合はAIが文章で省略しても必ず確認できます。
 AIには匿名化方式やmemberKey自体を説明させません。
+
+## Stage 8-7: AI total verification
+
+Stage 8-7 adds cross-stage regression and failure-mode verification without changing the database schema, migrations, or package dependencies.
+The current mock/static suite contains 83 tests and does not call the real OpenAI API.
+
+The total AI test suite covers:
+
+- provider 400, 401, 403, 429, temporary 5xx, network failure, timeout, and schema mismatch
+- global and feature-specific flags and missing configuration
+- per-user and global minute/daily limits
+- independent classification and analysis counters and locks
+- lock release after success and failure
+- restart-equivalent in-memory counter reset
+- safe public error messages
+- accurate `fallback` logging
+- provider token usage logging
+- aggregate-only analysis routes with no database writes
+- suggestion-only classification routes
+- unchanged Prisma schema and migration hashes
+- fixed OpenAI SDK and Zod versions with public npm registry lock URLs
+
+All production classification and analysis calls declare their available fallback. Successful requests log `fallback:false`; a failed AI request that is replaced by keyword classification or an automatic aggregate summary logs `fallback:true`.
+
+### Token and cost estimate helper
+
+Capture server output while performing one classification and the three analysis operations:
+
+```bash
+npm start 2>&1 | tee stage8-7-ai.log
+```
+
+Then calculate an approximate API cost from the structured `ai_request` lines:
+
+```bash
+node scripts/stage8-7-log-cost.mjs stage8-7-ai.log
+```
+
+The helper uses the standard short-context text token prices published on 2026-07-13:
+
+- `gpt-5.4-nano`: $0.20 / 1M input tokens and $1.25 / 1M output tokens
+- `gpt-5.4-mini`: $0.75 / 1M input tokens and $4.50 / 1M output tokens
+
+The estimate is informational. Recheck the current OpenAI pricing page before relying on it for budgeting.

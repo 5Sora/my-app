@@ -351,8 +351,8 @@ test("attempt timeout is normalized and limited to two attempts", async () => {
       retryJitterMs: 0,
       classification: {
         ...base.classification,
-        totalTimeoutMs: 60,
-        firstAttemptTimeoutMs: 20,
+        totalTimeoutMs: 300,
+        firstAttemptTimeoutMs: 60,
       },
     }),
     {

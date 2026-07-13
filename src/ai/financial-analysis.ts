@@ -61,6 +61,7 @@ export async function analyzePersonalLedgerWithAi(input: {
   return input.foundation.executeStructured({
     feature: "analysis",
     userId: input.userId,
+    fallbackOnError: true,
     schema: financialAnalysisSchema,
     schemaName: "personal_ledger_financial_analysis",
     instructions: buildPersonalLedgerAnalysisInstructions(),

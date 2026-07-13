@@ -34,6 +34,7 @@ export type AiStructuredRequest<T> = {
   schemaName: string;
   instructions: string;
   input: string | Array<Record<string, unknown>>;
+  fallbackOnError?: boolean;
 };
 
 export type AiStructuredResult<T> = {
@@ -189,7 +190,7 @@ export class AiFoundation {
         provider: "OPENAI",
         model: featureConfig.model,
         success: false,
-        fallback: false,
+        fallback: request.fallbackOnError === true,
         errorCode: normalized.code,
         durationMs,
         attempts,

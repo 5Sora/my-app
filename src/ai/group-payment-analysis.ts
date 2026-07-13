@@ -31,6 +31,7 @@ export async function analyzeGroupPaymentsWithAi(input: {
   return input.foundation.executeStructured({
     feature: "analysis",
     userId: input.userId,
+    fallbackOnError: true,
     schema: financialAnalysisSchema,
     schemaName: "group_payment_financial_analysis",
     instructions: buildGroupPaymentAnalysisInstructions(),
