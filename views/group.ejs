@@ -7,43 +7,16 @@
   <link rel="stylesheet" href="/css/auth.css">
   <link rel="stylesheet" href="/css/ledger.css">
   <link rel="stylesheet" href="/css/group.css">
+  <link rel="stylesheet" href="/css/app-shell.css">
 </head>
 <body class="ledger-body">
-  <header class="ledger-header">
-    <div>
-      <p class="eyebrow">グループ概要</p>
-      <h1><%= group.name %></h1>
-      <p class="period-label">
-        あなたの権限：<%= membership.role === "ADMIN" ? "グループ管理者" : "メンバー" %>
-      </p>
-    </div>
-
-    <nav class="header-actions group-header-nav" aria-label="グループ画面ナビゲーション">
-      <a href="/app" class="secondary-button button-link group-nav-item">自分の家計簿</a>
-      <a
-        href="/groups/<%= group.id %>"
-        class="secondary-button button-link group-nav-item is-active"
-        aria-current="page"
-      >
-        概要
-      </a>
-      <a
-        href="/groups/<%= group.id %>/fund"
-        class="secondary-button button-link group-nav-item"
-      >
-        基金
-      </a>
-      <a
-        href="/groups/<%= group.id %>/payments"
-        class="secondary-button button-link group-nav-item"
-      >
-        関連支払い
-      </a>
-      <form action="/logout" method="post" class="group-nav-logout">
-        <button type="submit" class="secondary-button group-nav-item">ログアウト</button>
-      </form>
-    </nav>
-  </header>
+  <%- include("partials/app-header", {
+    header: {
+      mode: "group",
+      groupId: group.id,
+      active: "overview"
+    }
+  }) %>
 
   <% if (error || success) { %>
     <section class="flash-area" aria-live="polite">

@@ -1,0 +1,212 @@
+:root {
+  --app-header-height: 64px;
+  --app-page-gap: 14px;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  flex: 0 0 auto;
+  width: min(1500px, 100%);
+  min-height: var(--app-header-height);
+  margin: 0 auto var(--app-page-gap);
+  border: 1px solid var(--border);
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 5px 18px rgb(23 21 19 / 8%);
+  backdrop-filter: blur(10px);
+}
+
+.app-header__inner {
+  min-height: calc(var(--app-header-height) - 2px);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+  padding: 9px 14px;
+}
+
+.app-header__nav {
+  min-width: 0;
+  margin-left: auto;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.app-header__nav .group-nav-item,
+.app-header__logout .secondary-button {
+  min-height: 42px;
+}
+
+.app-header__logout {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.ledger-shell {
+  width: min(1500px, 100%);
+  min-height: 0;
+  margin: 0 auto;
+  display: grid;
+  grid-template-rows: minmax(172px, 1fr) minmax(0, 2fr);
+  gap: var(--app-page-gap);
+}
+
+.ledger-shell-top {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--app-page-gap);
+}
+
+.ledger-shell-top > .panel {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ledger-shell-lower {
+  min-height: 0;
+}
+
+@media (max-width: 1050px) {
+  .app-header__nav {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 820px) {
+  :root {
+    --app-header-height: auto;
+  }
+
+  .app-header {
+    margin-bottom: 12px;
+  }
+
+  .app-header__inner {
+    min-height: 0;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  .app-header__nav {
+    width: 100%;
+    max-width: none;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overscroll-behavior-inline: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .ledger-shell {
+    display: grid;
+    grid-template-rows: auto auto;
+  }
+
+  .ledger-shell-top {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-header__inner {
+    padding: 8px 10px;
+  }
+
+  .app-header__nav .group-nav-item,
+  .app-header__logout .secondary-button {
+    min-height: 44px;
+    padding: 9px 12px;
+  }
+}
+
+/* Stage 9-1: group-fund shell. Business forms and routes remain unchanged. */
+@media (min-width: 821px) {
+  .fund-body {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .fund-body .flash-area {
+    flex: 0 0 auto;
+    margin-bottom: var(--app-page-gap);
+  }
+
+  .fund-shell {
+    flex: 1 1 auto;
+    height: auto;
+    max-height: none;
+  }
+
+  .fund-shell-top {
+    min-height: 0;
+  }
+
+  .fund-layout,
+  .fund-layout.is-context-closed {
+    width: 100%;
+    height: auto;
+    max-height: none;
+    margin: 0;
+    align-items: stretch;
+  }
+
+  .fund-context-column {
+    height: 100%;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .fund-page-panel,
+  .fund-member-panel {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .fund-page-panel .page-list,
+  .fund-member-panel .fund-member-list {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .fund-page-panel .page-list {
+    flex: 1 1 auto;
+  }
+
+  .fund-member-panel .fund-member-list {
+    flex: 1 1 auto;
+  }
+
+  .fund-operation-rail {
+    height: 100%;
+    min-height: 0;
+    align-self: stretch;
+    grid-template-rows: repeat(4, minmax(48px, 1fr));
+  }
+
+  .fund-operation-rail button {
+    height: auto;
+  }
+
+  .fund-collapsed-column {
+    height: 100%;
+    max-height: none;
+    overflow: hidden;
+  }
+
+  .fund-transaction-panel {
+    height: 100%;
+  }
+}

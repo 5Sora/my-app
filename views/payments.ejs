@@ -8,41 +8,17 @@
   <link rel="stylesheet" href="/css/ledger.css">
   <link rel="stylesheet" href="/css/group.css">
   <link rel="stylesheet" href="/css/payments.css">
+  <link rel="stylesheet" href="/css/app-shell.css">
 </head>
 <body class="ledger-body payments-body<%= isCalculationMode ? ' is-calculation-mode' : '' %>" data-calculation-mode="<%= String(isCalculationMode) %>">
-  <header class="ledger-header">
-    <div>
-      <p class="eyebrow">グループ関連支払い</p>
-      <h1><%= group.name %></h1>
-      <p class="period-label">
-        <strong><%= selectedPage.name %></strong>：
-        <% if (selectedPage.startDate || selectedPage.endDate) { %>
-          <%= selectedPage.startDate ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
-          〜
-          <%= selectedPage.endDate ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
-        <% } else { %>
-          全期間
-        <% } %>
-      </p>
-    </div>
-
-    <nav class="header-actions group-header-nav" aria-label="グループ画面ナビゲーション">
-      <a href="/app" class="secondary-button button-link group-nav-item">自分の家計簿</a>
-      <a href="/groups/<%= group.id %>" class="secondary-button button-link group-nav-item">概要</a>
-      <a href="/groups/<%= group.id %>/fund" class="secondary-button button-link group-nav-item">基金</a>
-      <a
-        href="<%= buildGroupPaymentsUrl(group.id, { pageId: selectedPage.id, contextState }) %>"
-        class="secondary-button button-link group-nav-item is-active"
-        data-payment-context-link
-        aria-current="page"
-      >
-        関連支払い
-      </a>
-      <form action="/logout" method="post" class="group-nav-logout">
-        <button type="submit" class="secondary-button group-nav-item">ログアウト</button>
-      </form>
-    </nav>
-  </header>
+  <%- include("partials/app-header", {
+    header: {
+      mode: "group",
+      groupId: group.id,
+      active: "payments",
+      paymentsHref: buildGroupPaymentsUrl(group.id, { pageId: selectedPage.id, contextState })
+    }
+  }) %>
 
   <% if (error || success) { %>
     <section class="flash-area" aria-live="polite">
@@ -210,15 +186,6 @@
                   >
                     <span>
                       <strong><%= page.name %></strong>
-                      <small>
-                        <% if (page.startDate || page.endDate) { %>
-                          <%= page.startDate ? new Date(page.startDate).toLocaleDateString("ja-JP") : "指定なし" %>
-                          〜
-                          <%= page.endDate ? new Date(page.endDate).toLocaleDateString("ja-JP") : "指定なし" %>
-                        <% } else { %>
-                          全期間
-                        <% } %>
-                      </small>
                     </span>
                     <% if (page.isInitial) { %><small class="initial-badge">初期</small><% } %>
                   </a>

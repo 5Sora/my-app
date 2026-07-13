@@ -1,0 +1,53 @@
+<header class="app-header">
+  <div class="app-header__inner">
+    <% if (header.mode === "personal") { %>
+      <form action="/logout" method="post" class="app-header__logout">
+        <button type="submit" class="secondary-button">ログアウト</button>
+      </form>
+    <% } else { %>
+      <nav class="header-actions group-header-nav app-header__nav" aria-label="グループ画面ナビゲーション">
+        <a href="/app" class="secondary-button button-link group-nav-item">自分の家計簿</a>
+        <a
+          href="/groups/<%= header.groupId %>"
+          class="secondary-button button-link group-nav-item<%= header.active === 'overview' ? ' is-active' : '' %>"
+          <% if (header.active === "overview") { %>aria-current="page"<% } %>
+        >概要</a>
+        <a
+          href="<%= header.fundHref || `/groups/${header.groupId}/fund` %>"
+          class="secondary-button button-link group-nav-item<%= header.active === 'fund' ? ' is-active' : '' %>"
+          <% if (header.active === "fund") { %>aria-current="page" data-fund-context-link<% } %>
+        >基金</a>
+        <a
+          href="<%= header.paymentsHref || `/groups/${header.groupId}/payments` %>"
+          class="secondary-button button-link group-nav-item<%= header.active === 'payments' ? ' is-active' : '' %>"
+          <% if (header.active === "payments") { %>aria-current="page" data-payment-context-link<% } %>
+        >関連支払い</a>
+        <form action="/logout" method="post" class="group-nav-logout">
+          <button type="submit" class="secondary-button group-nav-item">ログアウト</button>
+        </form>
+      </nav>
+    <% } %>
+  </div>
+</header>
+
+<script>
+  (() => {
+    const url = new URL(window.location.href);
+    let changed = false;
+
+    for (const key of ["success", "error"]) {
+      if (url.searchParams.has(key)) {
+        url.searchParams.delete(key);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${url.pathname}${url.search}${url.hash}`,
+      );
+    }
+  })();
+</script>

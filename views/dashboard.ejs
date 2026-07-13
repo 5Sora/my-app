@@ -7,27 +7,12 @@
   <link rel="stylesheet" href="/css/auth.css">
   <link rel="stylesheet" href="/css/ledger.css">
   <link rel="stylesheet" href="/css/group.css">
+  <link rel="stylesheet" href="/css/app-shell.css">
 </head>
 <body class="ledger-body">
-  <header class="ledger-header">
-    <div>
-      <p class="eyebrow">個人家計簿</p>
-      <h1><%= user.displayName %> の <%= selectedPage.name %> の収支</h1>
-      <p class="period-label">
-        <% if (selectedPage.startDate || selectedPage.endDate) { %>
-          <%= selectedPage.startDate ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
-          〜
-          <%= selectedPage.endDate ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
-        <% } else { %>
-          全期間
-        <% } %>
-      </p>
-    </div>
-
-    <form action="/logout" method="post">
-      <button type="submit" class="secondary-button">ログアウト</button>
-    </form>
-  </header>
+  <%- include("partials/app-header", {
+    header: { mode: "personal" }
+  }) %>
 
   <% if (error || success) { %>
     <section class="flash-area" aria-live="polite">
@@ -93,15 +78,6 @@
             >
               <span>
                 <strong><%= page.name %></strong>
-                <small>
-                  <% if (page.startDate || page.endDate) { %>
-                    <%= page.startDate ? new Date(page.startDate).toLocaleDateString("ja-JP") : "指定なし" %>
-                    〜
-                    <%= page.endDate ? new Date(page.endDate).toLocaleDateString("ja-JP") : "指定なし" %>
-                  <% } else { %>
-                    全期間
-                  <% } %>
-                </small>
               </span>
               <% if (page.isInitial) { %><small class="initial-badge">初期</small><% } %>
             </a>

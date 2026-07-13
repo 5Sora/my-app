@@ -8,46 +8,17 @@
   <link rel="stylesheet" href="/css/ledger.css">
   <link rel="stylesheet" href="/css/group.css">
   <link rel="stylesheet" href="/css/fund.css">
+  <link rel="stylesheet" href="/css/app-shell.css">
 </head>
 <body class="ledger-body fund-body">
-  <header class="ledger-header">
-    <div>
-      <p class="eyebrow">グループ基金</p>
-      <h1><%= fund.name %></h1>
-      <p class="period-label">
-        <strong><%= selectedPage.name %></strong>：
-        <% if (selectedPage.startDate || selectedPage.endDate) { %>
-          <%= selectedPage.startDate ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
-          〜
-          <%= selectedPage.endDate ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
-        <% } else { %>
-          全期間
-        <% } %>
-      </p>
-    </div>
-
-    <nav class="header-actions group-header-nav" aria-label="グループ画面ナビゲーション">
-      <a href="/app" class="secondary-button button-link group-nav-item">自分の家計簿</a>
-      <a href="/groups/<%= group.id %>" class="secondary-button button-link group-nav-item">概要</a>
-      <a
-        href="<%= buildGroupFundUrl(group.id, { pageId: selectedPage.id, contextState }) %>"
-        class="secondary-button button-link group-nav-item is-active"
-        data-fund-context-link
-        aria-current="page"
-      >
-        基金
-      </a>
-      <a
-        href="/groups/<%= group.id %>/payments"
-        class="secondary-button button-link group-nav-item"
-      >
-        関連支払い
-      </a>
-      <form action="/logout" method="post" class="group-nav-logout">
-        <button type="submit" class="secondary-button group-nav-item">ログアウト</button>
-      </form>
-    </nav>
-  </header>
+  <%- include("partials/app-header", {
+    header: {
+      mode: "group",
+      groupId: group.id,
+      active: "fund",
+      fundHref: buildGroupFundUrl(group.id, { pageId: selectedPage.id, contextState })
+    }
+  }) %>
 
   <% if (error || success) { %>
     <section class="flash-area" aria-live="polite">
@@ -60,43 +31,53 @@
     </section>
   <% } %>
 
-  <section class="summary-grid" aria-label="基金収支サマリー">
-    <article class="summary-card">
-      <span>繰越金</span>
-      <strong><%= summary.carryover.toLocaleString("ja-JP") %> 円</strong>
-    </article>
-    <article class="summary-card income-card">
-      <span>基金収入</span>
-      <strong><%= summary.incomeTotal.toLocaleString("ja-JP") %> 円</strong>
-    </article>
-    <article class="summary-card expense-card">
-      <span>基金支出</span>
-      <strong><%= summary.expenseTotal.toLocaleString("ja-JP") %> 円</strong>
-    </article>
-    <article class="summary-card balance-card">
-      <span>基金残高</span>
-      <strong><%= summary.balance.toLocaleString("ja-JP") %> 円</strong>
-    </article>
-  </section>
+  <main class="ledger-shell fund-shell" aria-label="グループ基金">
+    <section class="ledger-shell-top fund-shell-top" aria-label="基金の概要">
+      <article class="panel fund-title-card">
+        <p class="eyebrow">グループ基金</p>
+        <h1><%= fund.name %></h1>
+        <p class="fund-title-page"><strong><%= selectedPage.name %></strong></p>
+        <p class="period-label">
+          <% if (selectedPage.startDate || selectedPage.endDate) { %>
+            <%= selectedPage.startDate ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
+            〜
+            <%= selectedPage.endDate ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
+          <% } else { %>
+            全期間
+          <% } %>
+        </p>
+      </article>
 
-  <section class="ai-analysis-launch fund-ai-analysis-launch" aria-label="基金AI分析">
-    <div>
-      <p class="eyebrow">集計説明</p>
-      <p class="ai-analysis-launch-copy">選択中ページの基金収支・内部拠出・外部収入・匿名化した拠出構造だけを外部AI（OpenAI）へ送り、基金の傾向を説明します。氏名やuserIdは送りません。</p>
-    </div>
-    <button
-      type="button"
-      class="secondary-button"
-      data-ai-analysis-button
-      data-endpoint="/api/ai/analyze-group-fund"
-      data-group-id="<%= group.id %>"
-      data-page-id="<%= selectedPage.id %>"
-      data-page-name="<%= selectedPage.name %>"
-      data-loading-message="選択中の基金ページを集計し、匿名化した拠出構造をAIへ分析依頼しています。"
-    >AI分析</button>
-  </section>
+      <article class="panel fund-summary-card" aria-label="基金収支サマリー">
+        <p class="eyebrow">期間収支</p>
+        <div class="fund-summary-rows">
+          <div><span>繰越金</span><strong><%= summary.carryover.toLocaleString("ja-JP") %> 円</strong></div>
+          <div><span>＋ 基金収入</span><strong class="income-text"><%= summary.incomeTotal.toLocaleString("ja-JP") %> 円</strong></div>
+          <div><span>－ 基金支出</span><strong class="expense-text"><%= summary.expenseTotal.toLocaleString("ja-JP") %> 円</strong></div>
+          <div class="fund-summary-total"><span>＝ 基金残高</span><strong><%= summary.balance.toLocaleString("ja-JP") %> 円</strong></div>
+        </div>
+      </article>
 
-  <main class="fund-layout<%= isContextOpen ? '' : ' is-context-closed' %>" data-fund-layout>
+      <article class="panel fund-insight-card" aria-label="基金収入構成とAI分析">
+        <div>
+          <p class="eyebrow">基金収入構成</p>
+          <h2>収入構成・AI分析</h2>
+          <p class="ai-analysis-launch-copy">選択中ページの基金収支・内部拠出・外部収入・匿名化した拠出構造だけを外部AIへ送ります。</p>
+        </div>
+        <button
+          type="button"
+          class="secondary-button"
+          data-ai-analysis-button
+          data-endpoint="/api/ai/analyze-group-fund"
+          data-group-id="<%= group.id %>"
+          data-page-id="<%= selectedPage.id %>"
+          data-page-name="<%= selectedPage.name %>"
+          data-loading-message="選択中の基金ページを集計し、匿名化した拠出構造をAIへ分析依頼しています。"
+        >AI分析</button>
+      </article>
+    </section>
+
+    <section class="ledger-shell-lower fund-layout<%= isContextOpen ? '' : ' is-context-closed' %>" data-fund-layout>
     <aside
       class="fund-context-column"
       id="fund-context-panel"
@@ -106,7 +87,7 @@
       <section class="panel fund-page-panel">
         <div class="panel-heading compact">
           <div>
-            <p class="eyebrow">期間</p>
+            <p class="eyebrow">LedgerPage</p>
             <h2>表示ページ</h2>
           </div>
           <span><%= pages.length %> 件</span>
@@ -122,15 +103,6 @@
             >
               <span>
                 <strong><%= page.name %></strong>
-                <small>
-                  <% if (page.startDate || page.endDate) { %>
-                    <%= page.startDate ? new Date(page.startDate).toLocaleDateString("ja-JP") : "指定なし" %>
-                    〜
-                    <%= page.endDate ? new Date(page.endDate).toLocaleDateString("ja-JP") : "指定なし" %>
-                  <% } else { %>
-                    全期間
-                  <% } %>
-                </small>
               </span>
               <% if (page.isInitial) { %><small class="initial-badge">初期</small><% } %>
             </a>
@@ -162,24 +134,6 @@
             </li>
           <% }) %>
         </ul>
-      </section>
-
-      <section class="panel fund-status-panel">
-        <p class="eyebrow">基金状態</p>
-        <dl class="group-definition-list">
-          <div>
-            <dt>基金名</dt>
-            <dd><%= fund.name %></dd>
-          </div>
-          <div>
-            <dt>状態</dt>
-            <dd><%= fund.isActive ? "有効" : "無効" %></dd>
-          </div>
-          <div>
-            <dt>自分の権限</dt>
-            <dd><%= membership.role === "ADMIN" ? "グループ管理者" : "メンバー" %></dd>
-          </div>
-        </dl>
       </section>
     </aside>
 
@@ -217,13 +171,12 @@
     </aside>
 
     <aside class="panel fund-collapsed-column" aria-hidden="true">
-      <p class="eyebrow">期間サマリー</p>
-      <h2><%= selectedPage.name %></h2>
-      <p class="fund-collapsed-balance">
-        基金残高
-        <strong><%= summary.balance.toLocaleString("ja-JP") %> 円</strong>
-      </p>
-      <p class="form-help">左の右矢印から、LedgerPage一覧と有効メンバー一覧を開けます。</p>
+      <p class="eyebrow">期間比較</p>
+      <h2>収入・支出</h2>
+      <dl class="fund-collapsed-metrics">
+        <div><dt>収入</dt><dd class="income-text"><%= summary.incomeTotal.toLocaleString("ja-JP") %> 円</dd></div>
+        <div><dt>支出</dt><dd class="expense-text"><%= summary.expenseTotal.toLocaleString("ja-JP") %> 円</dd></div>
+      </dl>
     </aside>
 
     <section class="panel transaction-panel fund-transaction-panel">
@@ -351,6 +304,7 @@
           </div>
         </section>
       </div>
+    </section>
     </section>
   </main>
 
