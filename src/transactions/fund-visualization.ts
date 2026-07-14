@@ -14,18 +14,27 @@ export type FundVisualizationTransaction = {
   } | null;
 };
 
-export type FundIncomeCompositionItem = {
+type FundCompositionBaseItem = {
   key: string;
   label: string;
-  sourceType: "INTERNAL" | "EXTERNAL";
-  sourceTypeLabel: "内部拠出" | "外部収入";
   amount: number;
   percentage: number;
   color: string;
 };
 
+export type FundIncomeCompositionItem = FundCompositionBaseItem & {
+  sourceType: "INTERNAL" | "EXTERNAL";
+  sourceTypeLabel: "内部拠出" | "外部収入";
+};
+
+export type FundExpenseCompositionItem = FundCompositionBaseItem & {
+  sourceType: "FUND_EXPENSE" | "REFUND";
+  sourceTypeLabel: "基金支出" | "基金返金";
+};
+
 export type FundVisualization = {
   incomeComposition: FundIncomeCompositionItem[];
+  expenseComposition: FundExpenseCompositionItem[];
   totals: {
     internalContribution: number;
     externalIncome: number;
@@ -64,13 +73,51 @@ const externalBluePalette = [
   "#527fa5",
 ];
 
+const expenseRedPalette = [
+  "#a54a43",
+  "#b45d55",
+  "#8f3f39",
+  "#c16d64",
+  "#7f3733",
+  "#cc8178",
+  "#9d5952",
+  "#d2958e",
+];
+
+const refundAmberPalette = [
+  "#9a6a25",
+  "#ad7a31",
+  "#80561f",
+  "#bd8b42",
+  "#70491b",
+  "#c99b59",
+  "#8e642d",
+  "#d3ab70",
+];
+
 const roundToOne = (value: number) => Math.round(value * 10) / 10;
+
+const normalizePercentages = <T extends FundCompositionBaseItem>(
+  items: T[],
+  total: number,
+): T[] => {
+  if (total <= 0 || items.length === 0) return items;
+
+  const lastItem = items[items.length - 1];
+  const precedingPercentage = items
+    .slice(0, -1)
+    .reduce((sum, item) => sum + item.percentage, 0);
+  lastItem.percentage = roundToOne(Math.max(0, 100 - precedingPercentage));
+  return items;
+};
 
 export function buildFundVisualization(
   transactions: FundVisualizationTransaction[],
 ): FundVisualization {
   const internalByUser = new Map<number | "unknown", { label: string; amount: number }>();
   const externalByCategory = new Map<string, number>();
+  const expenseByCategory = new Map<string, number>();
+  const refundByRecipient = new Map<number | "external", { label: string; amount: number }>();
   let internalContribution = 0;
   let externalIncome = 0;
   let fundExpense = 0;
@@ -98,20 +145,30 @@ export function buildFundVisualization(
 
     if (transaction.kind === "FUND_EXPENSE") {
       fundExpense += transaction.amount;
+      const category = transaction.category.trim() || "基金支出・その他／不明";
+      expenseByCategory.set(category, (expenseByCategory.get(category) ?? 0) + transaction.amount);
       continue;
     }
 
     refund += transaction.amount;
+    const key = transaction.userId ?? "external";
+    const label = transaction.user?.displayName
+      ? `${transaction.user.displayName}への返金`
+      : "外部・不明な返金";
+    const current = refundByRecipient.get(key) ?? { label, amount: 0 };
+    current.amount += transaction.amount;
+    refundByRecipient.set(key, current);
   }
 
   const income = internalContribution + externalIncome;
   const expense = fundExpense + refund;
-  const composition: FundIncomeCompositionItem[] = [];
+  const incomeComposition: FundIncomeCompositionItem[] = [];
+  const expenseComposition: FundExpenseCompositionItem[] = [];
 
   [...internalByUser.entries()]
     .sort((left, right) => right[1].amount - left[1].amount || String(left[0]).localeCompare(String(right[0])))
     .forEach(([userId, value], index) => {
-      composition.push({
+      incomeComposition.push({
         key: `internal-${userId}`,
         label: value.label,
         sourceType: "INTERNAL",
@@ -125,7 +182,7 @@ export function buildFundVisualization(
   [...externalByCategory.entries()]
     .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "ja"))
     .forEach(([category, amount], index) => {
-      composition.push({
+      incomeComposition.push({
         key: `external-${category}`,
         label: category,
         sourceType: "EXTERNAL",
@@ -136,18 +193,42 @@ export function buildFundVisualization(
       });
     });
 
-  if (income > 0 && composition.length > 0) {
-    const lastItem = composition[composition.length - 1];
-    const precedingPercentage = composition
-      .slice(0, -1)
-      .reduce((sum, item) => sum + item.percentage, 0);
-    lastItem.percentage = roundToOne(Math.max(0, 100 - precedingPercentage));
-  }
+  [...expenseByCategory.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "ja"))
+    .forEach(([category, amount], index) => {
+      expenseComposition.push({
+        key: `expense-${category}`,
+        label: category,
+        sourceType: "FUND_EXPENSE",
+        sourceTypeLabel: "基金支出",
+        amount,
+        percentage: expense > 0 ? roundToOne((amount / expense) * 100) : 0,
+        color: expenseRedPalette[index % expenseRedPalette.length],
+      });
+    });
+
+  [...refundByRecipient.entries()]
+    .sort((left, right) => right[1].amount - left[1].amount || String(left[0]).localeCompare(String(right[0])))
+    .forEach(([recipientKey, value], index) => {
+      expenseComposition.push({
+        key: `refund-${recipientKey}`,
+        label: value.label,
+        sourceType: "REFUND",
+        sourceTypeLabel: "基金返金",
+        amount: value.amount,
+        percentage: expense > 0 ? roundToOne((value.amount / expense) * 100) : 0,
+        color: refundAmberPalette[index % refundAmberPalette.length],
+      });
+    });
+
+  normalizePercentages(incomeComposition, income);
+  normalizePercentages(expenseComposition, expense);
 
   const scaleMax = Math.max(income, expense, 1);
 
   return {
-    incomeComposition: composition,
+    incomeComposition,
+    expenseComposition,
     totals: {
       internalContribution,
       externalIncome,

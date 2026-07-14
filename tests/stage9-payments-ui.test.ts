@@ -11,8 +11,10 @@ test("Stage 9-5 payments page uses the shared three-card top shell and open/clos
   assert.match(view, /payments-title-card/);
   assert.match(view, /payments-method-area/);
   assert.match(view, /payments-insight-card/);
-  assert.match(css, /grid-template-columns: minmax\(250px, 3fr\) minmax\(64px, 1fr\) minmax\(0, 8fr\)/);
-  assert.match(css, /payments-lower-area\.is-context-closed[\s\S]*minmax\(64px, 1fr\) minmax\(250px, 3fr\) minmax\(0, 8fr\)/);
+  assert.match(css, /payments-lower-area[\s\S]*grid-template-columns: repeat\(12, minmax\(0, 1fr\)\)/);
+  assert.match(css, /payments-context-column[\s\S]*grid-column: 1 \/ span 3/);
+  assert.match(css, /payments-operation-rail[\s\S]*grid-column: 4/);
+  assert.match(css, /payments-history-panel[\s\S]*grid-column: 5 \/ -1/);
   assert.doesNotMatch(view, /payments-result-column/);
 });
 

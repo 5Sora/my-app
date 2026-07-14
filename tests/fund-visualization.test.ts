@@ -54,3 +54,26 @@ test("fund visualization returns safe empty percentages when no transactions exi
     externalSharePercent: 0,
   });
 });
+
+test("fund visualization builds an expense composition from expense categories and refund recipients", () => {
+  const result = buildFundVisualization([
+    { kind: "FUND_EXPENSE", amount: 3000, category: "会場費", userId: null },
+    { kind: "FUND_EXPENSE", amount: 1000, category: "会場費", userId: null },
+    { kind: "FUND_EXPENSE", amount: 2000, category: "備品", userId: null },
+    { kind: "FUND_REFUND", amount: 1500, category: "基金返金", userId: 4, user: { displayName: "山田" } },
+    { kind: "FUND_REFUND", amount: 500, category: "基金返金", userId: null },
+  ]);
+
+  assert.deepEqual(
+    result.expenseComposition.map(({ label, sourceType, amount, percentage }) => ({ label, sourceType, amount, percentage })),
+    [
+      { label: "会場費", sourceType: "FUND_EXPENSE", amount: 4000, percentage: 50 },
+      { label: "備品", sourceType: "FUND_EXPENSE", amount: 2000, percentage: 25 },
+      { label: "山田への返金", sourceType: "REFUND", amount: 1500, percentage: 18.8 },
+      { label: "外部・不明な返金", sourceType: "REFUND", amount: 500, percentage: 6.2 },
+    ],
+  );
+  assert.equal(result.expenseComposition[0]?.color, "#a54a43");
+  assert.equal(result.expenseComposition[2]?.color, "#9a6a25");
+  assert.equal(result.totals.expense, 8000);
+});

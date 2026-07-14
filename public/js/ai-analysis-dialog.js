@@ -22,11 +22,29 @@
   const setBusy = (busy) => {
     if (content instanceof HTMLElement) content.setAttribute("aria-busy", String(busy));
     dialog.setAttribute("aria-busy", String(busy));
+    dialog.classList.toggle("is-analysis-busy", busy);
     button.classList.toggle("is-loading", busy);
     button.setAttribute("aria-busy", String(busy));
     closeButtons.forEach((control) => {
-      if (control instanceof HTMLButtonElement) control.disabled = busy;
+      if (!(control instanceof HTMLButtonElement)) return;
+      if (!control.dataset.defaultCloseLabel) {
+        control.dataset.defaultCloseLabel = control.getAttribute("aria-label") || control.textContent?.trim() || "閉じる";
+      }
+      if (!control.dataset.defaultCloseTitle) {
+        control.dataset.defaultCloseTitle = control.getAttribute("title") || "";
+      }
+      control.disabled = busy;
+      control.classList.toggle("is-busy-disabled", busy);
       control.setAttribute("aria-disabled", String(busy));
+      if (busy) {
+        control.setAttribute("aria-label", "分析中は閉じられません");
+        control.setAttribute("title", "分析中は閉じられません");
+      } else {
+        control.setAttribute("aria-label", control.dataset.defaultCloseLabel || "閉じる");
+        const defaultTitle = control.dataset.defaultCloseTitle || "";
+        if (defaultTitle) control.setAttribute("title", defaultTitle);
+        else control.removeAttribute("title");
+      }
     });
   };
 

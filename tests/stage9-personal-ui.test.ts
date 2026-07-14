@@ -11,8 +11,10 @@ test("Stage 9-3 personal page uses the shared top shell and open/closed 12-colum
   assert.match(dashboard, /ledger-shell personal-shell/);
   assert.match(dashboard, /ledger-shell-top personal-shell-top/);
   assert.match(dashboard, /personal-layout<%= isContextOpen/);
-  assert.match(ledgerCss, /grid-template-columns: minmax\(250px, 3fr\) minmax\(64px, 1fr\) minmax\(0, 8fr\)/);
-  assert.match(ledgerCss, /personal-layout\.is-context-closed[\s\S]*minmax\(64px, 1fr\) minmax\(250px, 3fr\) minmax\(0, 8fr\)/);
+  assert.match(ledgerCss, /personal-layout[\s\S]*grid-template-columns: repeat\(12, minmax\(0, 1fr\)\)/);
+  assert.match(ledgerCss, /personal-context-column[\s\S]*grid-column: 1 \/ span 3/);
+  assert.match(ledgerCss, /personal-operation-rail[\s\S]*grid-column: 4/);
+  assert.match(ledgerCss, /personal-transaction-panel[\s\S]*grid-column: 5 \/ -1/);
 });
 
 test("Stage 9-3 personal ledger is five columns with fixed carryover and balance and a zero participation label", () => {

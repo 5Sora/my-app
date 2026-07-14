@@ -555,8 +555,8 @@
   cursor: pointer;
 }
 
-.payments-dialog-close:hover,
-.payments-dialog-close:focus-visible {
+.payments-dialog-close:not(:disabled):hover,
+.payments-dialog-close:not(:disabled):focus-visible {
   color: #fff;
   border-color: var(--text);
   background: var(--text);
@@ -1147,16 +1147,17 @@
   width: 100%;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(250px, 3fr) minmax(64px, 1fr) minmax(0, 8fr);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: var(--app-page-gap);
   align-items: stretch;
 }
 
 .payments-lower-area.is-context-closed {
-  grid-template-columns: minmax(64px, 1fr) minmax(250px, 3fr) minmax(0, 8fr);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
 }
 
 .payments-context-column {
+  grid-column: 1 / span 3;
   min-width: 0;
   min-height: 0;
   display: grid;
@@ -1195,6 +1196,7 @@
 }
 
 .payments-operation-rail {
+  grid-column: 4;
   min-width: 0;
   min-height: 0;
   display: grid;
@@ -1222,12 +1224,17 @@
 }
 
 .payments-lower-area.is-context-closed .payments-latest-batch {
-  grid-column: 2;
+  grid-column: 2 / span 3;
   display: flex;
   flex-direction: column;
 }
 
+.payments-lower-area.is-context-closed .payments-history-panel {
+  grid-column: 5 / -1;
+}
+
 .payments-history-panel {
+  grid-column: 5 / -1;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -1463,6 +1470,7 @@
 
   .payments-context-column,
   .payments-lower-area.is-context-closed .payments-context-column {
+    grid-column: 1;
     display: grid;
     order: 2;
   }
@@ -1489,7 +1497,9 @@
     max-height: 430px;
   }
 
-  .payments-history-panel {
+  .payments-history-panel,
+  .payments-lower-area.is-context-closed .payments-history-panel {
+    grid-column: 1;
     order: 5;
     min-height: 620px;
   }

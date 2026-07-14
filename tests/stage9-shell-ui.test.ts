@@ -83,7 +83,8 @@ test("fund page uses the shared three-part top shell and 12-column lower shell",
   assert.match(fund, /class="fund-ledger"/);
   assert.match(fund, /data-fund-context-toggle/);
 
-  assert.match(shellCss, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(shellCss, /grid-template-columns: repeat\(12, minmax\(0, 1fr\)\)/);
+  assert.match(shellCss, /\.ledger-shell-top > \.panel \{[\s\S]*grid-column: span 4/);
   assert.match(shellCss, /\.fund-body\s*\{[\s\S]*overflow: hidden/);
   assert.match(shellCss, /\.fund-context-column\s*\{[\s\S]*grid-template-rows: minmax\(0, 1fr\) minmax\(0, 1fr\)/);
   assert.match(shellCss, /\.fund-page-panel \.page-list,[\s\S]*overflow-y: auto/);

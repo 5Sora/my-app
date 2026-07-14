@@ -135,7 +135,7 @@
         <% } else { %>
           <div class="payments-chart-empty" role="status"><strong>表示できる支払額がありません</strong><span>0円参加者は履歴に残りますが、円グラフの面積は持ちません。</span></div>
         <% } %>
-        <script type="application/json" data-payment-share-chart-data><%- JSON.stringify(paymentVisualizationView.paymentComposition).replace(/</g, "\u003c") %></script>
+        <script type="application/json" data-payment-share-chart-data><%- JSON.stringify(paymentVisualizationView.paymentComposition).replace(/</g, "\\u003c") %></script>
       </article>
     </section>
 

@@ -26,16 +26,16 @@ export type GroupPaymentVisualization = {
 };
 
 const memberPalette = [
-  "#315f86",
-  "#4d7c9f",
-  "#6a94b2",
-  "#2f6f50",
-  "#598c6d",
-  "#80a78f",
-  "#8f5a3c",
-  "#b17a58",
-  "#725b8d",
-  "#9078a6",
+  "#8f2f2a",
+  "#a9473f",
+  "#bf6258",
+  "#7d3a46",
+  "#b46a4c",
+  "#c57f72",
+  "#8e4b3f",
+  "#d09682",
+  "#6f3540",
+  "#aa5a61",
 ];
 
 const roundToOne = (value: number) => Math.round(value * 10) / 10;

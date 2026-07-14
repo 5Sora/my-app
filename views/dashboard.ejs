@@ -116,7 +116,7 @@
           <span>選択期間に対象取引が登録されると、ここにカテゴリ構成を表示します。</span>
         </div>
         <div class="personal-category-chart__tooltip" role="tooltip" hidden data-personal-chart-tooltip></div>
-        <script type="application/json" data-personal-chart-data><%- JSON.stringify(personalVisualizationView).replace(/</g, "\u003c") %></script>
+        <script type="application/json" data-personal-chart-data><%- JSON.stringify(personalVisualizationView).replace(/</g, "\\u003c") %></script>
       </article>
     </section>
 

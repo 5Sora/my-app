@@ -143,3 +143,55 @@ dialog[data-dialog-submitting="true"]::backdrop {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Stage 9-8: disabled controls must not regain an actionable hover appearance. */
+button:disabled:not(.is-loading),
+button[aria-disabled="true"]:not(.is-loading) {
+  border-color: var(--border, #cfc8c1) !important;
+  color: #77716b !important;
+  background: #ece9e5 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  cursor: not-allowed !important;
+}
+
+button:disabled:not(.is-loading):hover,
+button:disabled:not(.is-loading):focus-visible,
+button[aria-disabled="true"]:not(.is-loading):hover,
+button[aria-disabled="true"]:not(.is-loading):focus-visible {
+  border-color: var(--border, #cfc8c1) !important;
+  color: #77716b !important;
+  background: #ece9e5 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Stage 9-8B: AI dialog close controls remain visibly non-actionable while analysis is running. */
+dialog[data-ai-analysis-dialog][aria-busy="true"] {
+  cursor: progress;
+}
+
+dialog[data-ai-analysis-dialog][aria-busy="true"] [data-close-ai-analysis-dialog],
+dialog[data-ai-analysis-dialog][aria-busy="true"] [data-close-ai-analysis-dialog]:hover,
+dialog[data-ai-analysis-dialog][aria-busy="true"] [data-close-ai-analysis-dialog]:focus,
+dialog[data-ai-analysis-dialog][aria-busy="true"] [data-close-ai-analysis-dialog]:focus-visible,
+dialog[data-ai-analysis-dialog][aria-busy="true"] [data-close-ai-analysis-dialog]:active {
+  border-color: #cfc8c1 !important;
+  color: #77716b !important;
+  background: #ece9e5 !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  transform: none !important;
+  filter: grayscale(0.25) !important;
+  opacity: 0.62 !important;
+  cursor: not-allowed !important;
+  transition: none !important;
+}
+
+dialog[data-ai-analysis-dialog][aria-busy="true"] [data-close-ai-analysis-dialog]::before,
+dialog[data-ai-analysis-dialog][aria-busy="true"] [data-close-ai-analysis-dialog]::after {
+  box-shadow: none !important;
+  transform: none !important;
+}
+
