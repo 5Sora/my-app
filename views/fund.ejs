@@ -30,6 +30,7 @@
   <link rel="stylesheet" href="/css/group.css">
   <link rel="stylesheet" href="/css/fund.css">
   <link rel="stylesheet" href="/css/app-shell.css">
+  <link rel="stylesheet" href="/css/transaction-overlay.css">
 </head>
 <body class="ledger-body fund-body">
   <%- include("partials/app-header", {
@@ -329,7 +330,7 @@
           <button
             type="button"
             class="fund-history-add"
-            data-open-dialog="fund-transaction-type-dialog"
+            data-open-transaction-overlay="fund-transaction-overlay"
             <%= canCreateFundTransaction ? "" : "disabled" %>
             aria-label="<%= canCreateFundTransaction ? '基金取引を追加' : '無効な基金には取引を追加できません' %>"
             title="<%= canCreateFundTransaction ? '基金取引を追加' : '無効な基金には取引を追加できません' %>"
@@ -515,261 +516,34 @@
     </form>
   <% } %>
 
-  <dialog class="fund-page-dialog" id="fund-transaction-type-dialog" aria-labelledby="fund-transaction-type-title">
-    <div class="fund-dialog-form">
-      <div class="fund-dialog-heading">
-        <div>
-          <p class="eyebrow">基金Transaction</p>
-          <h2 id="fund-transaction-type-title">追加する取引を選択</h2>
-        </div>
-        <button type="button" class="fund-dialog-close" data-close-dialog aria-label="閉じる" title="閉じる">×</button>
-      </div>
-
-      <div class="fund-transaction-type-list">
-        <button type="button" class="fund-transaction-type-option" data-switch-dialog="fund-income-dialog">
-          <strong>基金収入</strong>
-          <span>外部寄付、助成金、イベント収益などを登録します。</span>
-        </button>
-        <button type="button" class="fund-transaction-type-option" data-switch-dialog="fund-contribution-dialog">
-          <strong>自分が基金へ拠出</strong>
-          <span>あなた個人の財布から、このグループ基金へ拠出します。</span>
-        </button>
-        <button type="button" class="fund-transaction-type-option" data-switch-dialog="fund-expense-dialog">
-          <strong>基金支出</strong>
-          <span>備品費、会場費、交通費、飲食費、活動費などを登録します。</span>
-        </button>
-        <button type="button" class="fund-transaction-type-option" data-switch-dialog="fund-refund-dialog">
-          <strong>基金返金</strong>
-          <span>ユーザーまたは外部へ、基金から返金します。</span>
-        </button>
-      </div>
-    </div>
-  </dialog>
-
-  <dialog class="fund-page-dialog" id="fund-contribution-dialog" aria-labelledby="fund-contribution-title">
-    <form action="/groups/<%= group.id %>/fund/transactions/contribution" method="post" class="page-form fund-dialog-form">
-      <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
-      <input type="hidden" name="contextState" value="<%= contextState %>" data-fund-context-state>
-
-      <div class="fund-dialog-heading">
-        <div>
-          <p class="eyebrow">基金Transaction</p>
-          <h2 id="fund-contribution-title">基金へ拠出</h2>
-        </div>
-        <button type="button" class="fund-dialog-close" data-close-dialog aria-label="閉じる" title="閉じる">×</button>
-      </div>
-
-      <p class="form-help">拠出者はログイン中のあなた本人です。ほかのメンバー名義では登録できません。</p>
-
-      <label>
-        <span>実際の取引日</span>
-        <input type="date" name="transactionDate" value="<%= today %>" required>
-      </label>
-
-      <label>
-        <span>金額</span>
-        <input type="number" name="amount" min="1" step="1" inputmode="numeric" required>
-      </label>
-
-      <label>
-        <span>内容</span>
-        <textarea name="rawText" rows="4" maxlength="500" placeholder="例：7月分の基金拠出" required></textarea>
-      </label>
-
-      <p class="form-help">この1件を、基金側では収入、あなたの個人家計簿では支出として表示します。</p>
-      <div class="fund-dialog-actions">
-        <button type="button" class="secondary-button" data-switch-dialog="fund-transaction-type-dialog">取引種別へ戻る</button>
-        <button type="submit" class="primary-button">基金へ拠出</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog class="fund-page-dialog" id="fund-income-dialog" aria-labelledby="fund-income-title">
-    <form action="/groups/<%= group.id %>/fund/transactions/income" method="post" class="page-form fund-dialog-form" data-ai-classification-form data-ai-target="FUND_INCOME" data-ai-group-id="<%= group.id %>">
-      <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
-      <input type="hidden" name="contextState" value="<%= contextState %>" data-fund-context-state>
-      <input type="hidden" name="suggestionToken" value="" data-ai-suggestion-token>
-
-      <div class="fund-dialog-heading">
-        <div>
-          <p class="eyebrow">基金Transaction</p>
-          <h2 id="fund-income-title">基金収入を登録</h2>
-        </div>
-        <button type="button" class="fund-dialog-close" data-close-dialog aria-label="閉じる" title="閉じる">×</button>
-      </div>
-
-      <label>
-        <span>実際の取引日</span>
-        <input type="date" name="transactionDate" value="<%= today %>" max="<%= today %>" required>
-      </label>
-
-      <label>
-        <span>金額</span>
-        <input type="number" name="amount" min="1" step="1" inputmode="numeric" required>
-      </label>
-
-      <label>
-        <span>内容</span>
-        <textarea name="rawText" rows="4" maxlength="500" placeholder="例：昨日外部団体から寄付5000円を受け取った" required data-ai-raw-text></textarea>
-      </label>
-
-      <label>
-        <span>カテゴリ</span>
-        <select name="category" required>
-          <option value="">選択してください</option>
-          <% fundIncomeCategories.forEach(category => { %>
-            <option value="<%= category %>"><%= category %></option>
-          <% }) %>
-        </select>
-      </label>
-
-      <div class="ai-classification-actions">
-        <button type="button" class="secondary-button" data-ai-classify-button>AIで推定</button>
-        <p class="form-help">押すと、この内容だけを外部AI（OpenAI）へ送信します。候補は自動保存されません。</p>
-      </div>
-      <section class="ai-suggestion-panel" data-ai-suggestion-panel hidden aria-live="polite">
-        <p class="ai-suggestion-message" data-ai-message></p>
-        <dl class="ai-field-status" data-ai-field-status></dl>
-        <ul class="ai-warning-list" data-ai-warnings hidden></ul>
-      </section>
-
-      <label>
-        <span>関係者</span>
-        <select name="relatedUserId">
-          <option value="">外部・関係者なし</option>
-          <% activeMembers.forEach(member => { %>
-            <option value="<%= member.userId %>">
-              <%= member.user.displayName %><%= member.userId === currentUserId ? "（あなた）" : "" %>
-            </option>
-          <% }) %>
-        </select>
-      </label>
-
-      <p class="form-help">個人からの基金拠出は「自分が基金へ拠出」から登録してください。</p>
-      <div class="fund-dialog-actions">
-        <button type="button" class="secondary-button" data-switch-dialog="fund-transaction-type-dialog">取引種別へ戻る</button>
-        <button type="submit" class="primary-button">基金収入を登録</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog class="fund-page-dialog" id="fund-expense-dialog" aria-labelledby="fund-expense-title">
-    <form action="/groups/<%= group.id %>/fund/transactions/expense" method="post" class="page-form fund-dialog-form" data-ai-classification-form data-ai-target="FUND_EXPENSE" data-ai-group-id="<%= group.id %>">
-      <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
-      <input type="hidden" name="contextState" value="<%= contextState %>" data-fund-context-state>
-      <input type="hidden" name="suggestionToken" value="" data-ai-suggestion-token>
-
-      <div class="fund-dialog-heading">
-        <div>
-          <p class="eyebrow">基金Transaction</p>
-          <h2 id="fund-expense-title">基金支出を登録</h2>
-        </div>
-        <button type="button" class="fund-dialog-close" data-close-dialog aria-label="閉じる" title="閉じる">×</button>
-      </div>
-
-      <label>
-        <span>実際の取引日</span>
-        <input type="date" name="transactionDate" value="<%= today %>" max="<%= today %>" required>
-      </label>
-
-      <label>
-        <span>金額</span>
-        <input type="number" name="amount" min="1" step="1" inputmode="numeric" required>
-      </label>
-
-      <label>
-        <span>内容</span>
-        <textarea name="rawText" rows="4" maxlength="500" placeholder="例：昨日基金から備品を2500円で購入した" required data-ai-raw-text></textarea>
-      </label>
-
-      <label>
-        <span>カテゴリ</span>
-        <select name="category" required>
-          <option value="">選択してください</option>
-          <% fundExpenseCategories.forEach(category => { %>
-            <option value="<%= category %>"><%= category %></option>
-          <% }) %>
-        </select>
-      </label>
-
-      <div class="ai-classification-actions">
-        <button type="button" class="secondary-button" data-ai-classify-button>AIで推定</button>
-        <p class="form-help">押すと、この内容だけを外部AI（OpenAI）へ送信します。候補は自動保存されません。</p>
-      </div>
-      <section class="ai-suggestion-panel" data-ai-suggestion-panel hidden aria-live="polite">
-        <p class="ai-suggestion-message" data-ai-message></p>
-        <dl class="ai-field-status" data-ai-field-status></dl>
-        <ul class="ai-warning-list" data-ai-warnings hidden></ul>
-      </section>
-
-      <label>
-        <span>関係者</span>
-        <select name="relatedUserId">
-          <option value="">外部・関係者なし</option>
-          <% activeMembers.forEach(member => { %>
-            <option value="<%= member.userId %>">
-              <%= member.user.displayName %><%= member.userId === currentUserId ? "（あなた）" : "" %>
-            </option>
-          <% }) %>
-        </select>
-      </label>
-
-      <p class="form-help">備品購入、会場費、活動費、立替補填など、基金の通常支出として登録します。</p>
-      <div class="fund-dialog-actions">
-        <button type="button" class="secondary-button" data-switch-dialog="fund-transaction-type-dialog">取引種別へ戻る</button>
-        <button type="submit" class="primary-button">基金支出を登録</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog class="fund-page-dialog" id="fund-refund-dialog" aria-labelledby="fund-refund-title">
-    <form action="/groups/<%= group.id %>/fund/transactions/refund" method="post" class="page-form fund-dialog-form">
-      <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
-      <input type="hidden" name="contextState" value="<%= contextState %>" data-fund-context-state>
-
-      <div class="fund-dialog-heading">
-        <div>
-          <p class="eyebrow">基金Transaction</p>
-          <h2 id="fund-refund-title">基金返金を登録</h2>
-        </div>
-        <button type="button" class="fund-dialog-close" data-close-dialog aria-label="閉じる" title="閉じる">×</button>
-      </div>
-
-      <label>
-        <span>実際の取引日</span>
-        <input type="date" name="transactionDate" value="<%= today %>" required>
-      </label>
-
-      <label>
-        <span>金額</span>
-        <input type="number" name="amount" min="1" step="1" inputmode="numeric" required>
-      </label>
-
-      <label>
-        <span>内容</span>
-        <textarea name="rawText" rows="4" maxlength="500" placeholder="例：イベント中止に伴う参加費返金" required></textarea>
-      </label>
-
-      <label>
-        <span>返金先</span>
-        <select name="recipientUserId">
-          <option value="">外部・ユーザー指定なし</option>
-          <% refundRecipients.forEach(member => { %>
-            <option value="<%= member.userId %>">
-              <%= member.user.displayName %><%= member.userId === currentUserId ? "（あなた）" : "" %><%= member.isActive ? "" : "（脱退済み）" %>
-            </option>
-          <% }) %>
-        </select>
-      </label>
-
-      <p class="form-help">カテゴリは「基金返金」に固定されます。ユーザー返金は受取人の個人家計簿で収入として表示され、外部返金は基金側だけに表示されます。</p>
-      <div class="fund-dialog-actions">
-        <button type="button" class="secondary-button" data-switch-dialog="fund-transaction-type-dialog">取引種別へ戻る</button>
-        <button type="submit" class="primary-button">基金返金を登録</button>
-      </div>
-    </form>
-  </dialog>
-
+  <%- include("partials/transaction-add-overlay", {
+    overlay: {
+      id: "fund-transaction-overlay",
+      mode: "FUND",
+      eyebrow: "グループ基金",
+      title: "基金取引を追加",
+      action: `/groups/${group.id}/fund/transactions/expense`,
+      routes: {
+        income: `/groups/${group.id}/fund/transactions/income`,
+        expense: `/groups/${group.id}/fund/transactions/expense`,
+        contribution: `/groups/${group.id}/fund/transactions/contribution`,
+        refund: `/groups/${group.id}/fund/transactions/refund`
+      },
+      groupId: group.id,
+      today,
+      placeholder: "例：昨日外部団体から寄付5000円を受け取った",
+      note: "基金収入・基金支出はAI推定できます。基金拠出・基金返金は種類と対象者を手動で確認します。",
+      submitLabel: "取引を登録",
+      categories: { income: fundIncomeCategories, expense: fundExpenseCategories },
+      activeMembers,
+      refundRecipients,
+      currentUserId,
+      hiddenFields: [
+        { name: "currentPageId", value: selectedPage.id },
+        { name: "contextState", value: contextState, contextHook: "data-fund-context-state" }
+      ]
+    }
+  }) %>
 
 
   <%- include("partials/ai-analysis-dialog", {
@@ -920,7 +694,7 @@
         });
       });
 
-      document.querySelectorAll("dialog").forEach((dialog) => {
+      document.querySelectorAll("dialog.fund-page-dialog").forEach((dialog) => {
         dialog.addEventListener("click", (event) => {
           if (event.target === dialog) dialog.close();
         });
@@ -1009,6 +783,7 @@
     })();
   </script>
   <script src="/js/fund-charts.js" defer></script>
+  <script src="/js/transaction-overlay.js" defer></script>
   <script src="/js/ai-analysis-dialog.js" defer></script>
 </body>
 </html>

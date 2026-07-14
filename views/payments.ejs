@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/css/group.css">
   <link rel="stylesheet" href="/css/payments.css">
   <link rel="stylesheet" href="/css/app-shell.css">
+  <link rel="stylesheet" href="/css/transaction-overlay.css">
 </head>
 <body class="ledger-body payments-body<%= isCalculationMode ? ' is-calculation-mode' : '' %>" data-calculation-mode="<%= String(isCalculationMode) %>">
   <%- include("partials/app-header", {
@@ -287,7 +288,7 @@
             <button
               type="button"
               class="payments-history-add"
-              data-open-payment-dialog="payments-transaction-add-dialog"
+              data-open-transaction-overlay="payments-transaction-overlay"
               aria-label="個別支払いを登録"
               title="個別支払いを登録"
             >＋</button>
@@ -487,66 +488,25 @@
     </aside>
   </main>
 
-  <dialog class="payments-page-dialog payments-transaction-dialog" id="payments-transaction-add-dialog" aria-labelledby="payments-transaction-add-title">
-    <form action="/groups/<%= group.id %>/payments/transactions" method="post" class="page-form payments-dialog-form" data-ai-classification-form data-ai-target="GROUP_PAYMENT" data-ai-group-id="<%= group.id %>">
-      <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
-      <input type="hidden" name="contextState" value="<%= contextState ?? '' %>" data-payment-context-state>
-      <input type="hidden" name="suggestionToken" value="" data-ai-suggestion-token>
-
-      <div class="payments-dialog-heading">
-        <div>
-          <p class="eyebrow">個別支払い</p>
-          <h2 id="payments-transaction-add-title">関連支払いを登録</h2>
-        </div>
-        <button type="button" class="payments-dialog-close" data-close-payment-dialog aria-label="閉じる" title="閉じる">×</button>
-      </div>
-
-      <p class="form-help payments-self-payment-note">
-        <strong><%= currentUserDisplayName %></strong>さん本人が、自分の財布から支払った金額として登録します。他人名義では登録できません。
-      </p>
-
-      <label>
-        <span>実際の取引日</span>
-        <input type="date" name="transactionDate" value="<%= today %>" max="<%= today %>" required>
-      </label>
-
-      <label>
-        <span>金額</span>
-        <input type="number" name="amount" min="1" step="1" inputmode="numeric" required>
-      </label>
-
-      <label>
-        <span>カテゴリ</span>
-        <select name="category" required>
-          <option value="">選択してください</option>
-          <% groupPaymentCategories.forEach(category => { %>
-            <option value="<%= category %>"><%= category %></option>
-          <% }) %>
-        </select>
-      </label>
-
-      <label>
-        <span>内容・名目</span>
-        <textarea name="rawText" maxlength="500" rows="4" placeholder="例：昨日部活動の会場利用料を3000円払った" required data-ai-raw-text></textarea>
-      </label>
-
-      <div class="ai-classification-actions">
-        <button type="button" class="secondary-button" data-ai-classify-button>AIで推定</button>
-        <p class="form-help">押すと、この内容だけを外部AI（OpenAI）へ送信します。候補は自動保存されません。</p>
-      </div>
-      <section class="ai-suggestion-panel" data-ai-suggestion-panel hidden aria-live="polite">
-        <p class="ai-suggestion-message" data-ai-message></p>
-        <dl class="ai-field-status" data-ai-field-status></dl>
-        <ul class="ai-warning-list" data-ai-warnings hidden></ul>
-      </section>
-
-      <p class="form-help">登録する1件のTransactionを、本人の個人家計簿とこのグループの関連支払い履歴から参照します。</p>
-      <div class="payments-dialog-actions">
-        <button type="button" class="secondary-button" data-close-payment-dialog>キャンセル</button>
-        <button type="submit" class="primary-button">個別支払いを登録</button>
-      </div>
-    </form>
-  </dialog>
+  <%- include("partials/transaction-add-overlay", {
+    overlay: {
+      id: "payments-transaction-overlay",
+      mode: "GROUP_PAYMENT",
+      eyebrow: "関連支払い",
+      title: "個別支払いを追加",
+      action: `/groups/${group.id}/payments/transactions`,
+      groupId: group.id,
+      today,
+      placeholder: "例：昨日部活動の会場利用料を3000円払った",
+      note: `${currentUserDisplayName}さん本人が、自分の財布から支払った金額として登録します。他人名義では登録できません。`,
+      submitLabel: "個別支払いを登録",
+      categories: groupPaymentCategories,
+      hiddenFields: [
+        { name: "currentPageId", value: selectedPage.id },
+        { name: "contextState", value: contextState ?? "", contextHook: "data-payment-context-state" }
+      ]
+    }
+  }) %>
 
   <% if (isAdmin) { %>
     <dialog class="payments-page-dialog" id="payments-page-add-dialog" aria-labelledby="payments-page-add-title">
@@ -985,6 +945,7 @@
       window.addEventListener("scroll", hideTooltip, { passive: true, capture: true });
     })();
   </script>
+  <script src="/js/transaction-overlay.js" defer></script>
   <script src="/js/ai-analysis-dialog.js" defer></script>
 </body>
 </html>

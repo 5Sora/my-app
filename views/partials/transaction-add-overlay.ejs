@@ -1,0 +1,185 @@
+<%
+  const overlayMode = overlay.mode;
+  const overlayIsPersonal = overlayMode === "PERSONAL";
+  const overlayIsFund = overlayMode === "FUND";
+  const overlayIsPayment = overlayMode === "GROUP_PAYMENT";
+%>
+<dialog
+  class="transaction-overlay"
+  id="<%= overlay.id %>"
+  aria-labelledby="<%= overlay.id %>-title"
+  aria-describedby="<%= overlay.id %>-status"
+  aria-modal="true"
+  data-transaction-overlay
+>
+  <form
+    action="<%= overlay.action %>"
+    method="post"
+    class="transaction-overlay__form"
+    data-transaction-overlay-form
+    data-overlay-mode="<%= overlayMode %>"
+    <% if (overlay.groupId) { %>data-overlay-group-id="<%= overlay.groupId %>"<% } %>
+    <% if (overlayIsFund) { %>
+      data-fund-income-route="<%= overlay.routes.income %>"
+      data-fund-expense-route="<%= overlay.routes.expense %>"
+      data-fund-contribution-route="<%= overlay.routes.contribution %>"
+      data-fund-refund-route="<%= overlay.routes.refund %>"
+    <% } %>
+    data-submit-lock
+  >
+    <% overlay.hiddenFields.forEach(field => { %>
+      <input type="hidden" name="<%= field.name %>" value="<%= field.value %>"<% if (field.contextHook) { %> <%= field.contextHook %><% } %>>
+    <% }) %>
+    <input type="hidden" name="suggestionToken" value="" data-ai-suggestion-token>
+
+    <header class="transaction-overlay__header">
+      <div>
+        <p class="eyebrow"><%= overlay.eyebrow %></p>
+        <h2 id="<%= overlay.id %>-title"><%= overlay.title %></h2>
+      </div>
+      <button type="button" class="transaction-overlay__close" data-close-transaction-overlay aria-label="閉じる" title="閉じる">×</button>
+    </header>
+
+    <div class="transaction-overlay__body">
+      <section class="transaction-overlay__intro" data-overlay-intro>
+        <% if (overlay.note) { %><p class="transaction-overlay__note"><%= overlay.note %></p><% } %>
+        <label class="transaction-overlay__prompt">
+          <span>自然文章・内容</span>
+          <textarea
+            name="rawText"
+            maxlength="500"
+            rows="5"
+            placeholder="<%= overlay.placeholder %>"
+            required
+            data-overlay-raw-text
+            data-ai-raw-text
+          ></textarea>
+        </label>
+        <p class="form-help">入力内容は、明示的に「AIで推定」を押した場合だけ分類APIへ送信します。AI候補だけでは保存されません。</p>
+        <div class="transaction-overlay__primary-actions">
+          <button type="button" class="secondary-button" data-overlay-manual>手動入力</button>
+          <button type="button" class="primary-button" data-overlay-ai>AIで推定</button>
+        </div>
+        <p class="transaction-overlay__status" id="<%= overlay.id %>-status" data-overlay-status aria-live="polite"></p>
+      </section>
+
+      <section class="transaction-overlay__details" data-overlay-details hidden aria-label="取引詳細の確認">
+        <div class="transaction-overlay__details-heading">
+          <div>
+            <p class="eyebrow">詳細確認</p>
+            <h3>候補を確認・修正</h3>
+          </div>
+          <p>すべて編集できます。確認後に登録してください。</p>
+        </div>
+
+        <div class="transaction-overlay__fields">
+          <label>
+            <span>実際の取引日</span>
+            <input type="date" name="transactionDate" value="<%= overlay.today %>" max="<%= overlay.today %>" required data-overlay-detail-control>
+          </label>
+
+          <% if (overlayIsPersonal) { %>
+            <label>
+              <span>種類</span>
+              <select name="kind" required data-overlay-kind data-overlay-detail-control>
+                <option value="expense">支出</option>
+                <option value="income">収入</option>
+              </select>
+            </label>
+          <% } %>
+
+          <% if (overlayIsFund) { %>
+            <label>
+              <span>種類</span>
+              <select name="transactionType" required data-overlay-fund-type data-overlay-detail-control>
+                <option value="">選択してください</option>
+                <option value="FUND_INCOME">基金収入</option>
+                <option value="FUND_CONTRIBUTION">自分が基金へ拠出</option>
+                <option value="FUND_EXPENSE">基金支出</option>
+                <option value="FUND_REFUND">基金返金</option>
+              </select>
+            </label>
+          <% } %>
+
+          <label>
+            <span>金額</span>
+            <input type="number" name="amount" min="1" step="1" inputmode="numeric" required data-overlay-detail-control>
+          </label>
+
+          <% if (overlayIsPersonal) { %>
+            <label>
+              <span>カテゴリ</span>
+              <select name="category" data-overlay-category data-overlay-detail-control>
+                <option value="">内容からキーワード分類</option>
+                <optgroup label="収入" data-category-type="income">
+                  <% overlay.categories.income.forEach(category => { %><option value="<%= category %>"><%= category %></option><% }) %>
+                </optgroup>
+                <optgroup label="支出" data-category-type="expense">
+                  <% overlay.categories.expense.forEach(category => { %><option value="<%= category %>"><%= category %></option><% }) %>
+                </optgroup>
+              </select>
+            </label>
+          <% } %>
+
+          <% if (overlayIsPayment) { %>
+            <label>
+              <span>カテゴリ</span>
+              <select name="category" required data-overlay-category data-overlay-detail-control>
+                <option value="">選択してください</option>
+                <% overlay.categories.forEach(category => { %><option value="<%= category %>"><%= category %></option><% }) %>
+              </select>
+            </label>
+          <% } %>
+
+          <% if (overlayIsFund) { %>
+            <label data-fund-category-field>
+              <span>カテゴリ</span>
+              <select name="category" required data-overlay-category data-overlay-detail-control>
+                <option value="">選択してください</option>
+                <optgroup label="基金収入" data-category-type="FUND_INCOME">
+                  <% overlay.categories.income.forEach(category => { %><option value="<%= category %>"><%= category %></option><% }) %>
+                </optgroup>
+                <optgroup label="基金支出" data-category-type="FUND_EXPENSE">
+                  <% overlay.categories.expense.forEach(category => { %><option value="<%= category %>"><%= category %></option><% }) %>
+                </optgroup>
+              </select>
+            </label>
+
+            <label data-fund-related-user-field hidden>
+              <span>関係者</span>
+              <select name="relatedUserId" data-overlay-detail-control disabled>
+                <option value="">外部・関係者なし</option>
+                <% overlay.activeMembers.forEach(member => { %>
+                  <option value="<%= member.userId %>"><%= member.user.displayName %><%= member.userId === overlay.currentUserId ? "（あなた）" : "" %></option>
+                <% }) %>
+              </select>
+            </label>
+
+            <label data-fund-refund-field hidden>
+              <span>返金先</span>
+              <select name="recipientUserId" data-overlay-detail-control disabled>
+                <option value="">外部・ユーザー指定なし</option>
+                <% overlay.refundRecipients.forEach(member => { %>
+                  <option value="<%= member.userId %>"><%= member.user.displayName %><%= member.userId === overlay.currentUserId ? "（あなた）" : "" %><%= member.isActive ? "" : "（脱退済み）" %></option>
+                <% }) %>
+              </select>
+            </label>
+
+            <p class="form-help transaction-overlay__fund-help" data-fund-type-help>種類を選択すると、必要な確認項目へ切り替わります。</p>
+          <% } %>
+        </div>
+
+        <section class="ai-suggestion-panel transaction-overlay__suggestion" data-ai-suggestion-panel hidden aria-live="polite">
+          <p class="ai-suggestion-message" data-ai-message></p>
+          <dl class="ai-field-status" data-ai-field-status></dl>
+          <ul class="ai-warning-list" data-ai-warnings hidden></ul>
+        </section>
+      </section>
+    </div>
+
+    <footer class="transaction-overlay__footer" data-overlay-footer hidden>
+      <button type="button" class="secondary-button" data-close-transaction-overlay>キャンセル</button>
+      <button type="submit" class="primary-button" data-overlay-submit><%= overlay.submitLabel %></button>
+    </footer>
+  </form>
+</dialog>

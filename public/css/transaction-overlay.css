@@ -1,0 +1,225 @@
+.transaction-overlay {
+  width: min(1040px, calc(100vw - 32px));
+  max-width: none;
+  height: min(760px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  border: 1px solid #cfd5dc;
+  border-radius: 18px;
+  box-shadow: 0 24px 80px rgb(15 23 42 / 28%);
+  overflow: hidden;
+}
+
+.transaction-overlay::backdrop {
+  background: rgb(15 23 42 / 58%);
+  backdrop-filter: blur(2px);
+}
+
+.transaction-overlay__form {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: #f7f8fa;
+}
+
+.transaction-overlay__header,
+.transaction-overlay__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  background: #fff;
+}
+
+.transaction-overlay__header {
+  border-bottom: 1px solid #dfe3e8;
+}
+
+.transaction-overlay__header h2,
+.transaction-overlay__details-heading h3 {
+  margin: 2px 0 0;
+}
+
+.transaction-overlay__close {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #cbd2d9;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 1.45rem;
+  cursor: pointer;
+}
+
+.transaction-overlay__body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.transaction-overlay__intro,
+.transaction-overlay__details {
+  width: min(820px, 100%);
+  margin-inline: auto;
+}
+
+.transaction-overlay__intro {
+  min-height: 100%;
+  display: grid;
+  align-content: center;
+  gap: 16px;
+}
+
+.transaction-overlay__prompt {
+  display: grid;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.transaction-overlay__prompt textarea {
+  min-height: 150px;
+  resize: vertical;
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.transaction-overlay__note {
+  margin: 0;
+  padding: 12px 14px;
+  border-left: 4px solid #4d687f;
+  background: #eef3f6;
+}
+
+.transaction-overlay__primary-actions,
+.transaction-overlay__footer {
+  justify-content: flex-end;
+}
+
+.transaction-overlay__primary-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.transaction-overlay__primary-actions button {
+  min-width: 150px;
+  min-height: 46px;
+}
+
+.transaction-overlay__status {
+  min-height: 1.5em;
+  margin: 0;
+  color: #44515d;
+}
+
+.transaction-overlay__status[data-state="error"] {
+  color: #a61b1b;
+}
+
+.transaction-overlay__status[data-state="warning"] {
+  color: #7b4b00;
+}
+
+.transaction-overlay__details {
+  display: grid;
+  gap: 18px;
+}
+
+.transaction-overlay__details[hidden],
+.transaction-overlay__footer[hidden] {
+  display: none;
+}
+
+.transaction-overlay__details-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #d9dee4;
+}
+
+.transaction-overlay__details-heading p {
+  margin: 0;
+  color: #5d6975;
+}
+
+.transaction-overlay__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.transaction-overlay__fields label {
+  display: grid;
+  gap: 7px;
+  align-content: start;
+  font-weight: 700;
+}
+
+.transaction-overlay__fields input,
+.transaction-overlay__fields select,
+.transaction-overlay__prompt textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #b8c1ca;
+  border-radius: 9px;
+  background: #fff;
+  padding: 11px 12px;
+  color: #18212a;
+}
+
+.transaction-overlay__suggestion {
+  margin: 0;
+}
+
+.transaction-overlay__footer {
+  border-top: 1px solid #dfe3e8;
+  position: sticky;
+  bottom: 0;
+}
+
+.transaction-overlay__footer button {
+  min-width: 130px;
+  min-height: 44px;
+}
+
+.transaction-overlay [aria-busy="true"] {
+  cursor: wait;
+}
+
+@media (max-width: 720px) {
+  .transaction-overlay {
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .transaction-overlay__header,
+  .transaction-overlay__footer,
+  .transaction-overlay__body {
+    padding-inline: 16px;
+  }
+
+  .transaction-overlay__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-overlay__details-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .transaction-overlay__primary-actions,
+  .transaction-overlay__footer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .transaction-overlay__primary-actions button,
+  .transaction-overlay__footer button {
+    min-width: 0;
+  }
+}

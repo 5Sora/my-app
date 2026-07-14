@@ -34,6 +34,7 @@
   <link rel="stylesheet" href="/css/ledger.css">
   <link rel="stylesheet" href="/css/group.css">
   <link rel="stylesheet" href="/css/app-shell.css">
+  <link rel="stylesheet" href="/css/transaction-overlay.css">
 </head>
 <body class="ledger-body personal-body">
   <%- include("partials/app-header", { header: { mode: "personal" } }) %>
@@ -203,7 +204,7 @@
           <div><p class="eyebrow">詳細</p><h2>取引履歴</h2></div>
           <div class="personal-history-actions">
             <span><%= transactions.length %> 件</span>
-            <button type="button" class="personal-history-add" data-open-personal-dialog="personal-transaction-dialog" aria-label="個人取引を追加" title="個人取引を追加">＋</button>
+            <button type="button" class="personal-history-add" data-open-transaction-overlay="personal-transaction-overlay" aria-label="個人取引を追加" title="個人取引を追加">＋</button>
           </div>
         </div>
 
@@ -300,24 +301,29 @@
     </form>
   </dialog>
 
-  <dialog class="personal-dialog personal-transaction-dialog" id="personal-transaction-dialog" aria-labelledby="personal-transaction-title">
-    <form action="/app/transactions" method="post" class="transaction-form personal-dialog-form" data-personal-transaction-form data-submit-lock>
-      <input type="hidden" name="pageId" value="<%= selectedPage.id %>"><input type="hidden" name="contextState" value="<%= contextState %>" data-personal-context-state><input type="hidden" name="suggestionToken" value="" data-ai-suggestion-token>
-      <div class="personal-dialog-heading"><div><p class="eyebrow">個人家計簿</p><h2 id="personal-transaction-title">取引を追加</h2></div><button type="button" class="personal-dialog-close" data-close-personal-dialog aria-label="閉じる">×</button></div>
-      <label><span>実際の取引日</span><input type="date" name="transactionDate" value="<%= today %>" max="<%= today %>" required></label>
-      <label><span>種類</span><select name="kind" required><option value="expense">支出</option><option value="income">収入</option></select></label>
-      <label><span>金額</span><input type="number" name="amount" min="1" step="1" inputmode="numeric" required></label>
-      <label><span>カテゴリ</span><select name="category" data-personal-category><option value="">内容からキーワード分類</option><optgroup label="収入" data-category-kind="income"><% personalCategories.income.forEach(category => { %><option value="<%= category %>"><%= category %></option><% }) %></optgroup><optgroup label="支出" data-category-kind="expense"><% personalCategories.expense.forEach(category => { %><option value="<%= category %>"><%= category %></option><% }) %></optgroup></select></label>
-      <label><span>内容</span><textarea name="rawText" maxlength="500" rows="3" placeholder="例：昨日コンビニで昼食を800円買った" required data-ai-raw-text></textarea></label>
-      <div class="ai-classification-actions"><button type="button" class="secondary-button" data-ai-classify-button>AIで推定</button><p class="form-help">押すと、この内容だけを外部AIへ送信します。候補は自動保存されません。</p></div>
-      <section class="ai-suggestion-panel" data-ai-suggestion-panel hidden aria-live="polite"><p class="ai-suggestion-message" data-ai-message></p><dl class="ai-field-status" data-ai-field-status></dl><ul class="ai-warning-list" data-ai-warnings hidden></ul></section>
-      <div class="personal-dialog-actions"><button type="button" class="secondary-button" data-close-personal-dialog>キャンセル</button><button type="submit" class="primary-button">登録する</button></div>
-    </form>
-  </dialog>
+  <%- include("partials/transaction-add-overlay", {
+    overlay: {
+      id: "personal-transaction-overlay",
+      mode: "PERSONAL",
+      eyebrow: "個人家計簿",
+      title: "取引を追加",
+      action: "/app/transactions",
+      today,
+      placeholder: "例：昨日コンビニで昼食を800円買った",
+      note: "個人収入・個人支出だけを登録します。基金拠出や関連支払いは各グループ画面から登録してください。",
+      submitLabel: "登録する",
+      categories: personalCategories,
+      hiddenFields: [
+        { name: "pageId", value: selectedPage.id },
+        { name: "contextState", value: contextState, contextHook: "data-personal-context-state" }
+      ]
+    }
+  }) %>
 
   <%- include("partials/ai-analysis-dialog", { analysisDialog: { id: "personal-ai-analysis-dialog", eyebrow: "個人家計簿", title: "収支分析", pageName: selectedPage.name } }) %>
 
   <script src="/js/personal-dashboard.js" defer></script>
+  <script src="/js/transaction-overlay.js" defer></script>
   <script src="/js/personal-charts.js" defer></script>
   <script src="/js/ai-analysis-dialog.js" defer></script>
 </body>
