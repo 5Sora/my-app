@@ -31,6 +31,9 @@ test("Stage 9-7 gives all page and overlay dialogs modal names and shared focus 
     assert.match(source, /aria-modal="true"/);
     assert.match(source, /aria-labelledby=/);
   }
+  const group = await read("views/group.ejs");
+  assert.match(group, /class="group-dialog" aria-modal="true" aria-labelledby=/);
+  assert.match(group, /data-close-dialog/);
   assert.match(script, /event\.key !== "Tab"/);
   assert.match(script, /openerByDialog/);
   assert.match(script, /focusDialog/);

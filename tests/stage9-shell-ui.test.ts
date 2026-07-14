@@ -13,12 +13,14 @@ const renderHeader = async (header: Record<string, unknown>) => {
 };
 
 test("Stage 9-1 uses one shared sticky header on personal and group pages", async () => {
-  const [dashboard, group, fund, payments, shellCss] = await Promise.all([
+  const [dashboard, group, fund, payments, shellCss, groupCss, groupScript] = await Promise.all([
     read("views/dashboard.ejs"),
     read("views/group.ejs"),
     read("views/fund.ejs"),
     read("views/payments.ejs"),
     read("public/css/app-shell.css"),
+    read("public/css/group.css"),
+    read("public/js/group-overview.js"),
   ]);
 
   for (const view of [dashboard, group, fund, payments]) {
@@ -30,6 +32,21 @@ test("Stage 9-1 uses one shared sticky header on personal and group pages", asyn
   assert.match(shellCss, /\.app-header\s*\{[\s\S]*position: sticky/);
   assert.match(shellCss, /\.app-header\s*\{[\s\S]*z-index: 100/);
   assert.match(shellCss, /\.app-header__inner\s*\{[\s\S]*justify-content: flex-end/);
+
+  assert.match(group, /class="group-overview-shell"/);
+  assert.match(group, /class="group-overview-top"/);
+  assert.match(group, />基金ページ一覧</);
+  assert.match(group, />関連支払いページ一覧</);
+  assert.match(group, /id="group-members-heading">メンバー一覧</);
+  assert.match(group, /activeMemberCount %> 人（管理者 <%= activeAdminCount %> 人）/);
+  assert.doesNotMatch(group, /<dt>有効メンバー<\/dt>/);
+  assert.doesNotMatch(group, /<dt>有効な管理者<\/dt>/);
+  assert.match(group, /data-open-dialog="group-member-add-dialog"/);
+  assert.doesNotMatch(group, />メンバー追加・管理</);
+  assert.match(groupCss, /\.group-overview-shell\s*\{[\s\S]*grid-template-rows: minmax\(190px, 1fr\) minmax\(0, 2fr\)/);
+  assert.match(groupCss, /\.group-overview-top\s*\{[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(groupCss, /\.group-member-list\s*\{[\s\S]*overflow-y: auto/);
+  assert.match(groupScript, /dialog\.showModal\(\)/);
 });
 
 test("personal header exposes logout only while group header exposes the confirmed navigation", async () => {
