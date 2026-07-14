@@ -1,4 +1,12 @@
 <!DOCTYPE html>
+<%
+  const paymentVisualizationView = typeof paymentVisualization !== "undefined" && paymentVisualization
+    ? paymentVisualization
+    : {
+        paymentComposition: [],
+        totals: { amount: 0, paymentCount: 0, participantCount: 0 },
+      };
+%>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -28,465 +36,293 @@
     </section>
   <% } %>
 
-  <main class="payments-layout">
-    <section class="payments-main-column" aria-label="関連支払いの操作と履歴">
-      <section class="panel payments-top-area">
-        <div class="payments-title-area">
-          <p class="eyebrow">表示対象</p>
-          <h2><%= selectedPage.name %>の関連支払い</h2>
-          <dl class="payments-page-summary">
-            <div>
-              <dt>対象期間</dt>
-              <dd>
-                <% if (selectedPage.startDate || selectedPage.endDate) { %>
-                  <%= selectedPage.startDate ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP") : "指定なし" %>
-                  〜
-                  <%= selectedPage.endDate ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP") : "指定なし" %>
-                <% } else { %>
-                  全期間
-                <% } %>
-              </dd>
-            </div>
-            <div>
-              <dt>期間内合計</dt>
-              <dd><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong></dd>
-            </div>
-          </dl>
-          <section class="ai-analysis-launch payments-ai-analysis-launch" aria-label="関連支払いAI分析">
-            <div>
-              <p class="eyebrow">集計説明</p>
-              <p class="ai-analysis-launch-copy">選択中ページの総額・件数・カテゴリ構成だけを外部AI（OpenAI）へ送り、関連支払いの傾向を説明します。氏名や個人別支払額は送りません。</p>
-            </div>
-            <button
-              type="button"
-              class="secondary-button"
-              data-ai-analysis-button
-              data-endpoint="/api/ai/analyze-group-payments"
-              data-group-id="<%= group.id %>"
-              data-page-id="<%= selectedPage.id %>"
-              data-page-name="<%= selectedPage.name %>"
-              data-loading-message="選択中の関連支払いページを集計し、AIへ分析を依頼しています。"
-            >AI分析</button>
-          </section>
-          <form
-            id="split-preview-form"
-            action="/groups/<%= group.id %>/payments/preview"
-            method="post"
-            class="payments-split-form"
-            <%= isCalculationMode ? "" : "hidden" %>
-            data-split-preview-form
-          >
-            <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
-            <input type="hidden" name="contextState" value="open">
-            <div class="payments-split-fields">
-              <label>
-                <span>支払い総額</span>
-                <input type="number" name="totalAmount" min="1" step="1" value="<%= splitDraft.totalAmount %>" required inputmode="numeric">
-              </label>
-              <label>
-                <span>実際の取引日</span>
-                <input type="date" name="transactionDate" value="<%= splitDraft.transactionDate %>" max="<%= today %>" required>
-              </label>
-              <label class="payments-split-wide">
-                <span>内容・名目</span>
-                <textarea name="rawText" maxlength="500" rows="3" required><%= splitDraft.rawText %></textarea>
-              </label>
-              <label class="payments-split-wide">
-                <span>カテゴリ</span>
-                <select name="category" required>
-                  <option value="">選択してください</option>
-                  <% groupPaymentCategories.forEach(category => { %>
-                    <option value="<%= category %>" <%= splitDraft.category === category ? "selected" : "" %>><%= category %></option>
-                  <% }) %>
-                </select>
-              </label>
-            </div>
-            <p class="form-help">試算だけではDBへ保存されません。参加者と算出方法も選択してください。</p>
-          </form>
-          <p class="payments-stage-note" data-normal-stage-note <%= isCalculationMode ? "hidden" : "" %>>表示ページ管理、個別支払い登録、割り勘の試算に対応しています。</p>
-        </div>
-
-        <div class="payments-method-area" aria-labelledby="calculation-method-heading">
-          <div class="panel-heading compact payments-method-heading">
-            <div>
-              <p class="eyebrow">割り勘</p>
-              <h2 id="calculation-method-heading">算出方法</h2>
-            </div>
-            <span>4方式</span>
-          </div>
-
-          <ul class="payments-method-list">
-            <% calculationMethodOptions.forEach((method, index) => { %>
-              <li class="<%= isCalculationMode && splitDraft.calculationMethod === method.value ? 'is-selected' : '' %>" data-calculation-method-row>
-                <span class="payments-method-action">
-                  <button
-                    type="button"
-                    class="payments-method-help"
-                    aria-label="<%= method.label %>の説明を表示"
-                    aria-expanded="false"
-                    aria-controls="payment-method-description-<%= index %>"
-                    data-method-help
-                  >?</button>
-                  <label class="payments-method-radio" aria-label="<%= method.label %>を選択">
-                    <input
-                      type="radio"
-                      name="calculationMethod"
-                      value="<%= method.value %>"
-                      form="split-preview-form"
-                      data-calculation-method-input
-                      <%= splitDraft.calculationMethod === method.value ? "checked" : "" %>
-                    >
-                  </label>
-                </span>
-                <strong><%= method.label %></strong>
-                <p id="payment-method-description-<%= index %>" class="payments-method-description" hidden><%= method.description %></p>
-              </li>
-            <% }) %>
-          </ul>
-
-          <div class="payments-method-summary" aria-live="polite" data-method-summary>
-            <% const selectedMethodOption = calculationMethodOptions.find(method => method.value === splitDraft.calculationMethod); %>
-            <%= selectedMethodOption ? selectedMethodOption.description : "算出方法を選択すると、ここに要約を表示します。" %>
-          </div>
-
-          <button type="button" class="primary-button payments-start-button" data-start-split <%= isCalculationMode ? "hidden" : "" %>>割り勘を開始</button>
-          <div class="payments-calculation-actions" <%= isCalculationMode ? "" : "hidden" %> data-calculation-actions>
-            <button type="submit" form="split-preview-form" class="primary-button" data-preview-submit disabled>負担額を試算</button>
-            <a href="<%= buildGroupPaymentsUrl(group.id, { pageId: selectedPage.id, contextState: 'open' }) %>" class="secondary-button button-link">算出を中止</a>
-          </div>
-        </div>
-      </section>
-
-      <section
-        class="payments-lower-area<%= contextState === 'closed' ? ' is-context-closed' : '' %>"
-        data-payment-lower
-        data-context-state="<%= contextState ?? 'auto' %>"
-      >
-        <section class="payments-context-half" aria-label="表示ページと有効メンバー">
-          <div
-            class="payments-context-panels"
-            id="payment-context-panel"
-            aria-hidden="<%= String(contextState === 'closed') %>"
-          >
-            <section class="panel payments-page-panel">
-              <div class="panel-heading compact">
-                <div>
-                  <p class="eyebrow">期間</p>
-                  <h2>表示ページ</h2>
-                </div>
-                <span><%= pages.length %> 件</span>
-              </div>
-
-              <nav class="page-list" aria-label="グループ関連支払いページ">
-                <% pages.forEach(page => { %>
-                  <a
-                    href="<%= buildGroupPaymentsUrl(group.id, { pageId: page.id, contextState }) %>"
-                    class="<%= page.id === selectedPage.id ? 'is-active' : '' %>"
-                    data-payment-context-link
-                    <% if (page.id === selectedPage.id) { %>aria-current="page"<% } %>
-                  >
-                    <span>
-                      <strong><%= page.name %></strong>
-                    </span>
-                    <% if (page.isInitial) { %><small class="initial-badge">初期</small><% } %>
-                  </a>
-                <% }) %>
-              </nav>
-            </section>
-
-            <section class="panel payments-member-panel">
-              <div class="panel-heading compact">
-                <div>
-                  <p class="eyebrow">参加候補</p>
-                  <h2>有効メンバー</h2>
-                </div>
-                <span><%= activeMembers.length %> 人</span>
-              </div>
-
-              <% if (activeMembers.length === 0) { %>
-                <p class="empty-state">有効なメンバーがいません。</p>
-              <% } else { %>
-                <ul class="payments-member-list">
-                  <% activeMembers.forEach(member => { %>
-                    <li class="<%= isCalculationMode && splitDraft.participantIds.includes(member.userId) ? 'is-selected' : '' %>" data-participant-row>
-                      <span class="payments-member-action">
-                        <span class="payments-member-history-label" aria-hidden="true">履歴</span>
-                        <label class="payments-member-checkbox" aria-label="<%= member.user.displayName %>を今回の参加者に含める">
-                          <input
-                            type="checkbox"
-                            name="participantIds"
-                            value="<%= member.userId %>"
-                            form="split-preview-form"
-                            data-participant-input
-                            <%= splitDraft.participantIds.includes(member.userId) ? "checked" : "" %>
-                          >
-                        </label>
-                      </span>
-                      <span class="payments-member-name">
-                        <strong><%= member.user.displayName %></strong>
-                        <small><%= member.role === "ADMIN" ? "管理者" : "メンバー" %><%= member.userId === currentUserId ? "・あなた" : "" %></small>
-                      </span>
-                    </li>
-                  <% }) %>
-                </ul>
-              <% } %>
-              <p class="form-help">メンバー追加・脱退・権限変更はグループ概要で行います。</p>
-            </section>
-          </div>
-
-          <aside class="payments-operation-rail" aria-label="関連支払いページ操作">
-            <button
-              type="button"
-              data-payment-context-toggle
-              aria-controls="payment-context-panel"
-              aria-expanded="<%= String(contextState !== 'closed') %>"
-              aria-label="<%= isCalculationMode ? '算出中は参加者領域を閉じられません' : '左領域を閉じる' %>"
-              title="<%= isCalculationMode ? '算出中は参加者領域を閉じられません' : '左領域を閉じる' %>"
-              <%= isCalculationMode ? "disabled" : "" %>
-              data-calculation-lock-toggle
-            >←</button>
-            <button
-              type="button"
-              data-open-payment-dialog="payments-page-edit-dialog"
-              <%= isAdmin ? "" : "disabled" %>
-              aria-disabled="<%= String(!isAdmin) %>"
-              aria-label="<%= isAdmin ? '選択中LedgerPageを編集' : 'LedgerPage編集はグループ管理者のみ可能です' %>"
-              title="<%= isAdmin ? '選択中LedgerPageを編集' : 'LedgerPage編集はグループ管理者のみ可能です' %>"
-            >⚙</button>
-            <button
-              type="button"
-              data-open-payment-dialog="payments-page-add-dialog"
-              <%= isAdmin ? "" : "disabled" %>
-              aria-disabled="<%= String(!isAdmin) %>"
-              aria-label="<%= isAdmin ? 'LedgerPageを追加' : 'LedgerPage追加はグループ管理者のみ可能です' %>"
-              title="<%= isAdmin ? 'LedgerPageを追加' : 'LedgerPage追加はグループ管理者のみ可能です' %>"
-            >＋</button>
-            <button
-              type="submit"
-              form="payments-delete-page-form"
-              <%= !isAdmin || selectedPage.isInitial ? "disabled" : "" %>
-              aria-disabled="<%= String(!isAdmin || selectedPage.isInitial) %>"
-              aria-label="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>"
-              title="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>"
-            >−</button>
-          </aside>
-
-          <section class="panel payments-collapsed-summary" aria-hidden="true">
-            <p class="eyebrow">期間内サマリー</p>
-            <h2><%= selectedPage.name %></h2>
-            <p><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong></p>
-            <p><%= transactions.length %> 件・<%= perPersonRows.length %> 人</p>
-          </section>
-        </section>
-
-        <section class="panel payments-history-panel" aria-labelledby="payment-history-heading">
-          <div class="panel-heading payments-history-heading">
-            <div>
-              <p class="eyebrow">確定済みTransaction</p>
-              <h2 id="payment-history-heading">関連支払い履歴</h2>
-            </div>
-            <button
-              type="button"
-              class="payments-history-add"
-              data-open-transaction-overlay="payments-transaction-overlay"
-              aria-label="個別支払いを登録"
-              title="個別支払いを登録"
-            >＋</button>
-          </div>
-
-          <div class="payments-history-tabs" role="tablist" aria-label="履歴表示方法">
-            <button
-              type="button"
-              role="tab"
-              id="payments-chronological-tab"
-              aria-controls="payments-chronological-panel"
-              aria-selected="true"
-              tabindex="0"
-              data-payment-tab="chronological"
-            >時系列</button>
-            <button
-              type="button"
-              role="tab"
-              id="payments-person-tab"
-              aria-controls="payments-person-panel"
-              aria-selected="false"
-              tabindex="-1"
-              data-payment-tab="person"
-            >人ごと</button>
-          </div>
-
-          <section
-            id="payments-chronological-panel"
-            role="tabpanel"
-            aria-labelledby="payments-chronological-tab"
-            data-payment-tab-panel="chronological"
-          >
-            <div class="payments-ledger payments-ledger-chronological" aria-label="時系列の関連支払い履歴">
-              <div class="payments-ledger-heading" aria-hidden="true">
-                <span>日付</span><span>負担内容</span><span>金額</span><span>名前</span>
-              </div>
-              <div class="payments-ledger-scroll" tabindex="0" aria-label="時系列履歴。上下にスクロールできます">
-                <% if (transactions.length === 0) { %>
-                  <p class="empty-state payments-history-empty">この期間には、まだ関連支払いがありません。</p>
-                <% } else { %>
-                  <% transactions.forEach(transaction => { %>
-                    <article class="payments-ledger-row">
-                      <time datetime="<%= transaction.transactionDate.toISOString().slice(0, 10) %>"><%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %></time>
-                      <span class="payments-ledger-text" tabindex="0" data-payment-tooltip="<%= transaction.rawText %>"><%= transaction.rawText %></span>
-                      <strong><%= transaction.amount.toLocaleString("ja-JP") %> 円</strong>
-                      <span><%= transaction.user?.displayName ?? "不明なユーザー" %></span>
-                    </article>
-                  <% }) %>
-                <% } %>
-              </div>
-              <div class="payments-ledger-total">
-                <span>—</span><strong>総額</strong><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong><span>—</span>
-              </div>
-            </div>
-          </section>
-
-          <section
-            id="payments-person-panel"
-            role="tabpanel"
-            aria-labelledby="payments-person-tab"
-            data-payment-tab-panel="person"
-            hidden
-          >
-            <div class="payments-ledger payments-ledger-person" aria-label="人ごとの関連支払い集計">
-              <div class="payments-ledger-heading" aria-hidden="true">
-                <span>名前</span><span>合計支払額</span><span>支払い件数</span>
-              </div>
-              <div class="payments-ledger-scroll" tabindex="0" aria-label="人ごとの集計。上下にスクロールできます">
-                <% if (perPersonRows.length === 0) { %>
-                  <p class="empty-state payments-history-empty">この期間に集計できる支払いがありません。</p>
-                <% } else { %>
-                  <% perPersonRows.forEach(row => { %>
-                    <article class="payments-ledger-row">
-                      <strong><%= row.displayName %></strong>
-                      <strong><%= row.totalAmount.toLocaleString("ja-JP") %> 円</strong>
-                      <span><%= row.paymentCount.toLocaleString("ja-JP") %> 件</span>
-                    </article>
-                  <% }) %>
-                <% } %>
-              </div>
-              <div class="payments-ledger-total">
-                <strong>合計</strong><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong><span><%= transactions.length.toLocaleString("ja-JP") %> 件</span>
-              </div>
-            </div>
-          </section>
-        </section>
-      </section>
-    </section>
-
-    <aside class="panel payments-result-column" aria-labelledby="payment-result-heading" data-payment-result-column>
-      <% if (preview) { %>
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">今回の試算</p>
-            <h2 id="payment-result-heading">今回の試算結果</h2>
-          </div>
-          <span><%= preview.allocations.length %> 人</span>
-        </div>
-
-        <dl class="payments-batch-definition">
-          <div><dt>取引日</dt><dd><%= new Date(splitDraft.transactionDate + "T00:00:00Z").toLocaleDateString("ja-JP") %></dd></div>
-          <div><dt>内容</dt><dd><span tabindex="0" data-payment-tooltip="<%= splitDraft.rawText %>"><%= splitDraft.rawText %></span></dd></div>
-          <div><dt>カテゴリ</dt><dd><%= splitDraft.category %></dd></div>
-          <div><dt>選択方式</dt><dd><%= preview.selectedMethodLabel %></dd></div>
-          <% if (preview.usedMethod !== preview.selectedMethod) { %>
-            <div><dt>実使用方式</dt><dd><strong><%= preview.usedMethodLabel %></strong></dd></div>
+  <main class="ledger-shell payments-shell" aria-label="グループ関連支払い">
+    <section class="ledger-shell-top payments-shell-top" aria-label="関連支払いの概要と割り勘操作">
+      <article class="panel payments-title-card">
+        <p class="eyebrow">関連支払い</p>
+        <h1><%= selectedPage.name %></h1>
+        <p class="payments-title-group"><strong><%= group.name %></strong></p>
+        <p class="period-label">
+          <% if (selectedPage.startDate || selectedPage.endDate) { %>
+            <%= selectedPage.startDate ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
+            〜
+            <%= selectedPage.endDate ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
+          <% } else { %>
+            全期間
           <% } %>
-          <div><dt>総額</dt><dd><strong><%= preview.totalAmount.toLocaleString("ja-JP") %> 円</strong></dd></div>
+        </p>
+        <dl class="payments-title-metrics">
+          <div><dt>期間内総額</dt><dd><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong></dd></div>
+          <div><dt>記録件数</dt><dd><%= transactions.length.toLocaleString("ja-JP") %> 件</dd></div>
         </dl>
+      </article>
 
-        <% if (preview.fallbackReason) { %>
-          <p class="payments-fallback-message" role="status"><strong>均等割へfallback</strong><br><%= preview.fallbackReason %></p>
-        <% } %>
+      <article class="panel payments-method-area" aria-labelledby="calculation-method-heading">
+        <div class="panel-heading compact payments-method-heading">
+          <div><p class="eyebrow">割り勘</p><h2 id="calculation-method-heading">算出方法</h2></div>
+          <span>4方式</span>
+        </div>
 
-        <h3 class="payments-allocation-heading">参加者別負担額</h3>
-        <ul class="payments-preview-allocation-list">
-          <% preview.allocations.forEach(allocation => { %>
-            <li>
-              <div>
-                <strong><%= allocation.displayName %></strong>
-                <small>算出前比率 <%= allocation.ratioPercent.toLocaleString("ja-JP", { maximumFractionDigits: 2 }) %>%</small>
-                <small>正確値 <%= allocation.exactAmount.toLocaleString("ja-JP", { minimumFractionDigits: 2, maximumFractionDigits: 4 }) %> 円</small>
-              </div>
-              <strong><%= allocation.amount.toLocaleString("ja-JP") %> 円</strong>
+        <ul class="payments-method-list">
+          <% calculationMethodOptions.forEach((method) => { %>
+            <li class="<%= isCalculationMode && splitDraft.calculationMethod === method.value ? 'is-selected' : '' %>" data-calculation-method-row>
+              <span class="payments-method-action">
+                <button
+                  type="button"
+                  class="payments-method-help"
+                  aria-label="<%= method.label %>の説明を確認"
+                  aria-describedby="payment-method-summary"
+                  data-method-help
+                  data-method-description="<%= method.description %>"
+                >?</button>
+                <label class="payments-method-radio" aria-label="<%= method.label %>を選択">
+                  <input type="radio" name="calculationMethod" value="<%= method.value %>" form="split-preview-form" data-calculation-method-input <%= splitDraft.calculationMethod === method.value ? "checked" : "" %>>
+                </label>
+              </span>
+              <strong><%= method.label %></strong>
             </li>
           <% }) %>
         </ul>
-        <div class="payments-preview-total"><span>合計</span><strong><%= preview.allocations.reduce((sum, allocation) => sum + allocation.amount, 0).toLocaleString("ja-JP") %> 円</strong></div>
-        <form id="split-confirm-form" action="/groups/<%= group.id %>/payments/confirm" method="post" hidden>
-          <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
-          <input type="hidden" name="contextState" value="open">
-          <input type="hidden" name="totalAmount" value="<%= splitDraft.totalAmount %>">
-          <input type="hidden" name="transactionDate" value="<%= splitDraft.transactionDate %>">
-          <input type="hidden" name="rawText" value="<%= splitDraft.rawText %>">
-          <input type="hidden" name="category" value="<%= splitDraft.category %>">
-          <input type="hidden" name="calculationMethod" value="<%= splitDraft.calculationMethod %>">
-          <input type="hidden" name="previewSignature" value="<%= previewSignature ?? '' %>">
-          <% splitDraft.participantIds.forEach(participantId => { %>
-            <input type="hidden" name="participantIds" value="<%= participantId %>">
-          <% }) %>
-        </form>
-        <div class="payments-preview-actions">
-          <button type="submit" form="split-confirm-form" class="primary-button" data-preview-confirm-button>確認へ進む</button>
-          <button type="button" class="secondary-button" data-edit-split-conditions>条件を修正</button>
-          <a href="<%= buildGroupPaymentsUrl(group.id, { pageId: selectedPage.id, contextState: 'open' }) %>" class="secondary-button button-link">算出を中止</a>
-        </div>
-        <p class="form-help" data-preview-stale-message hidden>条件を変更したため、この試算結果は古くなりました。もう一度「負担額を試算」してください。</p>
-        <p class="form-help">この試算結果はまだDBへ保存されていません。</p>
-      <% } else if (isCalculationMode) { %>
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">今回の試算</p>
-            <h2 id="payment-result-heading">今回の試算を準備中</h2>
-          </div>
-        </div>
-        <div class="payments-result-empty">
-          <strong>支払い情報、参加者、算出方法を指定してください。</strong>
-          <p>必要な項目が揃うと「負担額を試算」を実行できます。試算だけではDBへ保存されません。</p>
-        </div>
-        <% if (latestBatch) { %>
-          <details class="payments-previous-batch-during-calculation">
-            <summary>前回確定分を確認</summary>
-            <p><strong><%= latestBatch.rawText %></strong></p>
-            <p><%= latestBatch.totalAmount.toLocaleString("ja-JP") %> 円・<%= latestBatch.calculationMethodLabel %></p>
-          </details>
-        <% } %>
-      <% } else { %>
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">前回確定分</p>
-            <h2 id="payment-result-heading">直近の割り勘結果</h2>
-          </div>
-          <% if (latestBatch) { %><span><%= latestBatch.allocations.length %> 人</span><% } %>
+
+        <div id="payment-method-summary" class="payments-method-summary" aria-live="polite" data-method-summary>
+          <% const selectedMethodOption = calculationMethodOptions.find(method => method.value === splitDraft.calculationMethod); %>
+          <%= selectedMethodOption ? selectedMethodOption.description : "？を押すと、この欄に算出方法の説明を表示します。" %>
         </div>
 
-        <% if (!latestBatch) { %>
-          <div class="payments-result-empty">
-            <strong>まだ確定済みの割り勘結果はありません。</strong>
-            <p>参加者と算出方法を選択して、最初の割り勘を開始できます。</p>
+        <button type="button" class="primary-button payments-start-button" data-start-split <%= isCalculationMode ? "hidden" : "" %>>割り勘を開始</button>
+        <div class="payments-calculation-actions" <%= isCalculationMode ? "" : "hidden" %> data-calculation-actions>
+          <button type="button" class="primary-button" data-open-payment-conditions disabled>支払い条件を入力</button>
+          <a href="<%= buildGroupPaymentsUrl(group.id, { pageId: selectedPage.id, contextState: 'open' }) %>" class="secondary-button button-link">算出を中止</a>
+        </div>
+      </article>
+
+      <article class="panel payments-insight-card" aria-labelledby="payment-share-chart-title" data-payment-share-chart>
+        <div class="payments-insight-heading">
+          <div>
+            <p class="eyebrow">メンバー別支払額割合</p>
+            <h2 id="payment-share-chart-title">選択期間に記録された支払額</h2>
           </div>
+          <button type="button" class="secondary-button payments-ai-analysis-button" data-ai-analysis-button data-endpoint="/api/ai/analyze-group-payments" data-group-id="<%= group.id %>" data-page-id="<%= selectedPage.id %>" data-page-name="<%= selectedPage.name %>" data-loading-message="選択中の関連支払いページを集計し、AIへ分析を依頼しています。">AI分析</button>
+        </div>
+        <p class="payments-chart-note">公平性の判定ではなく、選択期間に記録された支払額の割合です。</p>
+
+        <% if (paymentVisualizationView.totals.amount > 0) { %>
+          <div class="payments-share-chart">
+            <div class="payments-share-chart__visual">
+              <svg class="payments-share-chart__pie" viewBox="0 0 100 100" role="img" aria-label="メンバー別支払額割合。合計 <%= paymentVisualizationView.totals.amount.toLocaleString("ja-JP") %> 円">
+                <circle class="payments-share-chart__track" cx="50" cy="50" r="38" pathLength="100"></circle>
+                <g data-payment-share-segments></g>
+              </svg>
+              <div class="payments-share-chart__center" aria-hidden="true"><span>総額</span><strong><%= paymentVisualizationView.totals.amount.toLocaleString("ja-JP") %></strong><small>円</small></div>
+            </div>
+            <div class="payments-share-chart__legend" aria-label="メンバー別支払額割合の凡例">
+              <ul>
+                <% paymentVisualizationView.paymentComposition.forEach(item => { %>
+                  <li>
+                    <button type="button" class="payments-share-chart__legend-item" style="--chart-color: <%= item.color %>" data-payment-share-item="<%= item.key %>" aria-label="<%= item.label %>、<%= item.amount.toLocaleString("ja-JP") %>円、<%= item.percentage %>パーセント、<%= item.paymentCount %>件">
+                      <span class="payments-share-chart__swatch" aria-hidden="true"></span>
+                      <span class="payments-share-chart__legend-name"><strong><%= item.label %></strong><small><%= item.paymentCount %> 件<%= item.amount === 0 ? "・参加記録0円" : "" %></small></span>
+                      <span class="payments-share-chart__legend-value"><strong><%= item.amount.toLocaleString("ja-JP") %> 円</strong><small><%= item.percentage.toFixed(1) %>%</small></span>
+                    </button>
+                  </li>
+                <% }) %>
+              </ul>
+            </div>
+          </div>
+          <div class="payments-share-chart__tooltip" role="tooltip" hidden data-payment-share-tooltip></div>
         <% } else { %>
-          <dl class="payments-batch-definition">
+          <div class="payments-chart-empty" role="status"><strong>表示できる支払額がありません</strong><span>0円参加者は履歴に残りますが、円グラフの面積は持ちません。</span></div>
+        <% } %>
+        <script type="application/json" data-payment-share-chart-data><%- JSON.stringify(paymentVisualizationView.paymentComposition).replace(/</g, "\u003c") %></script>
+      </article>
+    </section>
+
+    <section class="ledger-shell-lower payments-lower-area<%= !isCalculationMode && contextState !== 'open' ? ' is-context-closed' : '' %>" data-payment-lower data-context-state="<%= contextState ?? 'auto' %>">
+      <aside class="payments-context-column" id="payment-context-panel" aria-label="表示ページと有効メンバー" aria-hidden="<%= String(!isCalculationMode && contextState !== 'open') %>">
+        <section class="panel payments-page-panel">
+          <div class="panel-heading compact"><div><p class="eyebrow">LedgerPage</p><h2>表示ページ</h2></div><span><%= pages.length %> 件</span></div>
+          <nav class="page-list" aria-label="グループ関連支払いページ">
+            <% pages.forEach(page => { %>
+              <a href="<%= buildGroupPaymentsUrl(group.id, { pageId: page.id, contextState }) %>" class="<%= page.id === selectedPage.id ? 'is-active' : '' %>" data-payment-context-link <% if (page.id === selectedPage.id) { %>aria-current="page"<% } %>><span><strong><%= page.name %></strong></span><% if (page.isInitial) { %><small class="initial-badge">初期</small><% } %></a>
+            <% }) %>
+          </nav>
+        </section>
+
+        <section class="panel payments-member-panel">
+          <div class="panel-heading compact"><div><p class="eyebrow">参加候補</p><h2>有効メンバー</h2></div><span><%= activeMembers.length %> 人</span></div>
+          <% if (activeMembers.length === 0) { %><p class="empty-state">有効なメンバーがいません。</p><% } else { %>
+            <ul class="payments-member-list">
+              <% activeMembers.forEach(member => { %>
+                <li class="<%= isCalculationMode && splitDraft.participantIds.includes(member.userId) ? 'is-selected' : '' %>" data-participant-row>
+                  <span class="payments-member-action"><span class="payments-member-history-label" aria-hidden="true">履歴</span><label class="payments-member-checkbox" aria-label="<%= member.user.displayName %>を今回の参加者に含める"><input type="checkbox" name="participantIds" value="<%= member.userId %>" form="split-preview-form" data-participant-input <%= splitDraft.participantIds.includes(member.userId) ? "checked" : "" %>></label></span>
+                  <span class="payments-member-name"><strong><%= member.user.displayName %></strong><small><%= member.role === "ADMIN" ? "管理者" : "メンバー" %><%= member.userId === currentUserId ? "・あなた" : "" %></small></span>
+                </li>
+              <% }) %>
+            </ul>
+          <% } %>
+          <p class="form-help">メンバー管理はグループ概要で行います。</p>
+        </section>
+      </aside>
+
+      <aside class="payments-operation-rail" aria-label="関連支払いページ操作">
+        <button type="button" data-payment-context-toggle aria-controls="payment-context-panel" aria-expanded="<%= String(isCalculationMode || contextState === 'open') %>" aria-label="<%= isCalculationMode ? '算出中は参加者領域を閉じられません' : '左領域を閉じる' %>" title="<%= isCalculationMode ? '算出中は参加者領域を閉じられません' : '左領域を閉じる' %>" <%= isCalculationMode ? "disabled" : "" %> data-calculation-lock-toggle><%= isCalculationMode || contextState === "open" ? "←" : "→" %></button>
+        <button type="button" data-open-payment-dialog="payments-page-edit-dialog" <%= isAdmin ? "" : "disabled" %> aria-disabled="<%= String(!isAdmin) %>" aria-label="<%= isAdmin ? '選択中LedgerPageを編集' : 'LedgerPage編集はグループ管理者のみ可能です' %>" title="<%= isAdmin ? '選択中LedgerPageを編集' : 'LedgerPage編集はグループ管理者のみ可能です' %>">⚙</button>
+        <button type="button" data-open-payment-dialog="payments-page-add-dialog" <%= isAdmin ? "" : "disabled" %> aria-disabled="<%= String(!isAdmin) %>" aria-label="<%= isAdmin ? 'LedgerPageを追加' : 'LedgerPage追加はグループ管理者のみ可能です' %>" title="<%= isAdmin ? 'LedgerPageを追加' : 'LedgerPage追加はグループ管理者のみ可能です' %>">＋</button>
+        <button type="submit" form="payments-delete-page-form" <%= !isAdmin || selectedPage.isInitial ? "disabled" : "" %> aria-disabled="<%= String(!isAdmin || selectedPage.isInitial) %>" aria-label="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>" title="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>">−</button>
+      </aside>
+
+      <aside class="panel payments-latest-batch" aria-hidden="<%= String(isCalculationMode || contextState === 'open') %>">
+        <div class="panel-heading compact"><div><p class="eyebrow">最新の確定割り勘</p><h2>直近batch</h2></div><% if (latestBatch) { %><span><%= latestBatch.allocations.length %> 人</span><% } %></div>
+        <% if (!latestBatch) { %>
+          <div class="payments-result-empty"><strong>確定済みの割り勘はありません。</strong><p>割り勘を確定すると、直近結果をここに表示します。</p></div>
+        <% } else { %>
+          <dl class="payments-latest-definition">
             <div><dt>取引日</dt><dd><%= new Date(latestBatch.transactionDate).toLocaleDateString("ja-JP") %></dd></div>
             <div><dt>内容</dt><dd><span tabindex="0" data-payment-tooltip="<%= latestBatch.rawText %>"><%= latestBatch.rawText %></span></dd></div>
-            <div><dt>カテゴリ</dt><dd><%= latestBatch.category %></dd></div>
-            <div><dt>算出方法</dt><dd><%= latestBatch.calculationMethodLabel %></dd></div>
             <div><dt>総額</dt><dd><strong><%= latestBatch.totalAmount.toLocaleString("ja-JP") %> 円</strong></dd></div>
+            <div><dt>選択方式</dt><dd>現行保存形式では未保持</dd></div>
+            <div><dt>実使用方式</dt><dd><strong><%= latestBatch.calculationMethodLabel %></strong></dd></div>
+            <div><dt>fallback</dt><dd>現行保存形式では理由未保持</dd></div>
           </dl>
           <h3 class="payments-allocation-heading">参加者別負担額</h3>
-          <ul class="payments-allocation-list">
-            <% latestBatch.allocations.forEach(allocation => { %>
-              <li><span><%= allocation.displayName %></span><strong><%= allocation.amount.toLocaleString("ja-JP") %> 円</strong></li>
-            <% }) %>
+          <ul class="payments-allocation-list payments-latest-allocation-list">
+            <% latestBatch.allocations.forEach(allocation => { %><li><span><%= allocation.displayName %></span><strong><%= allocation.amount.toLocaleString("ja-JP") %> 円</strong></li><% }) %>
           </ul>
         <% } %>
-      <% } %>
-    </aside>
+      </aside>
+
+      <section class="panel payments-history-panel" aria-labelledby="payment-history-heading">
+        <div class="panel-heading payments-history-heading">
+          <div><p class="eyebrow">確定済みTransaction</p><h2 id="payment-history-heading">関連支払い履歴</h2></div>
+          <div class="payments-history-actions"><span><%= transactions.length %> 件</span><button type="button" class="payments-history-add" data-open-transaction-overlay="payments-transaction-overlay" aria-label="個別支払いを登録" title="個別支払いを登録">＋</button></div>
+        </div>
+        <div class="payments-history-tabs" role="tablist" aria-label="履歴表示方法">
+          <button type="button" role="tab" id="payments-chronological-tab" aria-controls="payments-chronological-panel" aria-selected="true" tabindex="0" data-payment-tab="chronological">時系列</button>
+          <button type="button" role="tab" id="payments-person-tab" aria-controls="payments-person-panel" aria-selected="false" tabindex="-1" data-payment-tab="person">人ごと</button>
+        </div>
+        <section id="payments-chronological-panel" role="tabpanel" aria-labelledby="payments-chronological-tab" data-payment-tab-panel="chronological">
+          <div class="payments-ledger payments-ledger-chronological" aria-label="時系列の関連支払い履歴">
+            <div class="payments-ledger-heading" aria-hidden="true"><span>日付</span><span>負担内容</span><span>金額</span><span>名前</span></div>
+            <div class="payments-ledger-scroll" tabindex="0" aria-label="時系列履歴。上下にスクロールできます">
+              <% if (transactions.length === 0) { %><p class="empty-state payments-history-empty">この期間には、まだ関連支払いがありません。</p><% } else { %>
+                <% transactions.forEach(transaction => { %><article class="payments-ledger-row"><time datetime="<%= transaction.transactionDate.toISOString().slice(0, 10) %>"><%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %></time><span class="payments-ledger-text" tabindex="0" data-payment-tooltip="<%= transaction.rawText %>"><%= transaction.rawText %><% if (transaction.amount === 0 && transaction.paymentBatchId) { %><small>参加・負担0円</small><% } %></span><strong><%= transaction.amount.toLocaleString("ja-JP") %> 円</strong><span><%= transaction.user?.displayName ?? "不明なユーザー" %></span></article><% }) %>
+              <% } %>
+            </div>
+            <div class="payments-ledger-total"><span>—</span><strong>総額</strong><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong><span>—</span></div>
+          </div>
+        </section>
+        <section id="payments-person-panel" role="tabpanel" aria-labelledby="payments-person-tab" data-payment-tab-panel="person" hidden>
+          <div class="payments-ledger payments-ledger-person" aria-label="人ごとの関連支払い集計">
+            <div class="payments-ledger-heading" aria-hidden="true"><span>名前</span><span>合計支払額</span><span>支払い件数</span></div>
+            <div class="payments-ledger-scroll" tabindex="0" aria-label="人ごとの集計。上下にスクロールできます">
+              <% if (perPersonRows.length === 0) { %><p class="empty-state payments-history-empty">この期間に集計できる支払いがありません。</p><% } else { %><% perPersonRows.forEach(row => { %><article class="payments-ledger-row"><strong><%= row.displayName %></strong><strong><%= row.totalAmount.toLocaleString("ja-JP") %> 円</strong><span><%= row.paymentCount.toLocaleString("ja-JP") %> 件</span></article><% }) %><% } %>
+            </div>
+            <div class="payments-ledger-total"><strong>合計</strong><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong><span><%= transactions.length.toLocaleString("ja-JP") %> 件</span></div>
+          </div>
+        </section>
+      </section>
+    </section>
   </main>
+
+  <dialog
+    class="payments-condition-dialog"
+    aria-labelledby="payments-condition-title"
+    aria-modal="true"
+    data-payment-condition-dialog
+    data-auto-open="<%= String(isCalculationMode && !preview && Boolean(error)) %>"
+  >
+    <section class="payments-condition-panel">
+      <header class="payments-condition-header">
+        <div>
+          <p class="eyebrow">割り勘</p>
+          <h2 id="payments-condition-title">支払い条件を入力</h2>
+        </div>
+        <button type="button" class="payments-dialog-close" data-close-payment-conditions aria-label="参加者と算出方法の選択へ戻る" title="参加者と算出方法の選択へ戻る">×</button>
+      </header>
+
+      <form id="split-preview-form" action="/groups/<%= group.id %>/payments/preview" method="post" class="payments-condition-form" data-split-preview-form>
+        <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
+        <input type="hidden" name="contextState" value="open">
+
+        <div class="payments-condition-body">
+          <% if (error && isCalculationMode && !preview) { %>
+            <p class="error-message payments-condition-error" role="alert"><%= error %></p>
+          <% } %>
+
+          <section class="payments-condition-selection" aria-label="選択済み条件">
+            <div><span>算出方法</span><strong data-condition-method-label><%= selectedMethodOption?.label ?? "未選択" %></strong></div>
+            <div><span>参加者</span><strong data-condition-participant-summary><%= splitDraft.participantIds.length %> 人</strong></div>
+          </section>
+
+          <div class="payments-condition-fields">
+            <label>
+              <span>支払い総額</span>
+              <input type="number" name="totalAmount" min="1" step="1" value="<%= splitDraft.totalAmount %>" required inputmode="numeric">
+            </label>
+            <label>
+              <span>実際の取引日</span>
+              <input type="date" name="transactionDate" value="<%= splitDraft.transactionDate %>" max="<%= today %>" required>
+            </label>
+            <label class="payments-condition-wide">
+              <span>内容・名目</span>
+              <textarea name="rawText" maxlength="500" rows="5" required><%= splitDraft.rawText %></textarea>
+            </label>
+            <label class="payments-condition-wide">
+              <span>カテゴリ</span>
+              <select name="category" required>
+                <option value="">選択してください</option>
+                <% groupPaymentCategories.forEach(category => { %><option value="<%= category %>" <%= splitDraft.category === category ? "selected" : "" %>><%= category %></option><% }) %>
+              </select>
+            </label>
+          </div>
+          <p class="form-help">試算だけではDBへ保存されません。条件を変更した場合は、必ず再試算してください。</p>
+        </div>
+
+        <footer class="payments-condition-footer">
+          <button type="button" class="secondary-button" data-close-payment-conditions>参加者・方式へ戻る</button>
+          <a href="<%= buildGroupPaymentsUrl(group.id, { pageId: selectedPage.id, contextState: 'open' }) %>" class="secondary-button button-link">算出を中止</a>
+          <button type="submit" class="primary-button" data-preview-submit disabled>負担額を試算</button>
+        </footer>
+      </form>
+    </section>
+  </dialog>
+
+  <% if (preview) { %>
+    <dialog class="payments-preview-dialog" aria-labelledby="payments-preview-title" aria-modal="true" data-payment-preview-dialog>
+      <section class="payments-preview-panel">
+        <header class="payments-preview-header"><div><p class="eyebrow">割り勘</p><h2 id="payments-preview-title">割り勘の試算結果</h2></div><span><%= preview.allocations.length %> 人</span></header>
+        <div class="payments-preview-body">
+          <dl class="payments-batch-definition payments-preview-definition">
+            <div><dt>取引日</dt><dd><%= new Date(splitDraft.transactionDate + "T00:00:00Z").toLocaleDateString("ja-JP") %></dd></div>
+            <div><dt>内容</dt><dd><span tabindex="0" data-payment-tooltip="<%= splitDraft.rawText %>"><%= splitDraft.rawText %></span></dd></div>
+            <div><dt>カテゴリ</dt><dd><%= splitDraft.category %></dd></div>
+            <div><dt>総額</dt><dd><strong><%= preview.totalAmount.toLocaleString("ja-JP") %> 円</strong></dd></div>
+            <div><dt>選択方式</dt><dd><%= preview.selectedMethodLabel %></dd></div>
+            <div><dt>実使用方式</dt><dd><strong><%= preview.usedMethodLabel %></strong></dd></div>
+            <div><dt>fallback</dt><dd><%= preview.fallbackReason ?? "なし" %></dd></div>
+          </dl>
+          <% if (preview.fallbackReason) { %><p class="payments-fallback-message" role="status"><strong>均等割へfallback</strong><br><%= preview.fallbackReason %></p><% } %>
+          <div class="payments-preview-table" role="table" aria-label="参加者別の試算結果">
+            <div class="payments-preview-table__heading" role="row"><span role="columnheader">参加者</span><span role="columnheader">算出前比率</span><span role="columnheader">正確値</span><span role="columnheader">負担額</span></div>
+            <div class="payments-preview-table__rows">
+              <% preview.allocations.forEach(allocation => { %><div class="payments-preview-table__row" role="row"><strong role="cell"><%= allocation.displayName %></strong><span role="cell"><%= allocation.ratioPercent.toLocaleString("ja-JP", { maximumFractionDigits: 2 }) %>%</span><span role="cell"><%= allocation.exactAmount.toLocaleString("ja-JP", { minimumFractionDigits: 2, maximumFractionDigits: 4 }) %> 円</span><strong role="cell"><%= allocation.amount.toLocaleString("ja-JP") %> 円</strong></div><% }) %>
+            </div>
+            <div class="payments-preview-table__total"><span>合計</span><strong><%= preview.allocations.reduce((sum, allocation) => sum + allocation.amount, 0).toLocaleString("ja-JP") %> 円</strong></div>
+          </div>
+          <form id="split-confirm-form" action="/groups/<%= group.id %>/payments/confirm" method="post" hidden>
+            <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>"><input type="hidden" name="contextState" value="open"><input type="hidden" name="totalAmount" value="<%= splitDraft.totalAmount %>"><input type="hidden" name="transactionDate" value="<%= splitDraft.transactionDate %>"><input type="hidden" name="rawText" value="<%= splitDraft.rawText %>"><input type="hidden" name="category" value="<%= splitDraft.category %>"><input type="hidden" name="calculationMethod" value="<%= splitDraft.calculationMethod %>"><input type="hidden" name="previewSignature" value="<%= previewSignature ?? '' %>"><% splitDraft.participantIds.forEach(participantId => { %><input type="hidden" name="participantIds" value="<%= participantId %>"><% }) %>
+          </form>
+          <p class="form-help" data-preview-stale-message hidden>条件を変更したため、この試算結果は古くなりました。もう一度試算してください。</p>
+          <p class="form-help">この試算結果はまだDBへ保存されていません。</p>
+        </div>
+        <footer class="payments-preview-footer">
+          <button type="button" class="secondary-button" data-edit-split-conditions>条件を修正</button>
+          <button type="submit" form="split-confirm-form" class="primary-button" data-preview-confirm-button>確認へ進む</button>
+          <a href="<%= buildGroupPaymentsUrl(group.id, { pageId: selectedPage.id, contextState: 'open' }) %>" class="secondary-button button-link" data-cancel-payment-preview>算出を中止</a>
+        </footer>
+      </section>
+    </dialog>
+  <% } %>
 
   <%- include("partials/transaction-add-overlay", {
     overlay: {
@@ -637,7 +473,7 @@
 
       if (lowerArea instanceof HTMLElement && toggle instanceof HTMLButtonElement && contextPanel instanceof HTMLElement) {
         const explicitState = lowerArea.dataset.contextState;
-        const initialOpen = explicitState === "open" || (explicitState !== "closed" && !window.matchMedia("(max-width: 760px)").matches);
+        const initialOpen = document.body.classList.contains("is-calculation-mode") || explicitState === "open";
         setContextOpen(initialOpen, explicitState === "open" || explicitState === "closed");
         toggle.addEventListener("click", () => setContextOpen(toggle.getAttribute("aria-expanded") !== "true"));
       }
@@ -646,18 +482,15 @@
       const splitForm = document.querySelector("[data-split-preview-form]");
       const startSplitButton = document.querySelector("[data-start-split]");
       const calculationActions = document.querySelector("[data-calculation-actions]");
+      const conditionOpenButton = document.querySelector("[data-open-payment-conditions]");
       const previewSubmit = document.querySelector("[data-preview-submit]");
       const participantInputs = [...document.querySelectorAll("[data-participant-input]")];
       const methodInputs = [...document.querySelectorAll("[data-calculation-method-input]")];
       const methodSummary = document.querySelector("[data-method-summary]");
-      const resultColumn = document.querySelector("[data-payment-result-column]");
       const previewConfirmButton = document.querySelector("[data-preview-confirm-button]");
       const previewStaleMessage = document.querySelector("[data-preview-stale-message]");
-      const previousBatchSummary = <%- JSON.stringify(latestBatch ? {
-        totalAmount: latestBatch.totalAmount,
-        calculationMethodLabel: latestBatch.calculationMethodLabel,
-      } : null) %>;
       const methodDescriptions = <%- JSON.stringify(Object.fromEntries(calculationMethodOptions.map(method => [method.value, method.description]))) %>;
+      const methodLabels = <%- JSON.stringify(Object.fromEntries(calculationMethodOptions.map(method => [method.value, method.label]))) %>;
 
       const invalidateRenderedPreview = () => {
         if (!(previewConfirmButton instanceof HTMLButtonElement)) return;
@@ -679,21 +512,29 @@
         if (methodSummary) {
           methodSummary.textContent = selectedMethod
             ? methodDescriptions[selectedMethod.value]
-            : "算出方法を選択すると、ここに要約を表示します。";
+            : "算出方法を選択してください。？を押すと、この欄に説明を表示します。";
         }
+        window.dispatchEvent(new CustomEvent("payments:selection-updated", {
+          detail: {
+            methodLabel: selectedMethod ? methodLabels[selectedMethod.value] : "未選択",
+            participantCount: participantInputs.filter((input) => input.checked).length,
+          },
+        }));
       };
 
       const updatePreviewAvailability = () => {
         if (!(splitForm instanceof HTMLFormElement) || !(previewSubmit instanceof HTMLButtonElement)) return;
         const hasParticipant = participantInputs.some((input) => input.checked);
         const hasMethod = methodInputs.some((input) => input.checked);
+        if (conditionOpenButton instanceof HTMLButtonElement) {
+          conditionOpenButton.disabled = !(hasParticipant && hasMethod);
+        }
         previewSubmit.disabled = !(splitForm.checkValidity() && hasParticipant && hasMethod);
       };
 
       const enterCalculationMode = () => {
         body.classList.add("is-calculation-mode");
         body.dataset.calculationMode = "true";
-        if (splitForm instanceof HTMLElement) splitForm.hidden = false;
         if (startSplitButton instanceof HTMLElement) startSplitButton.hidden = true;
         if (calculationActions instanceof HTMLElement) calculationActions.hidden = false;
         participantInputs.forEach((input) => { input.checked = true; });
@@ -704,28 +545,10 @@
           toggle.setAttribute("aria-label", "算出中は参加者領域を閉じられません");
           toggle.setAttribute("title", "算出中は参加者領域を閉じられません");
         }
-        if (resultColumn instanceof HTMLElement) {
-          const previousBatchDetails = previousBatchSummary
-            ? `<details class="payments-previous-batch-during-calculation">
-                <summary>前回確定分を確認</summary>
-                <p><strong>直近の確定済み割り勘</strong></p>
-                <p>${Number(previousBatchSummary.totalAmount).toLocaleString("ja-JP")} 円・${String(previousBatchSummary.calculationMethodLabel)}</p>
-              </details>`
-            : "";
-          resultColumn.innerHTML = `
-            <div class="panel-heading">
-              <div><p class="eyebrow">今回の試算</p><h2 id="payment-result-heading">今回の試算を準備中</h2></div>
-            </div>
-            <div class="payments-result-empty">
-              <strong>支払い情報、参加者、算出方法を指定してください。</strong>
-              <p>必要な項目が揃うと「負担額を試算」を実行できます。試算だけではDBへ保存されません。</p>
-            </div>
-            ${previousBatchDetails}`;
-        }
         updateCalculationSelections();
         updatePreviewAvailability();
-        const firstInput = splitForm?.querySelector("input:not([type='hidden'])");
-        if (firstInput instanceof HTMLElement) firstInput.focus();
+        const firstMethod = methodInputs[0];
+        if (firstMethod instanceof HTMLElement) firstMethod.focus();
       };
 
       startSplitButton?.addEventListener("click", enterCalculationMode);
@@ -746,13 +569,6 @@
           invalidateRenderedPreview();
         });
       });
-      document.querySelector("[data-edit-split-conditions]")?.addEventListener("click", () => {
-        invalidateRenderedPreview();
-        const firstInput = splitForm?.querySelector("input:not([type='hidden'])");
-        if (firstInput instanceof HTMLElement) firstInput.focus();
-        splitForm?.scrollIntoView({ behavior: "smooth", block: "center" });
-      });
-
       if (body.classList.contains("is-calculation-mode")) {
         setContextOpen(true);
         if (toggle instanceof HTMLButtonElement) {
@@ -790,16 +606,13 @@
       });
 
       document.querySelectorAll("[data-method-help]").forEach((button) => {
-        button.addEventListener("click", () => {
-          const controlledId = button.getAttribute("aria-controls");
-          const description = controlledId ? document.getElementById(controlledId) : null;
-          if (!description) return;
-          const willOpen = description.hidden;
-          document.querySelectorAll("[data-method-help]").forEach((other) => other.setAttribute("aria-expanded", "false"));
-          document.querySelectorAll(".payments-method-list p").forEach((item) => { item.hidden = true; });
-          description.hidden = !willOpen;
-          button.setAttribute("aria-expanded", String(willOpen));
-        });
+        const showDescription = () => {
+          if (!(methodSummary instanceof HTMLElement)) return;
+          methodSummary.textContent = button.getAttribute("data-method-description") || "算出方法の説明を確認できませんでした。";
+        };
+        button.addEventListener("click", showDescription);
+        button.addEventListener("pointerenter", showDescription);
+        button.addEventListener("focus", showDescription);
       });
 
       document.querySelectorAll("[data-open-payment-dialog]").forEach((button) => {
@@ -945,6 +758,9 @@
       window.addEventListener("scroll", hideTooltip, { passive: true, capture: true });
     })();
   </script>
+  <script src="/js/payment-charts.js" defer></script>
+  <script src="/js/payment-condition-overlay.js" defer></script>
+  <% if (preview) { %><script src="/js/payment-preview-overlay.js" defer></script><% } %>
   <script src="/js/transaction-overlay.js" defer></script>
   <script src="/js/ai-analysis-dialog.js" defer></script>
 </body>

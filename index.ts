@@ -65,6 +65,7 @@ import {
 } from "./src/transactions/group-fund-summary.js";
 import { buildFundVisualization } from "./src/transactions/fund-visualization.js";
 import { buildPersonalVisualization } from "./src/transactions/personal-visualization.js";
+import { buildGroupPaymentVisualization } from "./src/transactions/group-payment-visualization.js";
 
 type CalculationMethodValue =
   | "EQUAL"
@@ -1931,6 +1932,7 @@ async function loadGroupPaymentsPageData(groupId: number, requestedPageId: numbe
       left.userId - right.userId,
   );
   const historyTotal = transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+  const paymentVisualization = buildGroupPaymentVisualization(transactions);
 
   const latestBatch = latestBatchTransactions.length
     ? {
@@ -1962,6 +1964,7 @@ async function loadGroupPaymentsPageData(groupId: number, requestedPageId: numbe
     transactions,
     perPersonRows,
     historyTotal,
+    paymentVisualization,
     latestBatch,
   };
 }
