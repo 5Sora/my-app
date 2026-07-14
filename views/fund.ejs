@@ -30,7 +30,9 @@
   <link rel="stylesheet" href="/css/group.css">
   <link rel="stylesheet" href="/css/fund.css">
   <link rel="stylesheet" href="/css/app-shell.css">
+  <link rel="stylesheet" href="/css/ui-states.css">
   <link rel="stylesheet" href="/css/transaction-overlay.css">
+  <script src="/js/ui-accessibility.js" defer></script>
 </head>
 <body class="ledger-body fund-body">
   <%- include("partials/app-header", {
@@ -43,12 +45,12 @@
   }) %>
 
   <% if (error || success) { %>
-    <section class="flash-area" aria-live="polite">
+    <section class="flash-area" role="region" aria-label="操作結果" aria-live="polite" aria-atomic="true">
       <% if (error) { %>
-        <p class="error-message" role="alert"><%= error %></p>
+        <p class="error-message ui-state-message" data-ui-state="error" role="alert"><%= error %></p>
       <% } %>
       <% if (success) { %>
-        <p class="success-message" role="status"><%= success %></p>
+        <p class="success-message ui-state-message" data-ui-state="success" role="status"><%= success %></p>
       <% } %>
     </section>
   <% } %>
@@ -441,7 +443,7 @@
 
 
   <% if (isAdmin) { %>
-    <dialog class="fund-page-dialog" id="fund-page-add-dialog" aria-labelledby="fund-page-add-title">
+    <dialog class="fund-page-dialog" aria-modal="true" id="fund-page-add-dialog" aria-labelledby="fund-page-add-title">
       <form action="/groups/<%= group.id %>/fund/pages" method="post" class="page-form fund-dialog-form">
         <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
         <input type="hidden" name="contextState" value="<%= contextState %>" data-fund-context-state>
@@ -477,7 +479,7 @@
       </form>
     </dialog>
 
-    <dialog class="fund-page-dialog" id="fund-page-edit-dialog" aria-labelledby="fund-page-edit-title">
+    <dialog class="fund-page-dialog" aria-modal="true" id="fund-page-edit-dialog" aria-labelledby="fund-page-edit-title">
       <form action="/groups/<%= group.id %>/fund/pages/<%= selectedPage.id %>" method="post" class="page-form fund-dialog-form">
         <input type="hidden" name="contextState" value="<%= contextState %>" data-fund-context-state>
         <div class="fund-dialog-heading">

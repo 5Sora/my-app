@@ -14,7 +14,21 @@
   const suggestions = dialog.querySelector("[data-ai-analysis-suggestions]");
   const limitations = dialog.querySelector("[data-ai-analysis-limitations]");
   const disclaimer = dialog.querySelector("[data-ai-analysis-disclaimer]");
+  const content = dialog.querySelector("[data-ai-analysis-content]");
+  const closeButtons = [...dialog.querySelectorAll("[data-close-ai-analysis-dialog]")];
+  const title = dialog.querySelector("h2");
   const defaultButtonLabel = button.textContent?.trim() || "AI分析";
+
+  const setBusy = (busy) => {
+    if (content instanceof HTMLElement) content.setAttribute("aria-busy", String(busy));
+    dialog.setAttribute("aria-busy", String(busy));
+    button.classList.toggle("is-loading", busy);
+    button.setAttribute("aria-busy", String(busy));
+    closeButtons.forEach((control) => {
+      if (control instanceof HTMLButtonElement) control.disabled = busy;
+      control.setAttribute("aria-disabled", String(busy));
+    });
+  };
 
   const clear = (element) => {
     if (element instanceof HTMLElement) element.replaceChildren();
@@ -24,6 +38,7 @@
     if (status instanceof HTMLElement) {
       status.textContent = button.dataset.loadingMessage || "選択中のページを集計し、AIへ分析を依頼しています。";
       status.dataset.source = "LOADING";
+      status.dataset.uiState = "loading";
     }
     if (source instanceof HTMLElement) source.hidden = true;
     if (pageName instanceof HTMLElement) pageName.textContent = button.dataset.pageName || "選択中ページ";
@@ -44,6 +59,7 @@
     if (status instanceof HTMLElement) {
       status.textContent = payload.message || "分析結果を表示しました。";
       status.dataset.source = payload.source || "";
+      status.dataset.uiState = payload.source === "AI" ? "success" : "fallback";
     }
     if (source instanceof HTMLElement) {
       source.textContent = analysis.sourceLabel || (payload.source === "AI" ? "AI分析" : "自動集計（AI分析ではありません）");
@@ -126,6 +142,13 @@
 
     setLoading();
     dialog.showModal();
+    requestAnimationFrame(() => {
+      if (title instanceof HTMLElement) {
+        title.setAttribute("tabindex", "-1");
+        title.focus();
+      }
+    });
+    setBusy(true);
     button.disabled = true;
     button.textContent = "分析中…";
 
@@ -137,25 +160,37 @@
         body: JSON.stringify(requestBody),
       });
       const payload = await response.json().catch(() => null);
+      if (!response.ok && !payload?.analysis) {
+        throw new Error(payload?.message || "分析結果を取得できませんでした。");
+      }
       render(payload);
     } catch (error) {
       if (status instanceof HTMLElement) {
         status.textContent = error instanceof Error ? error.message : "分析結果を取得できませんでした。";
         status.dataset.source = "ERROR";
+        status.dataset.uiState = "error";
       }
       if (overview instanceof HTMLElement) {
         overview.textContent = "ページを再読み込みせず、時間をおいてもう一度お試しください。";
       }
     } finally {
+      setBusy(false);
       button.disabled = false;
       button.textContent = defaultButtonLabel;
     }
   });
 
   dialog.querySelectorAll("[data-close-ai-analysis-dialog]").forEach((closeButton) => {
-    closeButton.addEventListener("click", () => dialog.close());
+    closeButton.addEventListener("click", () => {
+      if (content?.getAttribute("aria-busy") === "true") return;
+      dialog.close();
+    });
   });
   dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) dialog.close();
+    if (event.target === dialog && content?.getAttribute("aria-busy") !== "true") dialog.close();
   });
+  dialog.addEventListener("cancel", (event) => {
+    if (content?.getAttribute("aria-busy") === "true") event.preventDefault();
+  });
+  dialog.addEventListener("close", () => button.focus());
 })();

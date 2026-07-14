@@ -17,7 +17,9 @@
   <link rel="stylesheet" href="/css/group.css">
   <link rel="stylesheet" href="/css/payments.css">
   <link rel="stylesheet" href="/css/app-shell.css">
+  <link rel="stylesheet" href="/css/ui-states.css">
   <link rel="stylesheet" href="/css/transaction-overlay.css">
+  <script src="/js/ui-accessibility.js" defer></script>
 </head>
 <body class="ledger-body payments-body<%= isCalculationMode ? ' is-calculation-mode' : '' %>" data-calculation-mode="<%= String(isCalculationMode) %>">
   <%- include("partials/app-header", {
@@ -30,9 +32,9 @@
   }) %>
 
   <% if (error || success) { %>
-    <section class="flash-area" aria-live="polite">
-      <% if (error) { %><p class="error-message" role="alert"><%= error %></p><% } %>
-      <% if (success) { %><p class="success-message" role="status"><%= success %></p><% } %>
+    <section class="flash-area" role="region" aria-label="操作結果" aria-live="polite" aria-atomic="true">
+      <% if (error) { %><p class="error-message ui-state-message" data-ui-state="error" role="alert"><%= error %></p><% } %>
+      <% if (success) { %><p class="success-message ui-state-message" data-ui-state="success" role="status"><%= success %></p><% } %>
     </section>
   <% } %>
 
@@ -250,7 +252,7 @@
 
         <div class="payments-condition-body">
           <% if (error && isCalculationMode && !preview) { %>
-            <p class="error-message payments-condition-error" role="alert"><%= error %></p>
+            <p class="error-message payments-condition-error ui-state-message" data-ui-state="error" role="alert"><%= error %></p>
           <% } %>
 
           <section class="payments-condition-selection" aria-label="選択済み条件">
@@ -305,7 +307,7 @@
             <div><dt>実使用方式</dt><dd><strong><%= preview.usedMethodLabel %></strong></dd></div>
             <div><dt>fallback</dt><dd><%= preview.fallbackReason ?? "なし" %></dd></div>
           </dl>
-          <% if (preview.fallbackReason) { %><p class="payments-fallback-message" role="status"><strong>均等割へfallback</strong><br><%= preview.fallbackReason %></p><% } %>
+          <% if (preview.fallbackReason) { %><p class="payments-fallback-message ui-state-message" data-ui-state="fallback" role="status"><strong>均等割へfallback</strong><br><%= preview.fallbackReason %></p><% } %>
           <div class="payments-preview-table" role="table" aria-label="参加者別の試算結果">
             <div class="payments-preview-table__heading" role="row"><span role="columnheader">参加者</span><span role="columnheader">算出前比率</span><span role="columnheader">正確値</span><span role="columnheader">負担額</span></div>
             <div class="payments-preview-table__rows">
@@ -349,7 +351,7 @@
   }) %>
 
   <% if (isAdmin) { %>
-    <dialog class="payments-page-dialog" id="payments-page-add-dialog" aria-labelledby="payments-page-add-title">
+    <dialog class="payments-page-dialog" aria-modal="true" id="payments-page-add-dialog" aria-labelledby="payments-page-add-title">
       <form action="/groups/<%= group.id %>/payments/pages" method="post" class="page-form payments-dialog-form">
         <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>">
         <input type="hidden" name="contextState" value="<%= contextState ?? '' %>" data-payment-context-state>
@@ -386,7 +388,7 @@
       </form>
     </dialog>
 
-    <dialog class="payments-page-dialog" id="payments-page-edit-dialog" aria-labelledby="payments-page-edit-title">
+    <dialog class="payments-page-dialog" aria-modal="true" id="payments-page-edit-dialog" aria-labelledby="payments-page-edit-title">
       <form action="/groups/<%= group.id %>/payments/pages/<%= selectedPage.id %>" method="post" class="page-form payments-dialog-form">
         <input type="hidden" name="contextState" value="<%= contextState ?? '' %>" data-payment-context-state>
 
@@ -539,7 +541,11 @@
         if (conditionOpenButton instanceof HTMLButtonElement) {
           conditionOpenButton.disabled = !(hasParticipant && hasMethod);
         }
-        previewSubmit.disabled = !(splitForm.checkValidity() && hasParticipant && hasMethod);
+        // Do not call checkValidity() during initial rendering because it fires
+        // invalid events and paints untouched fields red. Once participants and a
+        // method are selected, allow the user to attempt the preview; native
+        // validation and the shared accessibility layer then show errors.
+        previewSubmit.disabled = !(hasParticipant && hasMethod);
       };
 
       const enterCalculationMode = () => {

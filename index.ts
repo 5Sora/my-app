@@ -262,6 +262,18 @@ function requireAuthentication(req: Request, res: Response, next: NextFunction):
   next();
 }
 
+function requireAuthenticationForAiJson(req: Request, res: Response, next: NextFunction): void {
+  if (!req.session.userId) {
+    res.status(401).json({
+      ok: false,
+      code: "AUTH_REQUIRED",
+      message: "ログインしてください。",
+    });
+    return;
+  }
+  next();
+}
+
 function parsePositiveInteger(value: unknown): number | null {
   const text = String(value ?? "").trim();
   if (!/^\d+$/.test(text)) return null;
@@ -4732,7 +4744,7 @@ app.post("/app/fund-contributions", requireAuthentication, async (req, res, next
 
 app.post(
   "/api/ai/analyze-personal-ledger",
-  requireAuthentication,
+  requireAuthenticationForAiJson,
   express.json({ limit: "2kb" }),
   async (req, res) => {
     const userId = req.session.userId;
@@ -4832,7 +4844,7 @@ app.post(
 
 app.post(
   "/api/ai/analyze-group-payments",
-  requireAuthentication,
+  requireAuthenticationForAiJson,
   express.json({ limit: "2kb" }),
   async (req, res) => {
     const userId = req.session.userId;
@@ -4932,7 +4944,7 @@ app.post(
 
 app.post(
   "/api/ai/analyze-group-fund",
-  requireAuthentication,
+  requireAuthenticationForAiJson,
   express.json({ limit: "2kb" }),
   async (req, res) => {
     const userId = req.session.userId;
@@ -5085,7 +5097,7 @@ app.post(
 
 app.post(
   "/api/ai/classify-transaction",
-  requireAuthentication,
+  requireAuthenticationForAiJson,
   express.json({ limit: "4kb" }),
   async (req, res) => {
     const userId = req.session.userId;

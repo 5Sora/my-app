@@ -25,8 +25,15 @@
   const setStatus = (element, text, state = "") => {
     if (!(element instanceof HTMLElement)) return;
     element.textContent = text;
-    if (state) element.dataset.state = state;
-    else delete element.dataset.state;
+    if (state) {
+      element.dataset.state = state;
+      element.dataset.uiState = state;
+      element.setAttribute("role", state === "error" ? "alert" : "status");
+    } else {
+      delete element.dataset.state;
+      delete element.dataset.uiState;
+      element.setAttribute("role", "status");
+    }
   };
 
   document.querySelectorAll("[data-transaction-overlay]").forEach((dialog) => {
@@ -52,6 +59,7 @@
     const suggestionMessage = form.querySelector("[data-ai-message]");
     const fieldStatuses = form.querySelector("[data-ai-field-status]");
     const warningList = form.querySelector("[data-ai-warnings]");
+    const closeButtons = [...dialog.querySelectorAll("[data-close-transaction-overlay]")];
 
     let opener = null;
 
@@ -259,6 +267,7 @@
     };
 
     const resetOverlay = () => {
+      if (typeof window.appUiResetValidation === "function") window.appUiResetValidation(dialog);
       form.reset();
       form.dataset.submitting = "false";
       form.dataset.overlaySubmitting = "false";
@@ -271,6 +280,10 @@
       if (mode === "PERSONAL" && kindSelect instanceof HTMLSelectElement) applyTypeState();
       if (mode === "FUND") applyTypeState();
       if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
+      closeButtons.forEach((button) => {
+        if (button instanceof HTMLButtonElement) button.disabled = false;
+        button.setAttribute("aria-disabled", "false");
+      });
     };
 
     document.querySelectorAll(`[data-open-transaction-overlay="${dialog.id}"]`).forEach((button) => {
@@ -331,6 +344,11 @@
       }
       form.dataset.overlaySubmitting = "true";
       form.setAttribute("aria-busy", "true");
+      setStatus(status, "登録処理中です。この画面を閉じずにお待ちください。", "loading");
+      closeButtons.forEach((button) => {
+        if (button instanceof HTMLButtonElement) button.disabled = true;
+        button.setAttribute("aria-disabled", "true");
+      });
       if (submitButton instanceof HTMLButtonElement) {
         submitButton.disabled = true;
         submitButton.textContent = "登録中…";

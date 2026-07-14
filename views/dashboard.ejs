@@ -34,15 +34,17 @@
   <link rel="stylesheet" href="/css/ledger.css">
   <link rel="stylesheet" href="/css/group.css">
   <link rel="stylesheet" href="/css/app-shell.css">
+  <link rel="stylesheet" href="/css/ui-states.css">
   <link rel="stylesheet" href="/css/transaction-overlay.css">
+  <script src="/js/ui-accessibility.js" defer></script>
 </head>
 <body class="ledger-body personal-body">
   <%- include("partials/app-header", { header: { mode: "personal" } }) %>
 
   <% if (error || success) { %>
-    <section class="flash-area" aria-live="polite">
-      <% if (error) { %><p class="error-message" role="alert"><%= error %></p><% } %>
-      <% if (success) { %><p class="success-message" role="status"><%= success %></p><% } %>
+    <section class="flash-area" role="region" aria-label="操作結果" aria-live="polite" aria-atomic="true">
+      <% if (error) { %><p class="error-message ui-state-message" data-ui-state="error" role="alert"><%= error %></p><% } %>
+      <% if (success) { %><p class="success-message ui-state-message" data-ui-state="success" role="status"><%= success %></p><% } %>
     </section>
   <% } %>
 
@@ -273,7 +275,7 @@
     <input type="hidden" name="contextState" value="<%= contextState %>" data-personal-context-state>
   </form>
 
-  <dialog class="personal-dialog" id="personal-page-add-dialog" aria-labelledby="personal-page-add-title">
+  <dialog class="personal-dialog" aria-modal="true" id="personal-page-add-dialog" aria-labelledby="personal-page-add-title">
     <form action="/app/pages" method="post" class="page-form personal-dialog-form">
       <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>"><input type="hidden" name="contextState" value="<%= contextState %>" data-personal-context-state>
       <div class="personal-dialog-heading"><div><p class="eyebrow">LedgerPage管理</p><h2 id="personal-page-add-title">表示ページを追加</h2></div><button type="button" class="personal-dialog-close" data-close-personal-dialog aria-label="閉じる">×</button></div>
@@ -284,7 +286,7 @@
     </form>
   </dialog>
 
-  <dialog class="personal-dialog" id="personal-page-edit-dialog" aria-labelledby="personal-page-edit-title">
+  <dialog class="personal-dialog" aria-modal="true" id="personal-page-edit-dialog" aria-labelledby="personal-page-edit-title">
     <form action="/app/pages/<%= selectedPage.id %>" method="post" class="page-form personal-dialog-form">
       <input type="hidden" name="contextState" value="<%= contextState %>" data-personal-context-state>
       <div class="personal-dialog-heading"><div><p class="eyebrow">LedgerPage管理</p><h2 id="personal-page-edit-title">選択中ページを編集</h2></div><button type="button" class="personal-dialog-close" data-close-personal-dialog aria-label="閉じる">×</button></div>
@@ -295,7 +297,7 @@
     </form>
   </dialog>
 
-  <dialog class="personal-dialog" id="personal-group-add-dialog" aria-labelledby="personal-group-add-title">
+  <dialog class="personal-dialog" aria-modal="true" id="personal-group-add-dialog" aria-labelledby="personal-group-add-title">
     <form action="/groups" method="post" class="page-form personal-dialog-form">
       <input type="hidden" name="contextState" value="<%= contextState %>">
       <div class="personal-dialog-heading"><div><p class="eyebrow">グループ</p><h2 id="personal-group-add-title">新しいグループを作成</h2></div><button type="button" class="personal-dialog-close" data-close-personal-dialog aria-label="閉じる">×</button></div>

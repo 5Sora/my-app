@@ -1,0 +1,145 @@
+:root {
+  --ui-focus: #1859a9;
+  --ui-error: #a61b1b;
+  --ui-error-soft: #fff1f1;
+  --ui-warning: #765000;
+  --ui-warning-soft: #fff8df;
+  --ui-success: #146b43;
+  --ui-success-soft: #eef9f3;
+  --ui-fallback: #475467;
+  --ui-fallback-soft: #f2f4f7;
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+
+:where(button, input, select, textarea):disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed !important;
+  opacity: 0.58;
+  filter: grayscale(0.18);
+}
+
+[aria-busy="true"] {
+  cursor: progress;
+}
+
+body[data-modal-open="true"] {
+  overflow: hidden;
+}
+
+.ui-live-region {
+  position: fixed !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.ui-state-message {
+  border-left: 4px solid currentColor;
+  padding: 10px 12px;
+  line-height: 1.55;
+}
+
+.ui-state-message[data-ui-state="success"] {
+  color: var(--ui-success);
+  background: var(--ui-success-soft);
+}
+
+.ui-state-message[data-ui-state="error"] {
+  color: var(--ui-error);
+  background: var(--ui-error-soft);
+}
+
+.ui-state-message[data-ui-state="warning"] {
+  color: var(--ui-warning);
+  background: var(--ui-warning-soft);
+}
+
+.ui-state-message[data-ui-state="fallback"] {
+  color: var(--ui-fallback);
+  background: var(--ui-fallback-soft);
+}
+
+.ui-state-message[data-ui-state="loading"] {
+  color: #1859a9;
+  background: #eef5ff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ui-state-message[data-ui-state="loading"]::before,
+[data-ai-analysis-button].is-loading::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: ui-spinner 0.8s linear infinite;
+}
+
+[data-ai-analysis-button].is-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #1859a9;
+  background: #eef5ff;
+  border-color: #8ab4e8;
+  opacity: 1;
+}
+
+@keyframes ui-spinner {
+  to { transform: rotate(360deg); }
+}
+
+.ui-validation-summary,
+.ui-field-error {
+  color: var(--ui-error);
+  background: var(--ui-error-soft);
+}
+
+.ui-validation-summary {
+  margin: 0 0 14px;
+  border-left: 4px solid var(--ui-error);
+  padding: 10px 12px;
+  font-weight: 700;
+}
+
+.ui-field-error {
+  display: block;
+  margin-top: 5px;
+  padding: 5px 7px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+[aria-invalid="true"] {
+  border-color: var(--ui-error) !important;
+  box-shadow: 0 0 0 1px var(--ui-error);
+}
+
+dialog[data-dialog-submitting="true"]::backdrop {
+  cursor: progress;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

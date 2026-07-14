@@ -2,9 +2,10 @@
   class="dashboard-dialog ai-analysis-dialog"
   id="<%= analysisDialog.id %>"
   data-ai-analysis-dialog
+  aria-modal="true"
   aria-labelledby="<%= analysisDialog.id %>-title"
 >
-  <section class="dashboard-dialog-form ai-analysis-content">
+  <section class="dashboard-dialog-form ai-analysis-content" data-ai-analysis-content>
     <div class="dashboard-dialog-heading">
       <div>
         <p class="eyebrow"><%= analysisDialog.eyebrow %></p>
@@ -18,7 +19,7 @@
       <p><strong>期間:</strong> <span data-ai-analysis-period>集計中</span></p>
     </div>
 
-    <p class="ai-analysis-status" data-ai-analysis-status role="status" aria-live="polite">AI分析を開始します。</p>
+    <p class="ai-analysis-status ui-state-message" data-ui-state="loading" data-ai-analysis-status role="status" aria-live="polite" aria-atomic="true">AI分析を開始します。</p>
     <span class="ai-analysis-source" data-ai-analysis-source hidden></span>
 
     <section class="ai-analysis-section">

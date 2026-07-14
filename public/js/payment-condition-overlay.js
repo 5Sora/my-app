@@ -7,7 +7,7 @@
 
   const methodLabel = dialog.querySelector("[data-condition-method-label]");
   const participantSummary = dialog.querySelector("[data-condition-participant-summary]");
-  const closeButtons = dialog.querySelectorAll("[data-close-payment-conditions]");
+  const closeButtons = [...dialog.querySelectorAll("[data-close-payment-conditions]")];
   let returnTarget = openButton instanceof HTMLElement ? openButton : null;
 
   const focusFirstField = () => {
@@ -15,9 +15,14 @@
     if (firstField instanceof HTMLElement) firstField.focus();
   };
 
+  const resetValidation = () => {
+    if (typeof window.appUiResetValidation === "function") window.appUiResetValidation(dialog);
+  };
+
   const openDialog = (trigger = null) => {
     if (form.dataset.submitting === "true") return;
     if (trigger instanceof HTMLElement) returnTarget = trigger;
+    resetValidation();
     if (!dialog.open) dialog.showModal();
     focusFirstField();
   };
@@ -34,6 +39,21 @@
 
   closeButtons.forEach((button) => button.addEventListener("click", closeDialog));
 
+  const syncSubmitting = () => {
+    const submitting = form.dataset.submitting === "true";
+    closeButtons.forEach((button) => {
+      if (button instanceof HTMLButtonElement) button.disabled = submitting;
+      button.setAttribute("aria-disabled", String(submitting));
+    });
+    dialog.dataset.dialogSubmitting = String(submitting);
+  };
+
+  new MutationObserver(syncSubmitting).observe(form, {
+    attributes: true,
+    attributeFilter: ["data-submitting", "aria-busy"],
+  });
+  syncSubmitting();
+
   dialog.addEventListener("cancel", (event) => {
     if (form.dataset.submitting === "true") {
       event.preventDefault();
@@ -41,6 +61,7 @@
   });
 
   dialog.addEventListener("close", () => {
+    resetValidation();
     if (returnTarget instanceof HTMLElement) returnTarget.focus();
   });
 

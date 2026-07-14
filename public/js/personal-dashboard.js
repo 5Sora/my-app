@@ -221,6 +221,7 @@
 
   const tooltip = document.createElement("div");
   tooltip.className = "personal-ledger-tooltip";
+  tooltip.setAttribute("role", "tooltip");
   tooltip.hidden = true;
   document.body.append(tooltip);
   document.querySelectorAll("[data-personal-ledger-tooltip]").forEach((target) => {

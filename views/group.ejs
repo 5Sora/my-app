@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="/css/ledger.css">
   <link rel="stylesheet" href="/css/group.css">
   <link rel="stylesheet" href="/css/app-shell.css">
+  <link rel="stylesheet" href="/css/ui-states.css">
+  <script src="/js/ui-accessibility.js" defer></script>
 </head>
 <body class="ledger-body">
   <%- include("partials/app-header", {
@@ -19,12 +21,12 @@
   }) %>
 
   <% if (error || success) { %>
-    <section class="flash-area" aria-live="polite">
+    <section class="flash-area" role="region" aria-label="操作結果" aria-live="polite" aria-atomic="true">
       <% if (error) { %>
-        <p class="error-message" role="alert"><%= error %></p>
+        <p class="error-message ui-state-message" data-ui-state="error" role="alert"><%= error %></p>
       <% } %>
       <% if (success) { %>
-        <p class="success-message" role="status"><%= success %></p>
+        <p class="success-message ui-state-message" data-ui-state="success" role="status"><%= success %></p>
       <% } %>
     </section>
   <% } %>
@@ -107,7 +109,7 @@
             </div>
           </dl>
         <% } else { %>
-          <p class="error-message" role="alert">このグループの基金が見つかりません。</p>
+          <p class="error-message ui-state-message" data-ui-state="error" role="alert">このグループの基金が見つかりません。</p>
         <% } %>
 
         <% const fundPage = ledgerPages.find(page => page.pageType === "GROUP_FUND"); %>
