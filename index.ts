@@ -63,6 +63,7 @@ import {
   buildGroupFundAnalysisBundle,
   type GroupFundTransactionKind,
 } from "./src/transactions/group-fund-summary.js";
+import { buildFundVisualization } from "./src/transactions/fund-visualization.js";
 
 type CalculationMethodValue =
   | "EQUAL"
@@ -3099,6 +3100,7 @@ app.get("/groups/:groupId/fund", requireAuthentication, async (req, res, next) =
       0,
     );
     const balance = carryover + incomeTotal - expenseTotal;
+    const fundVisualization = buildFundVisualization(transactions);
     const error = typeof req.query.error === "string" ? req.query.error : null;
     const success = typeof req.query.success === "string" ? req.query.success : null;
     const contextState = parseFundContextState(req.query.context);
@@ -3119,6 +3121,7 @@ app.get("/groups/:groupId/fund", requireAuthentication, async (req, res, next) =
         expenseTotal,
         balance,
       },
+      fundVisualization,
       error,
       success,
       isAdmin: membership.role === "ADMIN",

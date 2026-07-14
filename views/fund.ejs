@@ -1,4 +1,25 @@
 <!DOCTYPE html>
+<%
+  const fundVisualizationView = typeof fundVisualization !== "undefined" && fundVisualization
+    ? fundVisualization
+    : {
+        incomeComposition: [],
+        totals: {
+          internalContribution: 0,
+          externalIncome: 0,
+          income: 0,
+          fundExpense: 0,
+          refund: 0,
+          expense: 0,
+        },
+        barScale: {
+          incomePercent: 0,
+          expensePercent: 0,
+          internalSharePercent: 0,
+          externalSharePercent: 0,
+        },
+      };
+%>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -58,22 +79,79 @@
         </div>
       </article>
 
-      <article class="panel fund-insight-card" aria-label="基金収入構成とAI分析">
-        <div>
-          <p class="eyebrow">基金収入構成</p>
-          <h2>収入構成・AI分析</h2>
-          <p class="ai-analysis-launch-copy">選択中ページの基金収支・内部拠出・外部収入・匿名化した拠出構造だけを外部AIへ送ります。</p>
+      <article class="panel fund-insight-card" aria-labelledby="fund-income-composition-title" data-fund-income-chart>
+        <div class="fund-insight-heading">
+          <div>
+            <p class="eyebrow">基金収入構成</p>
+            <h2 id="fund-income-composition-title">内部拠出・外部収入</h2>
+          </div>
+          <button
+            type="button"
+            class="secondary-button fund-ai-analysis-button"
+            data-ai-analysis-button
+            data-endpoint="/api/ai/analyze-group-fund"
+            data-group-id="<%= group.id %>"
+            data-page-id="<%= selectedPage.id %>"
+            data-page-name="<%= selectedPage.name %>"
+            data-loading-message="選択中の基金ページを集計し、匿名化した拠出構造をAIへ分析依頼しています。"
+          >AI分析</button>
         </div>
-        <button
-          type="button"
-          class="secondary-button"
-          data-ai-analysis-button
-          data-endpoint="/api/ai/analyze-group-fund"
-          data-group-id="<%= group.id %>"
-          data-page-id="<%= selectedPage.id %>"
-          data-page-name="<%= selectedPage.name %>"
-          data-loading-message="選択中の基金ページを集計し、匿名化した拠出構造をAIへ分析依頼しています。"
-        >AI分析</button>
+
+        <% if (fundVisualizationView.totals.income > 0) { %>
+          <div class="fund-income-chart">
+            <div class="fund-income-chart__visual">
+              <svg
+                class="fund-income-chart__pie"
+                viewBox="0 0 100 100"
+                role="img"
+                aria-label="選択期間の基金収入構成。合計 <%= fundVisualizationView.totals.income.toLocaleString("ja-JP") %> 円"
+                data-fund-pie
+              >
+                <circle class="fund-income-chart__track" cx="50" cy="50" r="38" pathLength="100"></circle>
+                <g data-fund-pie-segments></g>
+              </svg>
+              <div class="fund-income-chart__center" aria-hidden="true">
+                <span>収入</span>
+                <strong><%= fundVisualizationView.totals.income.toLocaleString("ja-JP") %></strong>
+                <small>円</small>
+              </div>
+            </div>
+
+            <div class="fund-income-chart__legend" aria-label="基金収入構成の凡例">
+              <ul>
+                <% fundVisualizationView.incomeComposition.forEach(item => { %>
+                  <li>
+                    <button
+                      type="button"
+                      class="fund-income-chart__legend-item"
+                      style="--chart-color: <%= item.color %>"
+                      data-fund-chart-item="<%= item.key %>"
+                      aria-label="<%= item.label %>、<%= item.sourceTypeLabel %>、<%= item.amount.toLocaleString("ja-JP") %>円、<%= item.percentage %>パーセント"
+                    >
+                      <span class="fund-income-chart__swatch" aria-hidden="true"></span>
+                      <span class="fund-income-chart__legend-name">
+                        <strong><%= item.label %></strong>
+                        <small><%= item.sourceTypeLabel %></small>
+                      </span>
+                      <span class="fund-income-chart__legend-value">
+                        <strong><%= item.amount.toLocaleString("ja-JP") %> 円</strong>
+                        <small><%= item.percentage.toFixed(1) %>%</small>
+                      </span>
+                    </button>
+                  </li>
+                <% }) %>
+              </ul>
+            </div>
+          </div>
+          <div class="fund-income-chart__tooltip" role="tooltip" hidden data-fund-chart-tooltip></div>
+        <% } else { %>
+          <div class="fund-chart-empty" role="status">
+            <strong>表示できる基金収入がありません</strong>
+            <span>選択期間に内部拠出または外部収入が登録されると、ここに構成を表示します。</span>
+          </div>
+        <% } %>
+
+        <script type="application/json" data-fund-income-chart-data><%- JSON.stringify(fundVisualizationView.incomeComposition).replace(/</g, "\u003c") %></script>
       </article>
     </section>
 
@@ -170,13 +248,58 @@
       >−</button>
     </aside>
 
-    <aside class="panel fund-collapsed-column" aria-hidden="true">
-      <p class="eyebrow">期間比較</p>
-      <h2>収入・支出</h2>
-      <dl class="fund-collapsed-metrics">
-        <div><dt>収入</dt><dd class="income-text"><%= summary.incomeTotal.toLocaleString("ja-JP") %> 円</dd></div>
-        <div><dt>支出</dt><dd class="expense-text"><%= summary.expenseTotal.toLocaleString("ja-JP") %> 円</dd></div>
-      </dl>
+    <aside class="panel fund-collapsed-column" aria-hidden="<%= String(isContextOpen) %>">
+      <div class="fund-bar-chart-heading">
+        <div>
+          <p class="eyebrow">期間比較</p>
+          <h2>収入・支出</h2>
+        </div>
+        <small>選択期間</small>
+      </div>
+
+      <% if (fundVisualizationView.totals.income > 0 || fundVisualizationView.totals.expense > 0) { %>
+        <div
+          class="fund-bar-chart"
+          role="img"
+          aria-label="基金収入 <%= fundVisualizationView.totals.income.toLocaleString("ja-JP") %> 円、基金支出 <%= fundVisualizationView.totals.expense.toLocaleString("ja-JP") %> 円"
+        >
+          <div class="fund-bar-chart__plot" aria-hidden="true">
+            <section class="fund-bar-chart__column">
+              <span class="fund-bar-chart__value income-text"><%= fundVisualizationView.totals.income.toLocaleString("ja-JP") %> 円</span>
+              <div class="fund-bar-chart__track">
+                <div class="fund-bar-chart__income" style="height: <%= fundVisualizationView.barScale.incomePercent %>%">
+                  <% if (fundVisualizationView.totals.internalContribution > 0) { %>
+                    <span class="fund-bar-chart__internal" style="height: <%= fundVisualizationView.barScale.internalSharePercent %>%"></span>
+                  <% } %>
+                  <% if (fundVisualizationView.totals.externalIncome > 0) { %>
+                    <span class="fund-bar-chart__external" style="height: <%= fundVisualizationView.barScale.externalSharePercent %>%"></span>
+                  <% } %>
+                </div>
+              </div>
+              <strong class="fund-bar-chart__category">収入</strong>
+            </section>
+
+            <section class="fund-bar-chart__column">
+              <span class="fund-bar-chart__value expense-text"><%= fundVisualizationView.totals.expense.toLocaleString("ja-JP") %> 円</span>
+              <div class="fund-bar-chart__track">
+                <div class="fund-bar-chart__expense" style="height: <%= fundVisualizationView.barScale.expensePercent %>%"></div>
+              </div>
+              <strong class="fund-bar-chart__category">支出</strong>
+            </section>
+          </div>
+        </div>
+
+        <dl class="fund-bar-chart__legend">
+          <div><dt><span class="fund-bar-chart__key is-internal"></span>内部拠出</dt><dd><%= fundVisualizationView.totals.internalContribution.toLocaleString("ja-JP") %> 円</dd></div>
+          <div><dt><span class="fund-bar-chart__key is-external"></span>外部収入</dt><dd><%= fundVisualizationView.totals.externalIncome.toLocaleString("ja-JP") %> 円</dd></div>
+          <div><dt><span class="fund-bar-chart__key is-expense"></span>基金支出・返金</dt><dd><%= fundVisualizationView.totals.expense.toLocaleString("ja-JP") %> 円</dd></div>
+        </dl>
+      <% } else { %>
+        <div class="fund-chart-empty is-compact" role="status">
+          <strong>比較できる取引がありません</strong>
+          <span>選択期間に収入または支出が登録されると棒グラフを表示します。</span>
+        </div>
+      <% } %>
     </aside>
 
     <section class="panel transaction-panel fund-transaction-panel">
@@ -663,6 +786,7 @@
       const layout = document.querySelector("[data-fund-layout]");
       const toggle = document.querySelector("[data-fund-context-toggle]");
       const context = document.getElementById("fund-context-panel");
+      const collapsedSummary = document.querySelector(".fund-collapsed-column");
       const stateInputs = document.querySelectorAll("[data-fund-context-state]");
       const stateLinks = document.querySelectorAll("[data-fund-context-link]");
 
@@ -675,6 +799,7 @@
         toggle.setAttribute("aria-label", isOpen ? "左領域を閉じる" : "左領域を開く");
         toggle.setAttribute("title", isOpen ? "左領域を閉じる" : "左領域を開く");
         context.setAttribute("aria-hidden", String(!isOpen));
+        collapsedSummary?.setAttribute("aria-hidden", String(isOpen));
 
         const contextState = isOpen ? "open" : "closed";
         stateInputs.forEach((input) => {
@@ -883,6 +1008,7 @@
       });
     })();
   </script>
+  <script src="/js/fund-charts.js" defer></script>
   <script src="/js/ai-analysis-dialog.js" defer></script>
 </body>
 </html>
