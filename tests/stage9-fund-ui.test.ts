@@ -16,6 +16,7 @@ test("Stage 9-2 fund page renders the integrated income pie, persistent legend, 
   assert.match(view, /fundVisualizationView\.incomeComposition\.forEach/);
   assert.match(view, /内部拠出・外部収入/);
   assert.match(view, /表示できる基金収入がありません/);
+  assert.doesNotMatch(view, /data-fund-chart-mode-help/);
   assert.match(view, /\/js\/fund-charts\.js/);
 
   assert.match(css, /\.fund-income-chart__legend\s*\{[\s\S]*overflow-y: auto/);
@@ -46,8 +47,11 @@ test("Stage 9-2 closed fund context shows a vertical two-column comparison with 
   assert.match(view, /基金支出・返金/);
   assert.match(view, /collapsedSummary\?\.setAttribute\("aria-hidden", String\(isOpen\)\)/);
 
+  assert.match(css, /\.fund-bar-chart__plot\s*\{[\s\S]*min-height: clamp\(230px, 32vh, 300px\)/);
   assert.match(css, /\.fund-bar-chart__plot\s*\{[\s\S]*grid-template-columns: repeat\(2,/);
+  assert.match(css, /\.fund-bar-chart__track\s*\{[\s\S]*width: min\(68px, 78%\)/);
   assert.match(css, /\.fund-bar-chart__track\s*\{[\s\S]*align-items: flex-end/);
+  assert.match(css, /@media \(max-width: 820px\) \{[\s\S]*\.fund-bar-chart__plot \{[\s\S]*min-height: 190px/);
   assert.match(css, /\.fund-bar-chart__income\s*\{[\s\S]*flex-direction: column;/);
   assert.match(css, /\.fund-bar-chart__internal\s*\{[\s\S]*background: #9fbe8f/);
   assert.match(css, /\.fund-bar-chart__external\s*\{[\s\S]*background: #245a8d/);

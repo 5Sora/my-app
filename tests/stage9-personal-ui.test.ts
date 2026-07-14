@@ -34,4 +34,6 @@ test("Stage 9-3 transaction addition is exposed from the history heading and cat
   assert.match(dashboard, /data-personal-chart-mode="income"/);
   assert.match(chartJs, /render\("expense"\)/);
   assert.match(dashboardJs, /data-personal-context-state/);
+  assert.match(ledgerCss, /\.personal-bar-chart__plot\s*\{[\s\S]*min-height: clamp\(230px, 32vh, 300px\)/);
+  assert.match(ledgerCss, /@media \(max-width: 820px\) \{[\s\S]*\.personal-bar-chart__plot \{[\s\S]*min-height: 190px/);
 });
