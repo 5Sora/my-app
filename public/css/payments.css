@@ -1546,12 +1546,15 @@
   }
 }
 
-/* Stage 9-5A: fixed method summary and large payment-condition overlay. */
+/* Stage 9-5A: compact method summary and large payment-condition overlay. */
 .payments-method-summary {
-  min-height: 52px;
-  max-height: 72px;
+  min-height: 34px;
+  max-height: 48px;
+  margin-bottom: 6px;
+  padding: 6px 9px;
   overflow-y: auto;
   scrollbar-gutter: stable;
+  line-height: 1.35;
 }
 
 .payments-method-help {

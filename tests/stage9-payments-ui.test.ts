@@ -35,6 +35,7 @@ test("Stage 9-5 moves the latest confirmed batch into the closed 3-of-12 card an
   const view = await read("views/payments.ejs");
   assert.match(view, /payments-latest-batch/);
   assert.match(view, /最新の確定割り勘/);
+  assert.match(view, /直近の割り勘/);
   assert.match(view, /payments-latest-allocation-list/);
   assert.match(view, /payments-history-panel/);
   assert.match(view, /時系列/);

@@ -14,7 +14,7 @@ test("Stage 9-5A keeps method explanations in one fixed summary region without e
   assert.match(view, /data-method-description=/);
   assert.match(view, /pointerenter/);
   assert.doesNotMatch(view, /payments-method-description/);
-  assert.match(css, /payments-method-summary[\s\S]*max-height: 72px[\s\S]*overflow-y: auto/);
+  assert.match(css, /payments-method-summary[\s\S]*min-height: 34px[\s\S]*max-height: 48px[\s\S]*overflow-y: auto/);
 });
 
 test("Stage 9-5A moves payment amount, date, description, and category into a large condition dialog", async () => {

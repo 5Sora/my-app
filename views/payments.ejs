@@ -178,7 +178,7 @@
       </aside>
 
       <aside class="panel payments-latest-batch">
-        <div class="panel-heading compact"><div><p class="eyebrow">最新の確定割り勘</p><h2>直近batch</h2></div><% if (latestBatch) { %><span><%= latestBatch.allocations.length %> 人</span><% } %></div>
+        <div class="panel-heading compact"><div><p class="eyebrow">最新の確定割り勘</p><h2>直近の割り勘</h2></div><% if (latestBatch) { %><span><%= latestBatch.allocations.length %> 人</span><% } %></div>
         <% if (!latestBatch) { %>
           <div class="payments-result-empty"><strong>確定済みの割り勘はありません。</strong><p>割り勘を確定すると、直近結果をここに表示します。</p></div>
         <% } else { %>
