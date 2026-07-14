@@ -1,4 +1,30 @@
 <!DOCTYPE html>
+<%
+  const personalVisualizationView = typeof personalVisualization !== "undefined" && personalVisualization
+    ? personalVisualization
+    : {
+        incomeComposition: [],
+        expenseComposition: [],
+        totals: { income: 0, expense: 0 },
+        barScale: { incomePercent: 0, expensePercent: 0 },
+      };
+  const carryoverIsIncomeSide = summary.carryover >= 0;
+  const balanceIsIncomeSide = summary.balance >= 0;
+  const carryoverDateLabel = selectedPage.startDate
+    ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP")
+    : "開始時";
+  const balanceDateLabel = selectedPage.endDate
+    ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP")
+    : "現在";
+  const kindLabels = {
+    PERSONAL_INCOME: "個人収入",
+    PERSONAL_EXPENSE: "個人支出",
+    GROUP_PAYMENT: "グループ関連支出",
+    FUND_CONTRIBUTION: "基金拠出",
+    FUND_REFUND: "基金返金",
+  };
+  const sourceLabels = { MANUAL: "手動", KEYWORD: "キーワード", AI: "AI" };
+%>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -9,641 +35,290 @@
   <link rel="stylesheet" href="/css/group.css">
   <link rel="stylesheet" href="/css/app-shell.css">
 </head>
-<body class="ledger-body">
-  <%- include("partials/app-header", {
-    header: { mode: "personal" }
-  }) %>
+<body class="ledger-body personal-body">
+  <%- include("partials/app-header", { header: { mode: "personal" } }) %>
 
   <% if (error || success) { %>
     <section class="flash-area" aria-live="polite">
-      <% if (error) { %>
-        <p class="error-message" role="alert"><%= error %></p>
-      <% } %>
-      <% if (success) { %>
-        <p class="success-message" role="status"><%= success %></p>
-      <% } %>
+      <% if (error) { %><p class="error-message" role="alert"><%= error %></p><% } %>
+      <% if (success) { %><p class="success-message" role="status"><%= success %></p><% } %>
     </section>
   <% } %>
 
-  <section class="summary-grid" aria-label="収支サマリー">
-    <article class="summary-card">
-      <span>繰越金</span>
-      <strong><%= summary.carryover.toLocaleString("ja-JP") %> 円</strong>
-    </article>
-    <article class="summary-card income-card">
-      <span>収入</span>
-      <strong><%= summary.incomeTotal.toLocaleString("ja-JP") %> 円</strong>
-    </article>
-    <article class="summary-card expense-card">
-      <span>支出</span>
-      <strong><%= summary.expenseTotal.toLocaleString("ja-JP") %> 円</strong>
-    </article>
-    <article class="summary-card balance-card">
-      <span>残高</span>
-      <strong><%= summary.balance.toLocaleString("ja-JP") %> 円</strong>
-    </article>
-  </section>
-
-  <section class="ai-analysis-launch" aria-label="個人家計簿AI分析">
-    <div>
-      <p class="eyebrow">集計説明</p>
-      <p class="ai-analysis-launch-copy">選択中のページの集計値だけを外部AI（OpenAI）へ送り、収支の傾向を説明します。個別取引の内容や氏名は送りません。</p>
-    </div>
-    <button
-      type="button"
-      class="secondary-button"
-      data-ai-analysis-button
-      data-endpoint="/api/ai/analyze-personal-ledger"
-      data-page-id="<%= selectedPage.id %>"
-      data-page-name="<%= selectedPage.name %>"
-    >AI分析</button>
-  </section>
-
-  <main class="ledger-layout">
-    <aside class="ledger-sidebar">
-      <section class="panel page-management-panel">
-        <div class="panel-heading compact">
-          <div>
-            <p class="eyebrow">ページ管理</p>
-            <h2>表示ページ</h2>
-          </div>
-          <span><%= pages.length %> 件</span>
-        </div>
-
-        <nav class="page-list" aria-label="個人家計簿ページ">
-          <% pages.forEach(page => { %>
-            <a
-              href="/app?pageId=<%= page.id %>"
-              class="<%= page.id === selectedPage.id ? 'is-active' : '' %>"
-            >
-              <span>
-                <strong><%= page.name %></strong>
-              </span>
-              <% if (page.isInitial) { %><small class="initial-badge">初期</small><% } %>
-            </a>
-          <% }) %>
-        </nav>
-
-        <details class="page-action">
-          <summary>＋ 新しいページを追加</summary>
-          <form action="/app/pages" method="post" class="page-form">
-            <input
-              type="hidden"
-              name="currentPageId"
-              value="<%= selectedPage.id %>"
-            >
-
-            <label>
-              <span>ページ名</span>
-              <input type="text" name="name" maxlength="100" required>
-            </label>
-
-            <div class="date-pair">
-              <label>
-                <span>開始日</span>
-                <input type="date" name="startDate">
-              </label>
-              <label>
-                <span>終了日</span>
-                <input type="date" name="endDate">
-              </label>
-            </div>
-
-            <p class="form-help">日付を空欄にすると、その方向の期間を制限しません。</p>
-            <button type="submit" class="primary-button">ページを追加</button>
-          </form>
-        </details>
-
-        <details class="page-action">
-          <summary>⚙ 選択中ページを編集</summary>
-          <form
-            action="/app/pages/<%= selectedPage.id %>"
-            method="post"
-            class="page-form"
-          >
-            <label>
-              <span>ページ名</span>
-              <input
-                type="text"
-                name="name"
-                value="<%= selectedPage.name %>"
-                maxlength="100"
-                required
-              >
-            </label>
-
-            <div class="date-pair">
-              <label>
-                <span>開始日</span>
-                <input
-                  type="date"
-                  name="startDate"
-                  value="<%= selectedPageForm.startDate %>"
-                >
-              </label>
-              <label>
-                <span>終了日</span>
-                <input
-                  type="date"
-                  name="endDate"
-                  value="<%= selectedPageForm.endDate %>"
-                >
-              </label>
-            </div>
-
-            <p class="form-help">
-              初期ページも名前と期間は編集できます。
-            </p>
-            <button type="submit" class="primary-button">変更を保存</button>
-          </form>
-        </details>
-
-        <form
-          action="/app/pages/<%= selectedPage.id %>/delete"
-          method="post"
-          class="delete-page-form"
-          onsubmit="return confirm('この表示ページを削除しますか？取引データ自体は削除されません。');"
-        >
-          <button
-            type="submit"
-            class="danger-button"
-            <%= selectedPage.isInitial ? "disabled" : "" %>
-          >
-            − 選択中ページを削除
-          </button>
-          <% if (selectedPage.isInitial) { %>
-            <p class="form-help">初期ページは削除できません。</p>
+  <main class="ledger-shell personal-shell" aria-label="個人家計簿">
+    <section class="ledger-shell-top personal-shell-top" aria-label="個人家計簿の概要">
+      <article class="panel personal-title-card">
+        <p class="eyebrow">個人家計簿</p>
+        <h1><%= selectedPage.name %></h1>
+        <p class="period-label">
+          <% if (selectedPage.startDate || selectedPage.endDate) { %>
+            <%= selectedPage.startDate ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
+            〜
+            <%= selectedPage.endDate ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
+          <% } else { %>
+            全期間
           <% } %>
-        </form>
-      </section>
+        </p>
+      </article>
 
+      <article class="panel personal-summary-card" aria-label="個人収支サマリー">
+        <p class="eyebrow">期間収支</p>
+        <div class="personal-summary-rows">
+          <div><span>繰越金</span><strong><%= summary.carryover.toLocaleString("ja-JP") %> 円</strong></div>
+          <div><span>＋ 収入</span><strong class="income-text"><%= summary.incomeTotal.toLocaleString("ja-JP") %> 円</strong></div>
+          <div><span>－ 支出</span><strong class="expense-text"><%= summary.expenseTotal.toLocaleString("ja-JP") %> 円</strong></div>
+          <div class="personal-summary-total"><span>＝ 残高</span><strong><%= summary.balance.toLocaleString("ja-JP") %> 円</strong></div>
+        </div>
+      </article>
 
-      <section class="panel dashboard-group-panel">
-        <div class="panel-heading compact">
+      <article class="panel personal-insight-card" aria-labelledby="personal-category-chart-title" data-personal-category-chart>
+        <div class="personal-insight-heading">
           <div>
-            <p class="eyebrow">グループ</p>
-            <h2>所属グループ</h2>
+            <p class="eyebrow">カテゴリ構成</p>
+            <h2 id="personal-category-chart-title">支出カテゴリ</h2>
           </div>
-          <span><%= groupMemberships.length %> 件</span>
+          <button
+            type="button"
+            class="secondary-button personal-ai-analysis-button"
+            data-ai-analysis-button
+            data-endpoint="/api/ai/analyze-personal-ledger"
+            data-page-id="<%= selectedPage.id %>"
+            data-page-name="<%= selectedPage.name %>"
+          >AI分析</button>
         </div>
 
-        <% if (groupMemberships.length === 0) { %>
-          <p class="form-help">現在所属しているグループはありません。</p>
-        <% } else { %>
-          <nav class="group-link-list" aria-label="所属グループ">
-            <% groupMemberships.forEach(groupMembership => { %>
-              <a href="/groups/<%= groupMembership.group.id %>">
-                <span>
-                  <strong><%= groupMembership.group.name %></strong>
-                  <small>
-                    <%= groupMembership.role === "ADMIN" ? "グループ管理者" : "メンバー" %>
-                  </small>
-                </span>
-                <span aria-hidden="true">→</span>
+        <div class="personal-chart-switch" role="group" aria-label="円グラフの表示対象">
+          <button type="button" class="is-active" data-personal-chart-mode="expense" aria-pressed="true">支出カテゴリ</button>
+          <button type="button" data-personal-chart-mode="income" aria-pressed="false">収入カテゴリ</button>
+        </div>
+
+        <div class="personal-category-chart" data-personal-chart-content>
+          <div class="personal-category-chart__visual">
+            <svg class="personal-category-chart__pie" viewBox="0 0 100 100" role="img" data-personal-pie>
+              <circle class="personal-category-chart__track" cx="50" cy="50" r="38" pathLength="100"></circle>
+              <g data-personal-pie-segments></g>
+            </svg>
+            <div class="personal-category-chart__center" aria-hidden="true">
+              <span data-personal-chart-center-label>支出</span>
+              <strong data-personal-chart-center-value><%= personalVisualizationView.totals.expense.toLocaleString("ja-JP") %></strong>
+              <small>円</small>
+            </div>
+          </div>
+          <div class="personal-category-chart__legend" aria-label="カテゴリ構成の凡例">
+            <ul data-personal-chart-legend></ul>
+          </div>
+        </div>
+        <div class="personal-chart-empty" role="status" hidden data-personal-chart-empty>
+          <strong data-personal-chart-empty-title>表示できる支出がありません</strong>
+          <span>選択期間に対象取引が登録されると、ここにカテゴリ構成を表示します。</span>
+        </div>
+        <div class="personal-category-chart__tooltip" role="tooltip" hidden data-personal-chart-tooltip></div>
+        <script type="application/json" data-personal-chart-data><%- JSON.stringify(personalVisualizationView).replace(/</g, "\u003c") %></script>
+      </article>
+    </section>
+
+    <section class="ledger-shell-lower personal-layout<%= isContextOpen ? '' : ' is-context-closed' %>" data-personal-layout>
+      <aside class="personal-context-column" id="personal-context-panel" aria-label="個人家計簿ページと所属グループ" aria-hidden="<%= String(!isContextOpen) %>">
+        <section class="panel personal-page-panel">
+          <div class="panel-heading compact">
+            <div><p class="eyebrow">LedgerPage</p><h2>表示ページ</h2></div>
+            <span><%= pages.length %> 件</span>
+          </div>
+          <nav class="page-list" aria-label="個人家計簿ページ">
+            <% pages.forEach(page => { %>
+              <a
+                href="<%= buildAppUrl({ pageId: page.id, contextState }) %>"
+                class="<%= page.id === selectedPage.id ? 'is-active' : '' %>"
+                data-personal-context-link
+                <% if (page.id === selectedPage.id) { %>aria-current="page"<% } %>
+              >
+                <span><strong><%= page.name %></strong></span>
+                <% if (page.isInitial) { %><small class="initial-badge">初期</small><% } %>
               </a>
             <% }) %>
           </nav>
+        </section>
+
+        <section class="panel personal-group-panel">
+          <div class="panel-heading compact">
+            <div><p class="eyebrow">グループ</p><h2>所属グループ</h2></div>
+            <div class="personal-group-heading-actions">
+              <span><%= groupMemberships.length %> 件</span>
+              <button type="button" class="personal-compact-add" data-open-personal-dialog="personal-group-add-dialog" aria-label="グループを作成" title="グループを作成">＋</button>
+            </div>
+          </div>
+          <% if (groupMemberships.length === 0) { %>
+            <p class="form-help">現在所属しているグループはありません。</p>
+          <% } else { %>
+            <nav class="group-link-list" aria-label="所属グループ">
+              <% groupMemberships.forEach(groupMembership => { %>
+                <a href="/groups/<%= groupMembership.group.id %>">
+                  <span><strong><%= groupMembership.group.name %></strong><small><%= groupMembership.role === "ADMIN" ? "グループ管理者" : "メンバー" %></small></span>
+                  <span aria-hidden="true">→</span>
+                </a>
+              <% }) %>
+            </nav>
+          <% } %>
+        </section>
+      </aside>
+
+      <aside class="personal-operation-rail" aria-label="LedgerPage操作">
+        <button type="button" data-personal-context-toggle aria-controls="personal-context-panel" aria-expanded="<%= String(isContextOpen) %>" aria-label="<%= isContextOpen ? '左領域を閉じる' : '左領域を開く' %>" title="<%= isContextOpen ? '左領域を閉じる' : '左領域を開く' %>"><%= isContextOpen ? '←' : '→' %></button>
+        <button type="button" data-open-personal-dialog="personal-page-edit-dialog" aria-label="選択中LedgerPageを編集" title="選択中LedgerPageを編集">⚙</button>
+        <button type="button" data-open-personal-dialog="personal-page-add-dialog" aria-label="LedgerPageを追加" title="LedgerPageを追加">＋</button>
+        <button type="submit" form="personal-delete-page-form" <%= selectedPage.isInitial ? "disabled" : "" %> aria-label="<%= selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>" title="<%= selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>">−</button>
+      </aside>
+
+      <aside class="panel personal-collapsed-column" aria-hidden="<%= String(isContextOpen) %>">
+        <div class="personal-bar-chart-heading">
+          <div><p class="eyebrow">期間比較</p><h2>収入・支出</h2></div>
+          <small>選択期間</small>
+        </div>
+        <% if (personalVisualizationView.totals.income > 0 || personalVisualizationView.totals.expense > 0) { %>
+          <div class="personal-bar-chart" role="img" aria-label="収入 <%= personalVisualizationView.totals.income.toLocaleString("ja-JP") %> 円、支出 <%= personalVisualizationView.totals.expense.toLocaleString("ja-JP") %> 円">
+            <div class="personal-bar-chart__plot" aria-hidden="true">
+              <section class="personal-bar-chart__column">
+                <span class="personal-bar-chart__value income-text"><%= personalVisualizationView.totals.income.toLocaleString("ja-JP") %> 円</span>
+                <div class="personal-bar-chart__track"><div class="personal-bar-chart__income" style="height: <%= personalVisualizationView.barScale.incomePercent %>%"></div></div>
+                <strong>収入</strong>
+              </section>
+              <section class="personal-bar-chart__column">
+                <span class="personal-bar-chart__value expense-text"><%= personalVisualizationView.totals.expense.toLocaleString("ja-JP") %> 円</span>
+                <div class="personal-bar-chart__track"><div class="personal-bar-chart__expense" style="height: <%= personalVisualizationView.barScale.expensePercent %>%"></div></div>
+                <strong>支出</strong>
+              </section>
+            </div>
+          </div>
+          <dl class="personal-bar-chart__legend">
+            <div><dt><span class="personal-bar-chart__key is-income"></span>収入</dt><dd><%= personalVisualizationView.totals.income.toLocaleString("ja-JP") %> 円</dd></div>
+            <div><dt><span class="personal-bar-chart__key is-expense"></span>支出</dt><dd><%= personalVisualizationView.totals.expense.toLocaleString("ja-JP") %> 円</dd></div>
+          </dl>
+        <% } else { %>
+          <div class="personal-chart-empty is-compact" role="status"><strong>比較できる取引がありません</strong><span>選択期間に収入または支出が登録されると棒グラフを表示します。</span></div>
         <% } %>
+      </aside>
 
-        <details class="page-action">
-          <summary>＋ 新しいグループを作成</summary>
-          <form action="/groups" method="post" class="page-form">
-            <label>
-              <span>グループ名</span>
-              <input
-                type="text"
-                name="name"
-                maxlength="100"
-                placeholder="例：A-Bukatsu"
-                required
-              >
-            </label>
-            <p class="form-help">
-              作成者は、このグループの最初の管理者になります。
-            </p>
-            <button type="submit" class="primary-button">グループを作成</button>
-          </form>
-        </details>
-      </section>
-
-      <section class="panel dashboard-contribution-panel">
-        <div class="panel-heading compact">
-          <div>
-            <p class="eyebrow">グループ基金</p>
-            <h2>基金へ拠出</h2>
+      <section class="panel transaction-panel personal-transaction-panel">
+        <div class="panel-heading personal-history-heading">
+          <div><p class="eyebrow">詳細</p><h2>取引履歴</h2></div>
+          <div class="personal-history-actions">
+            <span><%= transactions.length %> 件</span>
+            <button type="button" class="personal-history-add" data-open-personal-dialog="personal-transaction-dialog" aria-label="個人取引を追加" title="個人取引を追加">＋</button>
           </div>
         </div>
 
-        <p class="form-help">あなた個人の財布から、所属グループの基金へ拠出します。</p>
-        <button
-          type="button"
-          class="primary-button dashboard-contribution-button"
-          data-open-contribution-dialog
-          <%= contributionGroups.length === 0 ? "disabled" : "" %>
-        >
-          基金へ拠出
-        </button>
-        <% if (contributionGroups.length === 0) { %>
-          <p class="form-help">拠出可能な有効グループ基金がありません。</p>
-        <% } %>
-      </section>
-
-      <section class="panel">
-        <h2>取引を追加</h2>
-
-
-        <form action="/app/transactions" method="post" class="transaction-form" data-personal-transaction-form data-submit-lock>
-          <input type="hidden" name="pageId" value="<%= selectedPage.id %>">
-          <input type="hidden" name="suggestionToken" value="" data-ai-suggestion-token>
-
-          <label>
-            <span>実際の取引日</span>
-            <input type="date" name="transactionDate" value="<%= today %>" max="<%= today %>" required>
-          </label>
-
-          <label>
-            <span>種類</span>
-            <select name="kind" required>
-              <option value="expense">支出</option>
-              <option value="income">収入</option>
-            </select>
-          </label>
-
-          <label>
-            <span>金額</span>
-            <input type="number" name="amount" min="1" step="1" inputmode="numeric" required>
-          </label>
-
-          <label>
-            <span>カテゴリ</span>
-            <select name="category" data-personal-category>
-              <option value="">内容からキーワード分類</option>
-              <optgroup label="収入" data-category-kind="income">
-                <% personalCategories.income.forEach(category => { %>
-                  <option value="<%= category %>"><%= category %></option>
-                <% }) %>
-              </optgroup>
-              <optgroup label="支出" data-category-kind="expense">
-                <% personalCategories.expense.forEach(category => { %>
-                  <option value="<%= category %>"><%= category %></option>
-                <% }) %>
-              </optgroup>
-            </select>
-          </label>
-
-          <label>
-            <span>内容</span>
-            <textarea
-              name="rawText"
-              maxlength="500"
-              rows="3"
-              placeholder="例：昨日コンビニで昼食を800円買った"
-              required
-              data-ai-raw-text
-            ></textarea>
-          </label>
-
-          <div class="ai-classification-actions">
-            <button type="button" class="secondary-button" data-ai-classify-button>AIで推定</button>
-            <p class="form-help">押すと、この内容だけを外部AI（OpenAI）へ送信します。候補は自動保存されません。</p>
+        <div class="personal-ledger" aria-label="個人収入と個人支出の5列取引台帳">
+          <div class="personal-ledger-column-heading" role="row">
+            <span role="columnheader">日付</span><span role="columnheader">収入内容</span><span role="columnheader">収入金額</span><span role="columnheader">支出内容</span><span role="columnheader">支出金額</span>
           </div>
 
-          <section class="ai-suggestion-panel" data-ai-suggestion-panel hidden aria-live="polite">
-            <p class="ai-suggestion-message" data-ai-message></p>
-            <dl class="ai-field-status" data-ai-field-status></dl>
-            <ul class="ai-warning-list" data-ai-warnings hidden></ul>
+          <section class="personal-ledger-section personal-ledger-carryover" aria-label="繰越金">
+            <div class="personal-ledger-row personal-ledger-summary-row">
+              <time title="<%= carryoverDateLabel %>"><%= carryoverDateLabel %></time>
+              <% if (carryoverIsIncomeSide) { %>
+                <div class="personal-ledger-content-cell"><strong>繰越金</strong></div><strong class="personal-ledger-amount income-text">+<%= summary.carryover.toLocaleString("ja-JP") %> 円</strong><div class="personal-ledger-empty-cell" aria-hidden="true"></div><div class="personal-ledger-empty-cell" aria-hidden="true"></div>
+              <% } else { %>
+                <div class="personal-ledger-empty-cell" aria-hidden="true"></div><div class="personal-ledger-empty-cell" aria-hidden="true"></div><div class="personal-ledger-content-cell"><strong>繰越金</strong></div><strong class="personal-ledger-amount expense-text">−<%= Math.abs(summary.carryover).toLocaleString("ja-JP") %> 円</strong>
+              <% } %>
+            </div>
           </section>
 
-          <button type="submit" class="primary-button">登録する</button>
-        </form>
+          <section class="personal-ledger-section personal-ledger-transactions" aria-label="取引詳細">
+            <div class="personal-ledger-scroll" tabindex="0" aria-label="個人取引詳細。上下にスクロールできます">
+              <% if (transactions.length === 0) { %>
+                <p class="empty-state personal-ledger-empty-state">この期間には、まだ取引がありません。</p>
+              <% } else { %>
+                <% transactions.forEach(transaction => { %>
+                  <% const isIncomeTransaction = transaction.kind === "PERSONAL_INCOME" || transaction.kind === "FUND_REFUND"; %>
+                  <% const isZeroParticipation = transaction.kind === "GROUP_PAYMENT" && transaction.amount === 0 && transaction.paymentBatchId; %>
+                  <% const relationLabel = transaction.group?.name ?? "個人"; %>
+                  <% const transactionMeta = `${kindLabels[transaction.kind]}・${relationLabel}・${transaction.category}・${sourceLabels[transaction.classificationSource]}`; %>
+                  <article class="personal-ledger-row personal-ledger-transaction-row<%= isZeroParticipation ? ' is-zero-participation' : '' %>">
+                    <time datetime="<%= new Date(transaction.transactionDate).toISOString().slice(0, 10) %>" title="<%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %>"><%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %></time>
+                    <% if (isIncomeTransaction) { %>
+                      <div class="personal-ledger-content-cell"><strong class="personal-ledger-primary-text" data-personal-ledger-tooltip="<%= transaction.rawText %>" aria-label="<%= transaction.rawText %>"><%= transaction.rawText %></strong><small class="personal-ledger-meta" data-personal-ledger-tooltip="<%= transactionMeta %>" aria-label="<%= transactionMeta %>"><%= transactionMeta %></small></div>
+                      <strong class="personal-ledger-amount income-text">+<%= transaction.amount.toLocaleString("ja-JP") %> 円</strong><div class="personal-ledger-empty-cell" aria-hidden="true"></div><div class="personal-ledger-empty-cell" aria-hidden="true"></div>
+                    <% } else { %>
+                      <div class="personal-ledger-empty-cell" aria-hidden="true"></div><div class="personal-ledger-empty-cell" aria-hidden="true"></div>
+                      <div class="personal-ledger-content-cell"><strong class="personal-ledger-primary-text" data-personal-ledger-tooltip="<%= transaction.rawText %>" aria-label="<%= transaction.rawText %>"><%= transaction.rawText %></strong><small class="personal-ledger-meta" data-personal-ledger-tooltip="<%= transactionMeta %>" aria-label="<%= transactionMeta %>"><%= transactionMeta %></small><% if (isZeroParticipation) { %><span class="zero-participation-badge">参加・負担0円</span><% } %></div>
+                      <strong class="personal-ledger-amount <%= isZeroParticipation ? '' : 'expense-text' %>"><%= isZeroParticipation ? '' : '−' %><%= transaction.amount.toLocaleString("ja-JP") %> 円</strong>
+                    <% } %>
+                  </article>
+                <% }) %>
+              <% } %>
+            </div>
+          </section>
+
+          <section class="personal-ledger-section personal-ledger-balance" aria-label="残高">
+            <div class="personal-ledger-row personal-ledger-summary-row">
+              <time title="<%= balanceDateLabel %>"><%= balanceDateLabel %></time>
+              <% if (balanceIsIncomeSide) { %>
+                <div class="personal-ledger-content-cell"><strong>残高</strong></div><strong class="personal-ledger-amount income-text">+<%= summary.balance.toLocaleString("ja-JP") %> 円</strong><div class="personal-ledger-empty-cell" aria-hidden="true"></div><div class="personal-ledger-empty-cell" aria-hidden="true"></div>
+              <% } else { %>
+                <div class="personal-ledger-empty-cell" aria-hidden="true"></div><div class="personal-ledger-empty-cell" aria-hidden="true"></div><div class="personal-ledger-content-cell"><strong>残高</strong></div><strong class="personal-ledger-amount expense-text">−<%= Math.abs(summary.balance).toLocaleString("ja-JP") %> 円</strong>
+              <% } %>
+            </div>
+          </section>
+        </div>
       </section>
-    </aside>
-
-    <section class="panel transaction-panel">
-      <div class="panel-heading">
-        <div>
-          <p class="eyebrow">詳細</p>
-          <h2>取引履歴</h2>
-        </div>
-        <span><%= transactions.length %> 件</span>
-      </div>
-
-      <% if (transactions.length === 0) { %>
-        <p class="empty-state">この期間には、まだ取引がありません。</p>
-      <% } else { %>
-        <div class="table-wrap">
-          <table class="transaction-table">
-            <thead>
-              <tr>
-                <th>取引日</th>
-                <th>種類</th>
-                <th>対象</th>
-                <th>金額</th>
-                <th>カテゴリ</th>
-                <th>内容</th>
-                <th>分類元</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% transactions.forEach(transaction => { %>
-                <%
-                  const isIncome =
-                    transaction.kind === "PERSONAL_INCOME" || transaction.kind === "FUND_REFUND";
-                  const kindLabel = transaction.kind === "GROUP_PAYMENT"
-                    ? "グループ関連支出"
-                    : transaction.kind === "FUND_CONTRIBUTION"
-                      ? "基金拠出"
-                      : transaction.kind === "FUND_REFUND"
-                        ? "基金返金"
-                        : isIncome
-                          ? "収入"
-                          : "支出";
-                  const classificationLabel = transaction.classificationSource === "MANUAL"
-                    ? "手動"
-                    : transaction.classificationSource === "AI"
-                      ? "AI"
-                      : "キーワード";
-                %>
-                <tr>
-                  <td><%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %></td>
-                  <td>
-                    <span class="kind-badge <%= isIncome ? 'income' : 'expense' %>">
-                      <%= kindLabel %>
-                    </span>
-                  </td>
-                  <td><%= transaction.group?.name ?? "個人" %></td>
-                  <td class="amount-cell <%= isIncome ? 'income-text' : 'expense-text' %>">
-                    <%= isIncome ? "+" : "−" %><%= transaction.amount.toLocaleString("ja-JP") %> 円
-                  </td>
-                  <td><%= transaction.category %></td>
-                  <td><%= transaction.rawText %></td>
-                  <td><%= classificationLabel %></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
-      <% } %>
     </section>
   </main>
 
-  <dialog class="dashboard-dialog" id="dashboard-contribution-dialog" aria-labelledby="dashboard-contribution-title">
-    <form action="/app/fund-contributions" method="post" class="transaction-form dashboard-dialog-form" data-submit-lock>
-      <input type="hidden" name="pageId" value="<%= selectedPage.id %>">
+  <form id="personal-delete-page-form" action="/app/pages/<%= selectedPage.id %>/delete" method="post" hidden onsubmit="return confirm('この表示ページを削除しますか？取引データ自体は削除されません。');">
+    <input type="hidden" name="contextState" value="<%= contextState %>" data-personal-context-state>
+  </form>
 
-      <div class="dashboard-dialog-heading">
-        <div>
-          <p class="eyebrow">グループ基金</p>
-          <h2 id="dashboard-contribution-title">基金へ拠出</h2>
-        </div>
-        <button type="button" class="dashboard-dialog-close" data-close-contribution-dialog aria-label="閉じる" title="閉じる">×</button>
-      </div>
-
-      <label>
-        <span>拠出先グループ</span>
-        <select name="groupId" required>
-          <option value="">選択してください</option>
-          <% contributionGroups.forEach(groupMembership => { %>
-            <option value="<%= groupMembership.group.id %>">
-              <%= groupMembership.group.name %> — <%= groupMembership.group.fund?.name ?? "基金" %>
-            </option>
-          <% }) %>
-        </select>
-      </label>
-
-      <label>
-        <span>実際の取引日</span>
-        <input type="date" name="transactionDate" value="<%= today %>" required>
-      </label>
-
-      <label>
-        <span>金額</span>
-        <input type="number" name="amount" min="1" step="1" inputmode="numeric" required>
-      </label>
-
-      <label>
-        <span>内容</span>
-        <textarea name="rawText" maxlength="500" rows="4" placeholder="例：7月分の基金拠出" required></textarea>
-      </label>
-
-      <p class="form-help">登録した1件は、個人家計簿では支出、対象基金では収入として表示されます。</p>
-      <div class="dashboard-dialog-actions">
-        <button type="button" class="secondary-button" data-close-contribution-dialog>キャンセル</button>
-        <button type="submit" class="primary-button">基金へ拠出</button>
-      </div>
+  <dialog class="personal-dialog" id="personal-page-add-dialog" aria-labelledby="personal-page-add-title">
+    <form action="/app/pages" method="post" class="page-form personal-dialog-form">
+      <input type="hidden" name="currentPageId" value="<%= selectedPage.id %>"><input type="hidden" name="contextState" value="<%= contextState %>" data-personal-context-state>
+      <div class="personal-dialog-heading"><div><p class="eyebrow">LedgerPage管理</p><h2 id="personal-page-add-title">表示ページを追加</h2></div><button type="button" class="personal-dialog-close" data-close-personal-dialog aria-label="閉じる">×</button></div>
+      <label><span>ページ名</span><input type="text" name="name" maxlength="100" required></label>
+      <div class="date-pair"><label><span>開始日</span><input type="date" name="startDate"></label><label><span>終了日</span><input type="date" name="endDate"></label></div>
+      <p class="form-help">日付を空欄にすると、その方向の期間を制限しません。</p>
+      <div class="personal-dialog-actions"><button type="button" class="secondary-button" data-close-personal-dialog>キャンセル</button><button type="submit" class="primary-button">ページを追加</button></div>
     </form>
   </dialog>
 
-  <%- include("partials/ai-analysis-dialog", {
-    analysisDialog: {
-      id: "personal-ai-analysis-dialog",
-      eyebrow: "個人家計簿",
-      title: "収支分析",
-      pageName: selectedPage.name,
-    },
-  }) %>
+  <dialog class="personal-dialog" id="personal-page-edit-dialog" aria-labelledby="personal-page-edit-title">
+    <form action="/app/pages/<%= selectedPage.id %>" method="post" class="page-form personal-dialog-form">
+      <input type="hidden" name="contextState" value="<%= contextState %>" data-personal-context-state>
+      <div class="personal-dialog-heading"><div><p class="eyebrow">LedgerPage管理</p><h2 id="personal-page-edit-title">選択中ページを編集</h2></div><button type="button" class="personal-dialog-close" data-close-personal-dialog aria-label="閉じる">×</button></div>
+      <label><span>ページ名</span><input type="text" name="name" value="<%= selectedPage.name %>" maxlength="100" required></label>
+      <div class="date-pair"><label><span>開始日</span><input type="date" name="startDate" value="<%= selectedPageForm.startDate %>"></label><label><span>終了日</span><input type="date" name="endDate" value="<%= selectedPageForm.endDate %>"></label></div>
+      <p class="form-help">初期ページも名前と期間は編集できます。</p>
+      <div class="personal-dialog-actions"><button type="button" class="secondary-button" data-close-personal-dialog>キャンセル</button><button type="submit" class="primary-button">変更を保存</button></div>
+    </form>
+  </dialog>
 
-  <script>
-    (() => {
-      const dialog = document.getElementById("dashboard-contribution-dialog");
-      const openButton = document.querySelector("[data-open-contribution-dialog]");
+  <dialog class="personal-dialog" id="personal-group-add-dialog" aria-labelledby="personal-group-add-title">
+    <form action="/groups" method="post" class="page-form personal-dialog-form">
+      <input type="hidden" name="contextState" value="<%= contextState %>">
+      <div class="personal-dialog-heading"><div><p class="eyebrow">グループ</p><h2 id="personal-group-add-title">新しいグループを作成</h2></div><button type="button" class="personal-dialog-close" data-close-personal-dialog aria-label="閉じる">×</button></div>
+      <label><span>グループ名</span><input type="text" name="name" maxlength="100" required></label>
+      <p class="form-help">作成者は、このグループの最初の管理者になります。</p>
+      <div class="personal-dialog-actions"><button type="button" class="secondary-button" data-close-personal-dialog>キャンセル</button><button type="submit" class="primary-button">グループを作成</button></div>
+    </form>
+  </dialog>
 
-      openButton?.addEventListener("click", () => {
-        if (dialog instanceof HTMLDialogElement) dialog.showModal();
-      });
+  <dialog class="personal-dialog personal-transaction-dialog" id="personal-transaction-dialog" aria-labelledby="personal-transaction-title">
+    <form action="/app/transactions" method="post" class="transaction-form personal-dialog-form" data-personal-transaction-form data-submit-lock>
+      <input type="hidden" name="pageId" value="<%= selectedPage.id %>"><input type="hidden" name="contextState" value="<%= contextState %>" data-personal-context-state><input type="hidden" name="suggestionToken" value="" data-ai-suggestion-token>
+      <div class="personal-dialog-heading"><div><p class="eyebrow">個人家計簿</p><h2 id="personal-transaction-title">取引を追加</h2></div><button type="button" class="personal-dialog-close" data-close-personal-dialog aria-label="閉じる">×</button></div>
+      <label><span>実際の取引日</span><input type="date" name="transactionDate" value="<%= today %>" max="<%= today %>" required></label>
+      <label><span>種類</span><select name="kind" required><option value="expense">支出</option><option value="income">収入</option></select></label>
+      <label><span>金額</span><input type="number" name="amount" min="1" step="1" inputmode="numeric" required></label>
+      <label><span>カテゴリ</span><select name="category" data-personal-category><option value="">内容からキーワード分類</option><optgroup label="収入" data-category-kind="income"><% personalCategories.income.forEach(category => { %><option value="<%= category %>"><%= category %></option><% }) %></optgroup><optgroup label="支出" data-category-kind="expense"><% personalCategories.expense.forEach(category => { %><option value="<%= category %>"><%= category %></option><% }) %></optgroup></select></label>
+      <label><span>内容</span><textarea name="rawText" maxlength="500" rows="3" placeholder="例：昨日コンビニで昼食を800円買った" required data-ai-raw-text></textarea></label>
+      <div class="ai-classification-actions"><button type="button" class="secondary-button" data-ai-classify-button>AIで推定</button><p class="form-help">押すと、この内容だけを外部AIへ送信します。候補は自動保存されません。</p></div>
+      <section class="ai-suggestion-panel" data-ai-suggestion-panel hidden aria-live="polite"><p class="ai-suggestion-message" data-ai-message></p><dl class="ai-field-status" data-ai-field-status></dl><ul class="ai-warning-list" data-ai-warnings hidden></ul></section>
+      <div class="personal-dialog-actions"><button type="button" class="secondary-button" data-close-personal-dialog>キャンセル</button><button type="submit" class="primary-button">登録する</button></div>
+    </form>
+  </dialog>
 
-      document.querySelectorAll("[data-close-contribution-dialog]").forEach((button) => {
-        button.addEventListener("click", () => {
-          if (dialog instanceof HTMLDialogElement) dialog.close();
-        });
-      });
+  <%- include("partials/ai-analysis-dialog", { analysisDialog: { id: "personal-ai-analysis-dialog", eyebrow: "個人家計簿", title: "収支分析", pageName: selectedPage.name } }) %>
 
-      dialog?.addEventListener("click", (event) => {
-        if (event.target === dialog && dialog instanceof HTMLDialogElement) dialog.close();
-      });
-
-      const personalForm = document.querySelector("[data-personal-transaction-form]");
-      if (personalForm instanceof HTMLFormElement) {
-        const kindSelect = personalForm.elements.namedItem("kind");
-        const amountInput = personalForm.elements.namedItem("amount");
-        const dateInput = personalForm.elements.namedItem("transactionDate");
-        const categorySelect = personalForm.elements.namedItem("category");
-        const rawTextInput = personalForm.elements.namedItem("rawText");
-        const suggestionTokenInput = personalForm.querySelector("[data-ai-suggestion-token]");
-        const classifyButton = personalForm.querySelector("[data-ai-classify-button]");
-        const suggestionPanel = personalForm.querySelector("[data-ai-suggestion-panel]");
-        const messageElement = personalForm.querySelector("[data-ai-message]");
-        const fieldStatusElement = personalForm.querySelector("[data-ai-field-status]");
-        const warningList = personalForm.querySelector("[data-ai-warnings]");
-
-        const statusLabels = {
-          EXPLICIT: "入力に明記",
-          INFERRED: "AI・規則で推定",
-          DEFAULTED: "画面の既定値",
-          MISSING: "要入力",
-        };
-
-        const updateCategoryOptions = () => {
-          if (!(kindSelect instanceof HTMLSelectElement) || !(categorySelect instanceof HTMLSelectElement)) return;
-          const selectedKind = kindSelect.value;
-          categorySelect.querySelectorAll("optgroup[data-category-kind]").forEach((group) => {
-            if (!(group instanceof HTMLOptGroupElement)) return;
-            const enabled = group.dataset.categoryKind === selectedKind;
-            group.disabled = !enabled;
-            group.hidden = !enabled;
-          });
-          const selectedOption = categorySelect.selectedOptions[0];
-          const selectedGroup = selectedOption?.parentElement;
-          if (selectedGroup instanceof HTMLOptGroupElement && selectedGroup.disabled) {
-            categorySelect.value = "";
-          }
-        };
-
-        const showSuggestion = (payload) => {
-          if (!(suggestionPanel instanceof HTMLElement)) return;
-          suggestionPanel.hidden = false;
-          if (messageElement instanceof HTMLElement) {
-            messageElement.textContent = payload.message || "候補を表示しました。";
-            messageElement.dataset.source = payload.source || "";
-          }
-
-          const suggestion = payload.suggestion;
-          if (!suggestion) return;
-
-          if (kindSelect instanceof HTMLSelectElement) {
-            if (suggestion.transactionType === "INCOME") kindSelect.value = "income";
-            if (suggestion.transactionType === "EXPENSE") kindSelect.value = "expense";
-            updateCategoryOptions();
-          }
-          if (amountInput instanceof HTMLInputElement && suggestion.amount !== null) {
-            amountInput.value = String(suggestion.amount);
-          }
-          if (dateInput instanceof HTMLInputElement) {
-            dateInput.value = suggestion.transactionDate || payload.referenceDate || dateInput.value;
-          }
-          if (categorySelect instanceof HTMLSelectElement) {
-            categorySelect.value = suggestion.category || "";
-          }
-          if (
-            payload.source === "AI" &&
-            rawTextInput instanceof HTMLTextAreaElement &&
-            suggestion.summary
-          ) {
-            rawTextInput.value = suggestion.summary;
-          }
-          if (suggestionTokenInput instanceof HTMLInputElement) {
-            suggestionTokenInput.value = payload.suggestionToken || "";
-          }
-
-          if (fieldStatusElement instanceof HTMLElement) {
-            fieldStatusElement.replaceChildren();
-            const fields = [
-              ["種類", suggestion.fieldStatus?.transactionType],
-              ["金額", suggestion.fieldStatus?.amount],
-              ["取引日", suggestion.transactionDate ? suggestion.fieldStatus?.transactionDate : "DEFAULTED"],
-              ["カテゴリ", suggestion.fieldStatus?.category],
-            ];
-            fields.forEach(([label, status]) => {
-              const term = document.createElement("dt");
-              term.textContent = label;
-              const description = document.createElement("dd");
-              description.textContent = statusLabels[status] || "要確認";
-              description.dataset.status = status || "";
-              fieldStatusElement.append(term, description);
-            });
-          }
-
-          if (warningList instanceof HTMLUListElement) {
-            warningList.replaceChildren();
-            const warnings = Array.isArray(suggestion.warnings) ? suggestion.warnings : [];
-            warnings.forEach((warning) => {
-              const item = document.createElement("li");
-              item.textContent = String(warning);
-              warningList.append(item);
-            });
-            warningList.hidden = warnings.length === 0;
-          }
-        };
-
-        kindSelect?.addEventListener("change", updateCategoryOptions);
-        updateCategoryOptions();
-
-        classifyButton?.addEventListener("click", async () => {
-          if (
-            !(classifyButton instanceof HTMLButtonElement) ||
-            !(kindSelect instanceof HTMLSelectElement) ||
-            !(rawTextInput instanceof HTMLTextAreaElement)
-          ) return;
-
-          const rawText = rawTextInput.value.trim();
-          if (!rawText) {
-            rawTextInput.focus();
-            rawTextInput.setCustomValidity("AIで推定する内容を入力してください。");
-            rawTextInput.reportValidity();
-            rawTextInput.setCustomValidity("");
-            return;
-          }
-
-          classifyButton.disabled = true;
-          classifyButton.textContent = "推定中…";
-          personalForm.setAttribute("aria-busy", "true");
-          if (suggestionPanel instanceof HTMLElement) suggestionPanel.hidden = false;
-          if (messageElement instanceof HTMLElement) messageElement.textContent = "AIで候補を作成しています。";
-
-          try {
-            const response = await fetch("/api/ai/classify-transaction", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "Accept": "application/json" },
-              credentials: "same-origin",
-              body: JSON.stringify({ rawText, fallbackKind: kindSelect.value }),
-            });
-            const payload = await response.json().catch(() => null);
-            if (payload?.suggestion) {
-              showSuggestion(payload);
-            } else {
-              throw new Error(payload?.message || "AI候補を取得できませんでした。");
-            }
-          } catch (error) {
-            if (suggestionPanel instanceof HTMLElement) suggestionPanel.hidden = false;
-            if (messageElement instanceof HTMLElement) {
-              messageElement.textContent = error instanceof Error
-                ? error.message
-                : "AI候補を取得できませんでした。手動で入力してください。";
-              messageElement.dataset.source = "ERROR";
-            }
-          } finally {
-            classifyButton.disabled = false;
-            classifyButton.textContent = "AIで推定";
-            personalForm.removeAttribute("aria-busy");
-          }
-        });
-      }
-
-      document.querySelectorAll("form[data-submit-lock]").forEach((form) => {
-        form.addEventListener("submit", (event) => {
-          if (event.defaultPrevented) return;
-
-          if (form.dataset.submitting === "true") {
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            return;
-          }
-
-          form.dataset.submitting = "true";
-          form.setAttribute("aria-busy", "true");
-          form.querySelectorAll("button[type='submit'], input[type='submit']").forEach((control) => {
-            if (control instanceof HTMLButtonElement) {
-              control.textContent = "処理中…";
-              control.disabled = true;
-            } else if (control instanceof HTMLInputElement) {
-              control.value = "処理中…";
-              control.disabled = true;
-            }
-          });
-        });
-      });
-    })();
-  </script>
+  <script src="/js/personal-dashboard.js" defer></script>
+  <script src="/js/personal-charts.js" defer></script>
   <script src="/js/ai-analysis-dialog.js" defer></script>
 </body>
 </html>

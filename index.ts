@@ -64,6 +64,7 @@ import {
   type GroupFundTransactionKind,
 } from "./src/transactions/group-fund-summary.js";
 import { buildFundVisualization } from "./src/transactions/fund-visualization.js";
+import { buildPersonalVisualization } from "./src/transactions/personal-visualization.js";
 
 type CalculationMethodValue =
   | "EQUAL"
@@ -387,10 +388,17 @@ function buildTransactionDateFilter(startDate: Date | null, endDate: Date | null
   };
 }
 
+type PersonalContextState = "open" | "closed";
+
+function parsePersonalContextState(value: unknown): PersonalContextState {
+  return value === "open" ? "open" : "closed";
+}
+
 function buildAppUrl(options: {
   pageId?: number | null;
   error?: string;
   success?: string;
+  contextState?: PersonalContextState;
 } = {}): string {
   const query = new URLSearchParams();
 
@@ -404,6 +412,10 @@ function buildAppUrl(options: {
 
   if (options.success) {
     query.set("success", options.success);
+  }
+
+  if (options.contextState === "open") {
+    query.set("context", "open");
   }
 
   const queryString = query.toString();
@@ -1236,6 +1248,7 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
 
   try {
     const requestedPageId = Number(req.query.pageId);
+    const contextState = parsePersonalContextState(req.query.context);
     const [pages, groupMemberships, user] = await Promise.all([
       prisma.ledgerPage.findMany({
         where: {
@@ -1308,7 +1321,7 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
             select: { id: true, name: true },
           },
         },
-        orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+        orderBy: [{ transactionDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       }),
       selectedPage.startDate
         ? prisma.transaction.findMany({
@@ -1345,6 +1358,7 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
     }, 0);
 
     const balance = carryover + incomeTotal - expenseTotal;
+    const personalVisualization = buildPersonalVisualization(transactions);
     const error = typeof req.query.error === "string" ? req.query.error : null;
     const success = typeof req.query.success === "string" ? req.query.success : null;
 
@@ -1361,6 +1375,10 @@ app.get("/app", requireAuthentication, async (req, res, next) => {
         expenseTotal,
         balance,
       },
+      personalVisualization,
+      contextState,
+      isContextOpen: contextState === "open",
+      buildAppUrl,
       error,
       success,
       today: getTokyoDateInputValue(),
@@ -1392,13 +1410,14 @@ app.post("/app/pages", requireAuthentication, async (req, res, next) => {
   }
 
   const currentPageId = parsePositiveInteger(req.body.currentPageId);
+  const contextState = parsePersonalContextState(req.body.contextState);
   const name = String(req.body.name ?? "").trim();
   const startDate = parseOptionalDateOnly(req.body.startDate);
   const endDate = parseOptionalDateOnly(req.body.endDate);
   const validationError = validateLedgerPageInput({ name, startDate, endDate });
 
   if (validationError) {
-    res.redirect(buildAppUrl({ pageId: currentPageId, error: validationError }));
+    res.redirect(buildAppUrl({ pageId: currentPageId, contextState, error: validationError }));
     return;
   }
 
@@ -1441,6 +1460,7 @@ app.post("/app/pages", requireAuthentication, async (req, res, next) => {
     res.redirect(
       buildAppUrl({
         pageId: page.id,
+        contextState,
         success: "表示ページを追加しました。",
       }),
     );
@@ -1452,6 +1472,7 @@ app.post("/app/pages", requireAuthentication, async (req, res, next) => {
 app.post("/app/pages/:pageId", requireAuthentication, async (req, res, next) => {
   const userId = req.session.userId;
   const pageId = parsePositiveInteger(req.params.pageId);
+  const contextState = parsePersonalContextState(req.body.contextState);
 
   if (!userId) {
     res.redirect("/?error=ログインしてください。");
@@ -1459,7 +1480,7 @@ app.post("/app/pages/:pageId", requireAuthentication, async (req, res, next) => 
   }
 
   if (!pageId) {
-    res.redirect(buildAppUrl({ error: "編集対象のページが正しくありません。" }));
+    res.redirect(buildAppUrl({ contextState, error: "編集対象のページが正しくありません。" }));
     return;
   }
 
@@ -1469,7 +1490,7 @@ app.post("/app/pages/:pageId", requireAuthentication, async (req, res, next) => 
   const validationError = validateLedgerPageInput({ name, startDate, endDate });
 
   if (validationError) {
-    res.redirect(buildAppUrl({ pageId, error: validationError }));
+    res.redirect(buildAppUrl({ pageId, contextState, error: validationError }));
     return;
   }
 
@@ -1496,7 +1517,7 @@ app.post("/app/pages/:pageId", requireAuthentication, async (req, res, next) => 
     });
 
     if (!page) {
-      res.redirect(buildAppUrl({ error: "編集対象のページが見つかりません。" }));
+      res.redirect(buildAppUrl({ contextState, error: "編集対象のページが見つかりません。" }));
       return;
     }
 
@@ -1512,6 +1533,7 @@ app.post("/app/pages/:pageId", requireAuthentication, async (req, res, next) => 
     res.redirect(
       buildAppUrl({
         pageId,
+        contextState,
         success: "表示ページを更新しました。",
       }),
     );
@@ -1526,6 +1548,7 @@ app.post(
   async (req, res, next) => {
     const userId = req.session.userId;
     const pageId = parsePositiveInteger(req.params.pageId);
+    const contextState = parsePersonalContextState(req.body.contextState);
 
     if (!userId) {
       res.redirect("/?error=ログインしてください。");
@@ -1533,7 +1556,7 @@ app.post(
     }
 
     if (!pageId) {
-      res.redirect(buildAppUrl({ error: "削除対象のページが正しくありません。" }));
+      res.redirect(buildAppUrl({ contextState, error: "削除対象のページが正しくありません。" }));
       return;
     }
 
@@ -1563,7 +1586,7 @@ app.post(
       });
 
       if (!page) {
-        res.redirect(buildAppUrl({ error: "削除対象のページが見つかりません。" }));
+        res.redirect(buildAppUrl({ contextState, error: "削除対象のページが見つかりません。" }));
         return;
       }
 
@@ -1571,6 +1594,7 @@ app.post(
         res.redirect(
           buildAppUrl({
             pageId,
+            contextState,
             error: "初期ページは削除できません。",
           }),
         );
@@ -1593,6 +1617,7 @@ app.post(
       res.redirect(
         buildAppUrl({
           pageId: fallbackPage?.id,
+          contextState,
           success: "表示ページを削除しました。",
         }),
       );
@@ -3064,9 +3089,9 @@ app.get("/groups/:groupId/fund", requireAuthentication, async (req, res, next) =
           },
         },
         orderBy: [
-          { transactionDate: "desc" },
-          { createdAt: "desc" },
-          { id: "desc" },
+          { transactionDate: "asc" },
+          { createdAt: "asc" },
+          { id: "asc" },
         ],
       }),
       selectedPage.startDate
@@ -5148,6 +5173,7 @@ app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
   const transactionDateInput = String(req.body.transactionDate ?? "").trim();
   const transactionDate = parseDateOnly(transactionDateInput);
   const pageId = parsePositiveInteger(req.body.pageId);
+  const contextState = parsePersonalContextState(req.body.contextState);
 
   const inputKind = kindInput === "income" || kindInput === "expense" ? kindInput : null;
 
@@ -5155,6 +5181,7 @@ app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
     res.redirect(
       buildAppUrl({
         pageId,
+        contextState,
         error: "取引日・種類・金額・内容を正しく入力してください。",
       }),
     );
@@ -5165,6 +5192,7 @@ app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
     res.redirect(
       buildAppUrl({
         pageId,
+        contextState,
         error: "内容は500文字以内で入力してください。",
       }),
     );
@@ -5175,6 +5203,7 @@ app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
     res.redirect(
       buildAppUrl({
         pageId,
+        contextState,
         error: "未来日の取引は登録できません。",
       }),
     );
@@ -5185,6 +5214,7 @@ app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
     res.redirect(
       buildAppUrl({
         pageId,
+        contextState,
         error: "選択した種類に対応するカテゴリを選んでください。",
       }),
     );
@@ -5241,6 +5271,7 @@ app.post("/app/transactions", requireAuthentication, async (req, res, next) => {
     res.redirect(
       buildAppUrl({
         pageId,
+        contextState,
         success: "取引を登録しました。",
       }),
     );
