@@ -164,13 +164,17 @@
       </aside>
 
       <aside class="personal-operation-rail" aria-label="LedgerPage操作">
-        <button type="button" data-personal-context-toggle aria-controls="personal-context-panel" aria-expanded="<%= String(isContextOpen) %>" aria-label="<%= isContextOpen ? '左領域を閉じる' : '左領域を開く' %>" title="<%= isContextOpen ? '左領域を閉じる' : '左領域を開く' %>"><%= isContextOpen ? '←' : '→' %></button>
-        <button type="button" data-open-personal-dialog="personal-page-edit-dialog" aria-label="選択中LedgerPageを編集" title="選択中LedgerPageを編集">⚙</button>
-        <button type="button" data-open-personal-dialog="personal-page-add-dialog" aria-label="LedgerPageを追加" title="LedgerPageを追加">＋</button>
-        <button type="submit" form="personal-delete-page-form" <%= selectedPage.isInitial ? "disabled" : "" %> aria-label="<%= selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>" title="<%= selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>">−</button>
+        <button class="ledger-operation-button" type="button" data-personal-context-toggle aria-controls="personal-context-panel" aria-expanded="<%= String(isContextOpen) %>" aria-label="<%= isContextOpen ? '一覧を閉じる' : '一覧を開く' %>" title="<%= isContextOpen ? '一覧を閉じる' : '一覧を開く' %>">
+          <span class="ledger-operation-icon ledger-operation-icon--desktop" data-operation-desktop-icon aria-hidden="true"><%= isContextOpen ? '←' : '→' %></span>
+          <span class="ledger-operation-icon ledger-operation-icon--mobile" data-operation-mobile-icon aria-hidden="true"><%= isContextOpen ? '↑' : '↓' %></span>
+          <span class="ledger-operation-label" data-operation-label><%= isContextOpen ? '閉じる' : '開く' %></span>
+        </button>
+        <button class="ledger-operation-button" type="button" data-open-personal-dialog="personal-page-edit-dialog" aria-label="選択中LedgerPageを編集" title="選択中LedgerPageを編集"><span aria-hidden="true">⚙</span><span class="ledger-operation-label">編集</span></button>
+        <button class="ledger-operation-button" type="button" data-open-personal-dialog="personal-page-add-dialog" aria-label="LedgerPageを追加" title="LedgerPageを追加"><span aria-hidden="true">＋</span><span class="ledger-operation-label">ページ追加</span></button>
+        <button class="ledger-operation-button" type="submit" form="personal-delete-page-form" <%= selectedPage.isInitial ? "disabled" : "" %> aria-label="<%= selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>" title="<%= selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>"><span aria-hidden="true">−</span><span class="ledger-operation-label">ページ削除</span></button>
       </aside>
 
-      <aside class="panel personal-collapsed-column" aria-hidden="<%= String(isContextOpen) %>">
+      <aside class="panel personal-collapsed-column">
         <div class="personal-bar-chart-heading">
           <div><p class="eyebrow">期間比較</p><h2>収入・支出</h2></div>
           <small>選択期間</small>
@@ -214,7 +218,7 @@
           </div>
 
           <section class="personal-ledger-section personal-ledger-carryover" aria-label="繰越金">
-            <div class="personal-ledger-row personal-ledger-summary-row">
+            <div class="personal-ledger-row personal-ledger-summary-row <%= carryoverIsIncomeSide ? 'is-income-row' : 'is-expense-row' %>">
               <time title="<%= carryoverDateLabel %>"><%= carryoverDateLabel %></time>
               <% if (carryoverIsIncomeSide) { %>
                 <div class="personal-ledger-content-cell"><strong>繰越金</strong></div><strong class="personal-ledger-amount income-text">+<%= summary.carryover.toLocaleString("ja-JP") %> 円</strong><div class="personal-ledger-empty-cell" aria-hidden="true"></div><div class="personal-ledger-empty-cell" aria-hidden="true"></div>
@@ -234,7 +238,7 @@
                   <% const isZeroParticipation = transaction.kind === "GROUP_PAYMENT" && transaction.amount === 0 && transaction.paymentBatchId; %>
                   <% const relationLabel = transaction.group?.name ?? "個人"; %>
                   <% const transactionMeta = `${kindLabels[transaction.kind]}・${relationLabel}・${transaction.category}・${sourceLabels[transaction.classificationSource]}`; %>
-                  <article class="personal-ledger-row personal-ledger-transaction-row<%= isZeroParticipation ? ' is-zero-participation' : '' %>">
+                  <article class="personal-ledger-row personal-ledger-transaction-row <%= isIncomeTransaction ? 'is-income-row' : 'is-expense-row' %><%= isZeroParticipation ? ' is-zero-participation' : '' %>">
                     <time datetime="<%= new Date(transaction.transactionDate).toISOString().slice(0, 10) %>" title="<%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %>"><%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %></time>
                     <% if (isIncomeTransaction) { %>
                       <div class="personal-ledger-content-cell"><strong class="personal-ledger-primary-text" data-personal-ledger-tooltip="<%= transaction.rawText %>" aria-label="<%= transaction.rawText %>"><%= transaction.rawText %></strong><small class="personal-ledger-meta" data-personal-ledger-tooltip="<%= transactionMeta %>" aria-label="<%= transactionMeta %>"><%= transactionMeta %></small></div>
@@ -251,7 +255,7 @@
           </section>
 
           <section class="personal-ledger-section personal-ledger-balance" aria-label="残高">
-            <div class="personal-ledger-row personal-ledger-summary-row">
+            <div class="personal-ledger-row personal-ledger-summary-row <%= balanceIsIncomeSide ? 'is-income-row' : 'is-expense-row' %>">
               <time title="<%= balanceDateLabel %>"><%= balanceDateLabel %></time>
               <% if (balanceIsIncomeSide) { %>
                 <div class="personal-ledger-content-cell"><strong>残高</strong></div><strong class="personal-ledger-amount income-text">+<%= summary.balance.toLocaleString("ja-JP") %> 円</strong><div class="personal-ledger-empty-cell" aria-hidden="true"></div><div class="personal-ledger-empty-cell" aria-hidden="true"></div>

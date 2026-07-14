@@ -1222,3 +1222,161 @@
     max-height: 210px;
   }
 }
+
+/* Stage 9-6: group-fund mobile order, operation bar and card ledger. */
+@media (max-width: 820px) {
+  .fund-operation-rail {
+    order: 1;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: 1fr;
+    gap: 0;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .fund-operation-rail button {
+    border: 0;
+    border-right: 1px solid var(--border);
+  }
+
+  .fund-operation-rail button:last-child {
+    border-right: 0;
+  }
+
+  .fund-context-column {
+    order: 2;
+    max-height: 58dvh;
+    grid-template-rows: repeat(2, minmax(180px, 1fr));
+  }
+
+  .fund-title-card {
+    order: 3;
+    min-height: 28dvh;
+  }
+
+  .fund-collapsed-column,
+  .fund-layout.is-context-closed .fund-collapsed-column {
+    order: 4;
+    display: block;
+    min-height: 30dvh;
+  }
+
+  .fund-summary-card {
+    order: 5;
+    min-height: 28dvh;
+  }
+
+  .fund-insight-card {
+    order: 6;
+    min-height: 34dvh;
+  }
+
+  .fund-transaction-panel,
+  .fund-layout.is-context-closed .fund-transaction-panel {
+    order: 7;
+    min-height: 72dvh;
+  }
+
+  .fund-ledger-column-heading {
+    display: none;
+  }
+
+  .fund-ledger-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "date date"
+      "content amount";
+    align-items: center;
+    gap: 0;
+    margin: 0 0 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .fund-ledger-row > time {
+    grid-area: date;
+    padding: 8px 10px;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    background: #f8f6f3;
+    font-size: 0.75rem;
+    font-weight: 800;
+  }
+
+  .fund-ledger-row > .fund-ledger-content-cell {
+    grid-area: content;
+    min-width: 0;
+    padding: 11px 10px;
+    border: 0;
+  }
+
+  .fund-ledger-row > .fund-ledger-amount {
+    grid-area: amount;
+    align-self: stretch;
+    display: grid;
+    place-items: center end;
+    padding: 11px 10px;
+    border: 0;
+    white-space: nowrap;
+  }
+
+  .fund-ledger-empty-cell {
+    display: none;
+  }
+
+  .fund-ledger-row.is-income-row .fund-ledger-content-cell::before,
+  .fund-ledger-row.is-expense-row .fund-ledger-content-cell::before {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+  }
+
+  .fund-ledger-row.is-income-row .fund-ledger-content-cell::before {
+    content: "基金収入";
+    color: var(--income);
+  }
+
+  .fund-ledger-row.is-expense-row .fund-ledger-content-cell::before {
+    content: "基金支出";
+    color: var(--expense);
+  }
+
+  .fund-ledger-scroll {
+    max-height: 62dvh;
+    padding-right: 2px;
+  }
+
+  .fund-ledger-carryover,
+  .fund-ledger-balance,
+  .fund-ledger-column-heading {
+    padding-right: 0;
+  }
+
+  .fund-ledger-primary-text,
+  .fund-ledger-meta {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+@media (max-width: 600px) {
+  .fund-title-card,
+  .fund-summary-card,
+  .fund-insight-card,
+  .fund-collapsed-column,
+  .fund-transaction-panel {
+    padding: 16px;
+  }
+
+  .fund-page-dialog {
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border: 0;
+  }
+}

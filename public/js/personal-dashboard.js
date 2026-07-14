@@ -13,12 +13,16 @@
     if (!(layout instanceof HTMLElement) || !(toggle instanceof HTMLButtonElement)) return;
     const isOpen = state === "open";
     layout.classList.toggle("is-context-closed", !isOpen);
-    toggle.textContent = isOpen ? "←" : "→";
+    const desktopIcon = toggle.querySelector("[data-operation-desktop-icon]");
+    const mobileIcon = toggle.querySelector("[data-operation-mobile-icon]");
+    const label = toggle.querySelector("[data-operation-label]");
+    if (desktopIcon instanceof HTMLElement) desktopIcon.textContent = isOpen ? "←" : "→";
+    if (mobileIcon instanceof HTMLElement) mobileIcon.textContent = isOpen ? "↑" : "↓";
+    if (label instanceof HTMLElement) label.textContent = isOpen ? "閉じる" : "開く";
     toggle.setAttribute("aria-expanded", String(isOpen));
-    toggle.setAttribute("aria-label", isOpen ? "左領域を閉じる" : "左領域を開く");
-    toggle.title = isOpen ? "左領域を閉じる" : "左領域を開く";
+    toggle.setAttribute("aria-label", isOpen ? "一覧を閉じる" : "一覧を開く");
+    toggle.title = isOpen ? "一覧を閉じる" : "一覧を開く";
     contextPanel?.setAttribute("aria-hidden", String(!isOpen));
-    collapsedPanel?.setAttribute("aria-hidden", String(isOpen));
 
     document.querySelectorAll("[data-personal-context-state]").forEach((input) => {
       if (input instanceof HTMLInputElement) input.value = state;

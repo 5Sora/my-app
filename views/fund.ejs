@@ -219,37 +219,44 @@
     <aside class="fund-operation-rail" aria-label="LedgerPage操作">
       <button
         type="button"
-        class="fund-context-toggle"
+        class="fund-context-toggle ledger-operation-button"
         data-fund-context-toggle
         aria-controls="fund-context-panel"
         aria-expanded="<%= String(isContextOpen) %>"
-        aria-label="<%= isContextOpen ? '左領域を閉じる' : '左領域を開く' %>"
-        title="<%= isContextOpen ? '左領域を閉じる' : '左領域を開く' %>"
-      ><%= isContextOpen ? '←' : '→' %></button>
+        aria-label="<%= isContextOpen ? '一覧を閉じる' : '一覧を開く' %>"
+        title="<%= isContextOpen ? '一覧を閉じる' : '一覧を開く' %>"
+      >
+        <span class="ledger-operation-icon ledger-operation-icon--desktop" data-operation-desktop-icon aria-hidden="true"><%= isContextOpen ? '←' : '→' %></span>
+        <span class="ledger-operation-icon ledger-operation-icon--mobile" data-operation-mobile-icon aria-hidden="true"><%= isContextOpen ? '↑' : '↓' %></span>
+        <span class="ledger-operation-label" data-operation-label><%= isContextOpen ? '閉じる' : '開く' %></span>
+      </button>
       <button
+        class="ledger-operation-button"
         type="button"
         data-open-dialog="fund-page-edit-dialog"
         <%= isAdmin ? "" : "disabled" %>
         aria-label="<%= isAdmin ? '選択中LedgerPageを編集' : 'LedgerPage編集はグループ管理者のみ可能です' %>"
         title="<%= isAdmin ? '選択中LedgerPageを編集' : 'LedgerPage編集はグループ管理者のみ可能です' %>"
-      >⚙</button>
+      ><span aria-hidden="true">⚙</span><span class="ledger-operation-label">編集</span></button>
       <button
+        class="ledger-operation-button"
         type="button"
         data-open-dialog="fund-page-add-dialog"
         <%= isAdmin ? "" : "disabled" %>
         aria-label="<%= isAdmin ? 'LedgerPageを追加' : 'LedgerPage追加はグループ管理者のみ可能です' %>"
         title="<%= isAdmin ? 'LedgerPageを追加' : 'LedgerPage追加はグループ管理者のみ可能です' %>"
-      >＋</button>
+      ><span aria-hidden="true">＋</span><span class="ledger-operation-label">ページ追加</span></button>
       <button
+        class="ledger-operation-button"
         type="submit"
         form="fund-delete-page-form"
         <%= !isAdmin || selectedPage.isInitial ? "disabled" : "" %>
         aria-label="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>"
         title="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>"
-      >−</button>
+      ><span aria-hidden="true">−</span><span class="ledger-operation-label">ページ削除</span></button>
     </aside>
 
-    <aside class="panel fund-collapsed-column" aria-hidden="<%= String(isContextOpen) %>">
+    <aside class="panel fund-collapsed-column">
       <div class="fund-bar-chart-heading">
         <div>
           <p class="eyebrow">期間比較</p>
@@ -348,7 +355,7 @@
         </div>
 
         <section class="fund-ledger-section fund-ledger-carryover" aria-label="繰越金">
-          <div class="fund-ledger-row fund-ledger-summary-row">
+          <div class="fund-ledger-row fund-ledger-summary-row <%= carryoverIsIncomeSide ? 'is-income-row' : 'is-expense-row' %>">
             <time title="<%= carryoverDateLabel %>"><%= carryoverDateLabel %></time>
             <% if (carryoverIsIncomeSide) { %>
               <div class="fund-ledger-content-cell"><strong>繰越金</strong></div>
@@ -378,7 +385,7 @@
                     : transaction.kind === "FUND_REFUND"
                       ? "外部・関係者なし"
                       : "関係者なし"; %>
-                <article class="fund-ledger-row fund-ledger-transaction-row">
+                <article class="fund-ledger-row fund-ledger-transaction-row <%= isIncomeTransaction ? 'is-income-row' : 'is-expense-row' %>">
                   <time
                     datetime="<%= new Date(transaction.transactionDate).toISOString().slice(0, 10) %>"
                     title="<%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %>"
@@ -412,7 +419,7 @@
         </section>
 
         <section class="fund-ledger-section fund-ledger-balance" aria-label="残高">
-          <div class="fund-ledger-row fund-ledger-summary-row">
+          <div class="fund-ledger-row fund-ledger-summary-row <%= balanceIsIncomeSide ? 'is-income-row' : 'is-expense-row' %>">
             <time title="<%= balanceDateLabel %>"><%= balanceDateLabel %></time>
             <% if (balanceIsIncomeSide) { %>
               <div class="fund-ledger-content-cell"><strong>残高</strong></div>
@@ -568,12 +575,20 @@
 
       const setOpen = (isOpen) => {
         layout.classList.toggle("is-context-closed", !isOpen);
-        toggle.textContent = isOpen ? "←" : "→";
+        const desktopIcon = toggle.querySelector("[data-operation-desktop-icon]");
+        const mobileIcon = toggle.querySelector("[data-operation-mobile-icon]");
+        const label = toggle.querySelector("[data-operation-label]");
+        if (desktopIcon instanceof HTMLElement) desktopIcon.textContent = isOpen ? "←" : "→";
+        if (mobileIcon instanceof HTMLElement) mobileIcon.textContent = isOpen ? "↑" : "↓";
+        if (label instanceof HTMLElement) label.textContent = isOpen ? "閉じる" : "開く";
         toggle.setAttribute("aria-expanded", String(isOpen));
-        toggle.setAttribute("aria-label", isOpen ? "左領域を閉じる" : "左領域を開く");
-        toggle.setAttribute("title", isOpen ? "左領域を閉じる" : "左領域を開く");
+        toggle.setAttribute("aria-label", isOpen ? "一覧を閉じる" : "一覧を開く");
+        toggle.setAttribute("title", isOpen ? "一覧を閉じる" : "一覧を開く");
         context.setAttribute("aria-hidden", String(!isOpen));
         collapsedSummary?.setAttribute("aria-hidden", String(isOpen));
+        if (window.matchMedia("(max-width: 820px)").matches) {
+          collapsedSummary?.setAttribute("aria-hidden", "false");
+        }
 
         const contextState = isOpen ? "open" : "closed";
         stateInputs.forEach((input) => {

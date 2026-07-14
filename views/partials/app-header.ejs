@@ -1,11 +1,26 @@
-<header class="app-header">
+<header class="app-header" data-app-header>
   <div class="app-header__inner">
     <% if (header.mode === "personal") { %>
       <form action="/logout" method="post" class="app-header__logout">
         <button type="submit" class="secondary-button">ログアウト</button>
       </form>
     <% } else { %>
-      <nav class="header-actions group-header-nav app-header__nav" aria-label="グループ画面ナビゲーション">
+      <button
+        type="button"
+        class="app-header__menu-toggle"
+        aria-expanded="false"
+        aria-controls="group-app-navigation"
+        data-app-header-menu-toggle
+      >
+        <span aria-hidden="true">☰</span>
+        <span>メニュー</span>
+      </button>
+      <nav
+        id="group-app-navigation"
+        class="header-actions group-header-nav app-header__nav"
+        aria-label="グループ画面ナビゲーション"
+        data-app-header-nav
+      >
         <a href="/app" class="secondary-button button-link group-nav-item">自分の家計簿</a>
         <a
           href="/groups/<%= header.groupId %>"
@@ -49,5 +64,41 @@
         `${url.pathname}${url.search}${url.hash}`,
       );
     }
+
+    const header = document.querySelector("[data-app-header]");
+    const menuToggle = header?.querySelector("[data-app-header-menu-toggle]");
+    const navigation = header?.querySelector("[data-app-header-nav]");
+    const mobileQuery = window.matchMedia("(max-width: 820px)");
+
+    if (!(menuToggle instanceof HTMLButtonElement) || !(navigation instanceof HTMLElement)) return;
+
+    const setMenuOpen = (isOpen) => {
+      const shouldShow = !mobileQuery.matches || isOpen;
+      navigation.hidden = !shouldShow;
+      menuToggle.setAttribute("aria-expanded", String(isOpen));
+      menuToggle.classList.toggle("is-open", isOpen);
+    };
+
+    const syncMenuForViewport = () => {
+      setMenuOpen(!mobileQuery.matches);
+    };
+
+    menuToggle.addEventListener("click", () => {
+      setMenuOpen(menuToggle.getAttribute("aria-expanded") !== "true");
+    });
+
+    navigation.addEventListener("click", (event) => {
+      if (mobileQuery.matches && event.target instanceof HTMLAnchorElement) setMenuOpen(false);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && mobileQuery.matches && menuToggle.getAttribute("aria-expanded") === "true") {
+        setMenuOpen(false);
+        menuToggle.focus();
+      }
+    });
+
+    mobileQuery.addEventListener?.("change", syncMenuForViewport);
+    syncMenuForViewport();
   })();
 </script>

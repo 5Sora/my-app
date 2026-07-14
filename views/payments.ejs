@@ -165,13 +165,17 @@
       </aside>
 
       <aside class="payments-operation-rail" aria-label="関連支払いページ操作">
-        <button type="button" data-payment-context-toggle aria-controls="payment-context-panel" aria-expanded="<%= String(isCalculationMode || contextState === 'open') %>" aria-label="<%= isCalculationMode ? '算出中は参加者領域を閉じられません' : '左領域を閉じる' %>" title="<%= isCalculationMode ? '算出中は参加者領域を閉じられません' : '左領域を閉じる' %>" <%= isCalculationMode ? "disabled" : "" %> data-calculation-lock-toggle><%= isCalculationMode || contextState === "open" ? "←" : "→" %></button>
-        <button type="button" data-open-payment-dialog="payments-page-edit-dialog" <%= isAdmin ? "" : "disabled" %> aria-disabled="<%= String(!isAdmin) %>" aria-label="<%= isAdmin ? '選択中LedgerPageを編集' : 'LedgerPage編集はグループ管理者のみ可能です' %>" title="<%= isAdmin ? '選択中LedgerPageを編集' : 'LedgerPage編集はグループ管理者のみ可能です' %>">⚙</button>
-        <button type="button" data-open-payment-dialog="payments-page-add-dialog" <%= isAdmin ? "" : "disabled" %> aria-disabled="<%= String(!isAdmin) %>" aria-label="<%= isAdmin ? 'LedgerPageを追加' : 'LedgerPage追加はグループ管理者のみ可能です' %>" title="<%= isAdmin ? 'LedgerPageを追加' : 'LedgerPage追加はグループ管理者のみ可能です' %>">＋</button>
-        <button type="submit" form="payments-delete-page-form" <%= !isAdmin || selectedPage.isInitial ? "disabled" : "" %> aria-disabled="<%= String(!isAdmin || selectedPage.isInitial) %>" aria-label="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>" title="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>">−</button>
+        <button class="ledger-operation-button" type="button" data-payment-context-toggle aria-controls="payment-context-panel" aria-expanded="<%= String(isCalculationMode || contextState === 'open') %>" aria-label="<%= isCalculationMode ? '算出中は参加者領域を閉じられません' : (contextState === 'open' ? '一覧を閉じる' : '一覧を開く') %>" title="<%= isCalculationMode ? '算出中は参加者領域を閉じられません' : (contextState === 'open' ? '一覧を閉じる' : '一覧を開く') %>" <%= isCalculationMode ? "disabled" : "" %> data-calculation-lock-toggle>
+          <span class="ledger-operation-icon ledger-operation-icon--desktop" data-operation-desktop-icon aria-hidden="true"><%= isCalculationMode || contextState === "open" ? "←" : "→" %></span>
+          <span class="ledger-operation-icon ledger-operation-icon--mobile" data-operation-mobile-icon aria-hidden="true"><%= isCalculationMode || contextState === "open" ? "↑" : "↓" %></span>
+          <span class="ledger-operation-label" data-operation-label><%= isCalculationMode ? '算出中' : (contextState === 'open' ? '閉じる' : '開く') %></span>
+        </button>
+        <button class="ledger-operation-button" type="button" data-open-payment-dialog="payments-page-edit-dialog" <%= isAdmin ? "" : "disabled" %> aria-disabled="<%= String(!isAdmin) %>" aria-label="<%= isAdmin ? '選択中LedgerPageを編集' : 'LedgerPage編集はグループ管理者のみ可能です' %>" title="<%= isAdmin ? '選択中LedgerPageを編集' : 'LedgerPage編集はグループ管理者のみ可能です' %>"><span aria-hidden="true">⚙</span><span class="ledger-operation-label">編集</span></button>
+        <button class="ledger-operation-button" type="button" data-open-payment-dialog="payments-page-add-dialog" <%= isAdmin ? "" : "disabled" %> aria-disabled="<%= String(!isAdmin) %>" aria-label="<%= isAdmin ? 'LedgerPageを追加' : 'LedgerPage追加はグループ管理者のみ可能です' %>" title="<%= isAdmin ? 'LedgerPageを追加' : 'LedgerPage追加はグループ管理者のみ可能です' %>"><span aria-hidden="true">＋</span><span class="ledger-operation-label">ページ追加</span></button>
+        <button class="ledger-operation-button" type="submit" form="payments-delete-page-form" <%= !isAdmin || selectedPage.isInitial ? "disabled" : "" %> aria-disabled="<%= String(!isAdmin || selectedPage.isInitial) %>" aria-label="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>" title="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>"><span aria-hidden="true">−</span><span class="ledger-operation-label">ページ削除</span></button>
       </aside>
 
-      <aside class="panel payments-latest-batch" aria-hidden="<%= String(isCalculationMode || contextState === 'open') %>">
+      <aside class="panel payments-latest-batch">
         <div class="panel-heading compact"><div><p class="eyebrow">最新の確定割り勘</p><h2>直近batch</h2></div><% if (latestBatch) { %><span><%= latestBatch.allocations.length %> 人</span><% } %></div>
         <% if (!latestBatch) { %>
           <div class="payments-result-empty"><strong>確定済みの割り勘はありません。</strong><p>割り勘を確定すると、直近結果をここに表示します。</p></div>
@@ -451,10 +455,16 @@
 
         lowerArea.classList.toggle("is-context-closed", !isOpen);
         lowerArea.dataset.contextState = isOpen ? "open" : "closed";
-        toggle.textContent = isOpen ? "←" : "→";
+        const desktopIcon = toggle.querySelector("[data-operation-desktop-icon]");
+        const mobileIcon = toggle.querySelector("[data-operation-mobile-icon]");
+        const label = toggle.querySelector("[data-operation-label]");
+        const isLocked = toggle.disabled;
+        if (desktopIcon instanceof HTMLElement) desktopIcon.textContent = isOpen ? "←" : "→";
+        if (mobileIcon instanceof HTMLElement) mobileIcon.textContent = isOpen ? "↑" : "↓";
+        if (label instanceof HTMLElement) label.textContent = isLocked ? "算出中" : (isOpen ? "閉じる" : "開く");
         toggle.setAttribute("aria-expanded", String(isOpen));
-        toggle.setAttribute("aria-label", isOpen ? "左領域を閉じる" : "左領域を開く");
-        toggle.setAttribute("title", isOpen ? "左領域を閉じる" : "左領域を開く");
+        toggle.setAttribute("aria-label", isLocked ? "算出中は参加者領域を閉じられません" : (isOpen ? "一覧を閉じる" : "一覧を開く"));
+        toggle.setAttribute("title", isLocked ? "算出中は参加者領域を閉じられません" : (isOpen ? "一覧を閉じる" : "一覧を開く"));
         contextPanel.setAttribute("aria-hidden", String(!isOpen));
 
         const contextState = isOpen ? "open" : "closed";
