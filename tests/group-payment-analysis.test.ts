@@ -35,7 +35,7 @@ const aggregate = buildGroupPaymentAnalysisAggregate({
 });
 
 const aiAnalysis = {
-  overview: "関連支払い総額とカテゴリ構成を集計しました。",
+  overview: "割り勘総額とカテゴリ構成を集計しました。",
   observations: [
     { title: "会場費の割合", description: "会場費が総額の60%です。", level: "WARNING" as const },
   ],

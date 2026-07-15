@@ -12,14 +12,16 @@
   const balanceIsIncomeSide = summary.balance >= 0;
   const carryoverDateLabel = selectedPage.startDate
     ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP")
-    : "開始時";
+    : "はじめ";
   const balanceDateLabel = selectedPage.endDate
     ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP")
-    : "現在";
+    : "おわり";
+  const carryoverDateAriaLabel = selectedPage.startDate ? carryoverDateLabel : "選択期間の開始時点";
+  const balanceDateAriaLabel = selectedPage.endDate ? balanceDateLabel : "選択期間の終了時点";
   const kindLabels = {
     PERSONAL_INCOME: "個人収入",
     PERSONAL_EXPENSE: "個人支出",
-    GROUP_PAYMENT: "グループ関連支出",
+    GROUP_PAYMENT: "割り勘",
     FUND_CONTRIBUTION: "基金拠出",
     FUND_REFUND: "基金返金",
   };
@@ -29,7 +31,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= user.displayName %> の <%= selectedPage.name %> の収支</title>
+  <title>家計簿｜<%= user.displayName %>｜<%= selectedPage.name %></title>
   <link rel="stylesheet" href="/css/auth.css">
   <link rel="stylesheet" href="/css/ledger.css">
   <link rel="stylesheet" href="/css/group.css">
@@ -50,22 +52,22 @@
 
   <main class="ledger-shell personal-shell" aria-label="個人家計簿">
     <section class="ledger-shell-top personal-shell-top" aria-label="個人家計簿の概要">
-      <article class="panel personal-title-card">
-        <p class="eyebrow">個人家計簿</p>
-        <h1><%= selectedPage.name %></h1>
-        <p class="period-label">
+      <article class="panel personal-title-card" aria-labelledby="personal-ledger-title">
+        <h2 class="ledger-context-title"><%= user.displayName %> の家計簿</h2>
+        <h1 id="personal-ledger-title"><%= selectedPage.name %></h1>
+        <p class="ledger-period-title<%= selectedPage.startDate || selectedPage.endDate ? '' : ' is-empty' %>">
           <% if (selectedPage.startDate || selectedPage.endDate) { %>
             <%= selectedPage.startDate ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
             〜
             <%= selectedPage.endDate ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
           <% } else { %>
-            全期間
+            <span aria-hidden="true">&nbsp;</span>
           <% } %>
         </p>
       </article>
 
-      <article class="panel personal-summary-card" aria-label="個人収支サマリー">
-        <p class="eyebrow">期間収支</p>
+      <article class="panel personal-summary-card" aria-labelledby="personal-summary-title">
+        <h2 id="personal-summary-title">サマリー</h2>
         <div class="personal-summary-rows">
           <div><span>繰越金</span><strong><%= summary.carryover.toLocaleString("ja-JP") %> 円</strong></div>
           <div><span>＋ 収入</span><strong class="income-text"><%= summary.incomeTotal.toLocaleString("ja-JP") %> 円</strong></div>
@@ -76,10 +78,7 @@
 
       <article class="panel personal-insight-card" aria-labelledby="personal-category-chart-title" data-personal-category-chart>
         <div class="personal-insight-heading">
-          <div>
-            <p class="eyebrow">カテゴリ構成</p>
-            <h2 id="personal-category-chart-title">支出カテゴリ</h2>
-          </div>
+          <h2 id="personal-category-chart-title">カテゴリ</h2>
           <button
             type="button"
             class="secondary-button personal-ai-analysis-button"
@@ -122,12 +121,12 @@
 
     <section class="ledger-shell-lower personal-layout<%= isContextOpen ? '' : ' is-context-closed' %>" data-personal-layout>
       <aside class="personal-context-column" id="personal-context-panel" aria-label="個人家計簿ページと所属グループ" aria-hidden="<%= String(!isContextOpen) %>">
-        <section class="panel personal-page-panel">
+        <section class="panel personal-page-panel ledger-context-panel">
           <div class="panel-heading compact">
-            <div><p class="eyebrow">LedgerPage</p><h2>表示ページ</h2></div>
+            <h2>表示ページ</h2>
             <span><%= pages.length %> 件</span>
           </div>
-          <nav class="page-list" aria-label="個人家計簿ページ">
+          <nav class="page-list ledger-context-list" aria-label="個人家計簿ページ">
             <% pages.forEach(page => { %>
               <a
                 href="<%= buildAppUrl({ pageId: page.id, contextState }) %>"
@@ -142,9 +141,9 @@
           </nav>
         </section>
 
-        <section class="panel personal-group-panel">
+        <section class="panel personal-group-panel ledger-context-panel">
           <div class="panel-heading compact">
-            <div><p class="eyebrow">グループ</p><h2>所属グループ</h2></div>
+            <h2>所属グループ</h2>
             <div class="personal-group-heading-actions">
               <span><%= groupMemberships.length %> 件</span>
               <button type="button" class="personal-compact-add" data-open-personal-dialog="personal-group-add-dialog" aria-label="グループを作成" title="グループを作成">＋</button>
@@ -153,10 +152,10 @@
           <% if (groupMemberships.length === 0) { %>
             <p class="form-help">現在所属しているグループはありません。</p>
           <% } else { %>
-            <nav class="group-link-list" aria-label="所属グループ">
+            <nav class="group-link-list ledger-context-list" aria-label="所属グループ">
               <% groupMemberships.forEach(groupMembership => { %>
                 <a href="/groups/<%= groupMembership.group.id %>">
-                  <span><strong><%= groupMembership.group.name %></strong><small><%= groupMembership.role === "ADMIN" ? "グループ管理者" : "メンバー" %></small></span>
+                  <span><strong><%= groupMembership.group.name %></strong></span>
                   <span aria-hidden="true">→</span>
                 </a>
               <% }) %>
@@ -178,19 +177,16 @@
 
       <aside class="panel personal-collapsed-column">
         <div class="personal-bar-chart-heading">
-          <div><p class="eyebrow">期間比較</p><h2>収入・支出</h2></div>
-          <small>選択期間</small>
+          <h2>収入・支出</h2>
         </div>
         <% if (personalVisualizationView.totals.income > 0 || personalVisualizationView.totals.expense > 0) { %>
           <div class="personal-bar-chart" role="img" aria-label="収入 <%= personalVisualizationView.totals.income.toLocaleString("ja-JP") %> 円、支出 <%= personalVisualizationView.totals.expense.toLocaleString("ja-JP") %> 円">
             <div class="personal-bar-chart__plot" aria-hidden="true">
               <section class="personal-bar-chart__column">
-                <span class="personal-bar-chart__value income-text"><%= personalVisualizationView.totals.income.toLocaleString("ja-JP") %> 円</span>
                 <div class="personal-bar-chart__track"><div class="personal-bar-chart__income" style="height: <%= personalVisualizationView.barScale.incomePercent %>%"></div></div>
                 <strong>収入</strong>
               </section>
               <section class="personal-bar-chart__column">
-                <span class="personal-bar-chart__value expense-text"><%= personalVisualizationView.totals.expense.toLocaleString("ja-JP") %> 円</span>
                 <div class="personal-bar-chart__track"><div class="personal-bar-chart__expense" style="height: <%= personalVisualizationView.barScale.expensePercent %>%"></div></div>
                 <strong>支出</strong>
               </section>
@@ -207,7 +203,7 @@
 
       <section class="panel transaction-panel personal-transaction-panel">
         <div class="panel-heading personal-history-heading">
-          <div><p class="eyebrow">詳細</p><h2>取引履歴</h2></div>
+          <h2>履歴詳細</h2>
           <div class="personal-history-actions">
             <span><%= transactions.length %> 件</span>
             <button type="button" class="personal-history-add" data-open-transaction-overlay="personal-transaction-overlay" aria-label="個人取引を追加" title="個人取引を追加">＋</button>
@@ -221,7 +217,7 @@
 
           <section class="personal-ledger-section personal-ledger-carryover" aria-label="繰越金">
             <div class="personal-ledger-row personal-ledger-summary-row <%= carryoverIsIncomeSide ? 'is-income-row' : 'is-expense-row' %>">
-              <time title="<%= carryoverDateLabel %>"><%= carryoverDateLabel %></time>
+              <time title="<%= carryoverDateLabel %>" aria-label="<%= carryoverDateAriaLabel %>"><%= carryoverDateLabel %></time>
               <% if (carryoverIsIncomeSide) { %>
                 <div class="personal-ledger-content-cell"><strong>繰越金</strong></div><strong class="personal-ledger-amount income-text">+<%= summary.carryover.toLocaleString("ja-JP") %> 円</strong><div class="personal-ledger-empty-cell" aria-hidden="true"></div><div class="personal-ledger-empty-cell" aria-hidden="true"></div>
               <% } else { %>
@@ -258,7 +254,7 @@
 
           <section class="personal-ledger-section personal-ledger-balance" aria-label="残高">
             <div class="personal-ledger-row personal-ledger-summary-row <%= balanceIsIncomeSide ? 'is-income-row' : 'is-expense-row' %>">
-              <time title="<%= balanceDateLabel %>"><%= balanceDateLabel %></time>
+              <time title="<%= balanceDateLabel %>" aria-label="<%= balanceDateAriaLabel %>"><%= balanceDateLabel %></time>
               <% if (balanceIsIncomeSide) { %>
                 <div class="personal-ledger-content-cell"><strong>残高</strong></div><strong class="personal-ledger-amount income-text">+<%= summary.balance.toLocaleString("ja-JP") %> 円</strong><div class="personal-ledger-empty-cell" aria-hidden="true"></div><div class="personal-ledger-empty-cell" aria-hidden="true"></div>
               <% } else { %>
@@ -316,7 +312,7 @@
       action: "/app/transactions",
       today,
       placeholder: "例：昨日コンビニで昼食を800円買った",
-      note: "個人収入・個人支出だけを登録します。基金拠出や関連支払いは各グループ画面から登録してください。",
+      note: "個人収入・個人支出だけを登録します。基金拠出や割り勘は各グループ画面から登録してください。",
       submitLabel: "登録する",
       categories: personalCategories,
       hiddenFields: [

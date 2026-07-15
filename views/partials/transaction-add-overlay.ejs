@@ -42,7 +42,13 @@
 
     <div class="transaction-overlay__body">
       <section class="transaction-overlay__intro" data-overlay-intro>
-        <% if (overlay.note) { %><p class="transaction-overlay__note"><%= overlay.note %></p><% } %>
+        <% if (Array.isArray(overlay.notes)) { %>
+          <div class="transaction-overlay__notes">
+            <% overlay.notes.forEach(note => { %><p class="transaction-overlay__note"><%= note %></p><% }) %>
+          </div>
+        <% } else if (overlay.note) { %>
+          <p class="transaction-overlay__note"><%= overlay.note %></p>
+        <% } %>
         <label class="transaction-overlay__prompt">
           <span>自然文章・内容</span>
           <textarea

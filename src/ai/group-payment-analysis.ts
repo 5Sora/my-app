@@ -46,8 +46,8 @@ export function buildGroupPaymentAutomaticSummary(
   const topCategory = aggregate.current.categories[0] ?? null;
   const observations: FinancialAnalysisDisplay["observations"] = [
     {
-      title: "関連支払いの集計",
-      description: `総額は${currency(aggregate.current.totalAmount)}、Transactionは${aggregate.current.transactionCount}件です。単独支払いは${aggregate.current.singlePaymentCount}件、確定batchは${aggregate.current.confirmedBatchCount}件です。`,
+      title: "割り勘の集計",
+      description: `総額は${currency(aggregate.current.totalAmount)}、Transactionは${aggregate.current.transactionCount}件です。個別支払いは${aggregate.current.singlePaymentCount}件、確定済み割り勘は${aggregate.current.confirmedBatchCount}件です。`,
       level: aggregate.warningFlags.noPayments ? "INFO" : "INFO",
     },
     {
@@ -83,7 +83,7 @@ export function buildGroupPaymentAutomaticSummary(
   if (topCategory) {
     suggestions.push({
       title: "カテゴリ別集計の確認",
-      description: `割合が最も大きい「${topCategory.category}」を確認すると、関連支払いの構成を把握しやすくなります。`,
+      description: `割合が最も大きい「${topCategory.category}」を確認すると、割り勘の構成を把握しやすくなります。`,
     });
   }
   if (aggregate.warningFlags.limitedTransactionCount) {
@@ -102,7 +102,7 @@ export function buildGroupPaymentAutomaticSummary(
   return {
     source: "AUTOMATIC_SUMMARY",
     sourceLabel: "自動集計（AI分析ではありません）",
-    overview: `${aggregate.period.label}の関連支払い集計です。支払いイベントは${aggregate.current.paymentEventCount}件です。`,
+    overview: `${aggregate.period.label}の割り勘集計です。支払いイベントは${aggregate.current.paymentEventCount}件です。`,
     observations,
     suggestions,
     limitations: [

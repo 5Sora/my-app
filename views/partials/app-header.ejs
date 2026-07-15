@@ -36,7 +36,7 @@
           href="<%= header.paymentsHref || `/groups/${header.groupId}/payments` %>"
           class="secondary-button button-link group-nav-item<%= header.active === 'payments' ? ' is-active' : '' %>"
           <% if (header.active === "payments") { %>aria-current="page" data-payment-context-link<% } %>
-        >関連支払い</a>
+        >割り勘</a>
         <form action="/logout" method="post" class="group-nav-logout">
           <button type="submit" class="secondary-button group-nav-item">ログアウト</button>
         </form>

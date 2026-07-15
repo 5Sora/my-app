@@ -335,3 +335,628 @@
     font-size: 0.68rem;
   }
 }
+
+
+/* Stable chart heading band across the three ledger screens. */
+.personal-insight-heading,
+.fund-insight-heading,
+.payments-insight-heading {
+  min-height: 40px;
+  align-items: flex-start;
+}
+
+
+/* Cross-ledger visual normalization: personal, fund and split-payment screens. */
+:root {
+  --ledger-panel-padding: 18px;
+  --ledger-panel-title-size: 20px;
+  --ledger-page-title-size: clamp(2rem, 2.7vw, 2.55rem);
+  --ledger-body-text-size: 14px;
+  --ledger-meta-text-size: 11px;
+  --ledger-chart-size: 158px;
+  --ledger-chart-control-height: 31px;
+}
+
+/* Shared title cards: left aligned, with identical hierarchy and vertical rhythm. */
+.personal-title-card,
+.fund-title-card,
+.payments-title-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: var(--ledger-panel-padding);
+  text-align: left;
+}
+
+.personal-title-card .ledger-context-title,
+.fund-title-card .ledger-context-title,
+.payments-title-card .ledger-context-title {
+  margin: 0;
+  font-size: var(--ledger-panel-title-size);
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.personal-title-card h1,
+.fund-title-card h1,
+.payments-title-card h1 {
+  margin: auto 0 0;
+  font-size: var(--ledger-page-title-size);
+  font-weight: 800;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.personal-title-card .ledger-period-title,
+.fund-title-card .ledger-period-title,
+.payments-title-card .ledger-period-title {
+  min-height: 1.3em;
+  margin: 8px 0 auto;
+  color: var(--text);
+  font-size: var(--ledger-panel-title-size);
+  font-weight: 800;
+  line-height: 1.3;
+  text-align: left;
+}
+
+/* Shared panel title placement. */
+.personal-summary-card,
+.fund-summary-card,
+.personal-insight-card,
+.fund-insight-card,
+.payments-insight-card,
+.personal-transaction-panel,
+.fund-transaction-panel,
+.payments-history-panel {
+  padding: var(--ledger-panel-padding);
+}
+
+.personal-summary-card > h2,
+.fund-summary-card > h2,
+.personal-insight-heading > h2,
+.fund-insight-heading > h2,
+.payments-insight-heading > h2,
+.personal-history-heading > h2,
+.fund-history-heading > h2,
+.payments-history-heading > h2 {
+  margin: 0;
+  font-size: var(--ledger-panel-title-size);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.personal-insight-heading,
+.fund-insight-heading,
+.payments-insight-heading {
+  min-height: 40px;
+  align-items: flex-start;
+}
+
+/* Personal and fund summaries share one typographic scale and row geometry. */
+.personal-summary-card,
+.fund-summary-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.personal-summary-rows,
+.fund-summary-rows {
+  display: grid;
+  gap: 0;
+  margin-top: auto;
+}
+
+.personal-summary-rows > div,
+.fund-summary-rows > div {
+  min-height: 30px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: baseline;
+  padding: 5px 0;
+}
+
+.personal-summary-rows span,
+.fund-summary-rows span {
+  color: var(--muted);
+  font-size: var(--ledger-body-text-size);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.personal-summary-rows strong,
+.fund-summary-rows strong {
+  font-size: 16px;
+  line-height: 1.35;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.personal-summary-total,
+.fund-summary-total {
+  border-top: 2px solid var(--text);
+  padding-top: 6px !important;
+}
+
+/* Personal and fund category panels use the same controls and chart geometry. */
+.personal-insight-card,
+.fund-insight-card,
+.payments-insight-card {
+  gap: 10px;
+}
+
+.personal-chart-switch,
+.fund-chart-toggle {
+  min-height: var(--ledger-chart-control-height);
+}
+
+.personal-chart-switch button,
+.fund-chart-toggle__button {
+  min-height: var(--ledger-chart-control-height);
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.personal-category-chart,
+.fund-income-chart,
+.payments-share-chart {
+  min-height: 0;
+  grid-template-columns: minmax(112px, 0.8fr) minmax(150px, 1.2fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.personal-category-chart__visual,
+.fund-income-chart__visual,
+.payments-share-chart__visual {
+  width: min(100%, var(--ledger-chart-size));
+  aspect-ratio: 1;
+  justify-self: center;
+  margin: 0;
+}
+
+/* Split-payment has no chart switch; reserve the same vertical band without an empty control. */
+.payments-share-chart {
+  padding-top: calc(var(--ledger-chart-control-height) + 10px);
+}
+
+.personal-category-chart__center strong,
+.fund-income-chart__center strong,
+.payments-share-chart__center strong {
+  font-size: 16px;
+  line-height: 1.05;
+}
+
+.personal-category-chart__center span,
+.personal-category-chart__center small,
+.fund-income-chart__center span,
+.fund-income-chart__center small,
+.payments-share-chart__center span,
+.payments-share-chart__center small {
+  font-size: 10px;
+}
+
+.personal-category-chart__legend-name strong,
+.fund-income-chart__legend-name strong,
+.payments-share-chart__legend-name strong,
+.personal-category-chart__legend-value strong,
+.fund-income-chart__legend-value strong,
+.payments-share-chart__legend-value strong {
+  font-size: 12px;
+}
+
+.personal-category-chart__legend-value small,
+.fund-income-chart__legend-name small,
+.fund-income-chart__legend-value small,
+.payments-share-chart__legend-name small,
+.payments-share-chart__legend-value small {
+  font-size: 10px;
+}
+
+/* Operation icons keep the same dimensions on all three screens. */
+.ledger-operation-button {
+  font-size: 16px !important;
+}
+
+.ledger-operation-button > span[aria-hidden="true"] {
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* History headers share the same baseline, spacing and action sizes. */
+.personal-history-heading,
+.fund-history-heading,
+.payments-history-heading {
+  min-height: 40px;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.personal-history-actions,
+.fund-history-actions,
+.payments-history-actions {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  font-size: var(--ledger-body-text-size);
+}
+
+.personal-history-add,
+.fund-history-add,
+.payments-history-add {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* Personal and fund five-column ledgers now share one exact visual specification. */
+.personal-ledger,
+.fund-ledger {
+  --personal-ledger-columns: 12% 30% 14% 30% 14%;
+  --fund-ledger-columns: 12% 30% 14% 30% 14%;
+}
+
+.personal-ledger-column-heading,
+.fund-ledger-column-heading,
+.payments-ledger-heading {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.personal-ledger-column-heading > span,
+.personal-ledger-row > *,
+.fund-ledger-column-heading > span,
+.fund-ledger-row > time,
+.fund-ledger-row > .fund-ledger-content-cell,
+.fund-ledger-row > .fund-ledger-amount,
+.fund-ledger-row > .fund-ledger-empty-cell {
+  padding: 10px;
+}
+
+.personal-ledger-row,
+.fund-ledger-row,
+.payments-ledger-row {
+  min-height: 58px;
+  font-size: var(--ledger-body-text-size);
+  line-height: 1.35;
+}
+
+.personal-ledger-row > time,
+.fund-ledger-row > time,
+.payments-ledger-row > time {
+  color: var(--muted);
+  font-size: var(--ledger-body-text-size);
+  line-height: 1.35;
+}
+
+.personal-ledger-primary-text,
+.fund-ledger-primary-text,
+.payments-ledger-text > strong,
+.personal-ledger-amount,
+.fund-ledger-amount,
+.payments-ledger-row > strong,
+.payments-ledger-total > strong {
+  font-size: var(--ledger-body-text-size);
+  line-height: 1.35;
+}
+
+.personal-ledger-meta,
+.fund-ledger-meta,
+.fund-ledger-content-cell small,
+.payments-ledger-text small {
+  font-size: var(--ledger-meta-text-size);
+  line-height: 1.35;
+}
+
+.personal-ledger-summary-row,
+.fund-ledger-summary-row,
+.payments-ledger-total {
+  min-height: 52px;
+  font-size: var(--ledger-body-text-size);
+}
+
+.payments-history-tabs {
+  margin: 0 0 12px;
+}
+
+.payments-history-tabs button {
+  font-size: var(--ledger-body-text-size);
+}
+
+.payments-ledger-heading > *,
+.payments-ledger-row > *,
+.payments-ledger-total > * {
+  padding: 10px 8px;
+  font-size: var(--ledger-body-text-size);
+  line-height: 1.35;
+}
+
+@media (max-width: 820px) {
+  :root {
+    --ledger-panel-padding: 16px;
+    --ledger-panel-title-size: 18px;
+    --ledger-page-title-size: clamp(1.75rem, 8vw, 2.2rem);
+    --ledger-chart-size: 150px;
+  }
+
+  .payments-share-chart {
+    padding-top: 0;
+  }
+}
+
+/* Final cross-ledger detail pass: history type, summary-row alignment and operation spacing. */
+.personal-ledger-column-heading > span,
+.fund-ledger-column-heading > span,
+.payments-ledger-heading > * {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.personal-ledger-row > *,
+.fund-ledger-row > time,
+.fund-ledger-row > .fund-ledger-content-cell,
+.fund-ledger-row > .fund-ledger-amount,
+.fund-ledger-row > .fund-ledger-empty-cell,
+.payments-ledger-row > *,
+.payments-ledger-total > * {
+  font-size: var(--ledger-body-text-size);
+  line-height: 1.35;
+}
+
+.personal-ledger-primary-text,
+.fund-ledger-primary-text,
+.payments-ledger-text {
+  font-size: var(--ledger-body-text-size);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.personal-ledger-meta,
+.fund-ledger-meta,
+.payments-ledger-text small {
+  font-size: var(--ledger-meta-text-size);
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.personal-ledger-summary-row > *,
+.fund-ledger-summary-row > * {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+}
+
+.personal-ledger-summary-row > time,
+.fund-ledger-summary-row > time {
+  align-self: stretch;
+  justify-content: flex-start;
+  vertical-align: middle;
+}
+
+@media (min-width: 821px) {
+  .personal-operation-rail {
+    gap: 8px;
+    border: 0;
+    background: transparent;
+  }
+
+  .personal-operation-rail button,
+  .personal-operation-rail button:last-child {
+    border: 1px solid var(--border);
+  }
+
+  .personal-operation-rail button:hover:not(:disabled),
+  .personal-operation-rail button:focus-visible:not(:disabled) {
+    border-color: var(--text);
+  }
+}
+
+
+/* Shared context-list and panel-header system across ledger and overview screens. */
+.ledger-context-panel {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 14px 16px;
+}
+
+.ledger-context-panel > .panel-heading,
+.group-overview-panel-heading,
+.group-members-heading {
+  min-height: 40px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ledger-context-panel > .panel-heading h2,
+.group-overview-panel-heading h2,
+.group-members-heading h2 {
+  margin: 0;
+  font-size: var(--ledger-panel-title-size);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.ledger-context-panel > .panel-heading > span,
+.ledger-context-panel > .panel-heading > div > span,
+.group-overview-panel-heading > span,
+.group-members-heading-actions > span {
+  color: var(--muted);
+  font-size: var(--ledger-body-text-size);
+  line-height: 1.35;
+}
+
+.ledger-context-list {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: grid;
+  align-content: start;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  list-style: none;
+}
+
+.ledger-context-list a,
+.ledger-context-list > li {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  color: var(--text);
+  background: transparent;
+  text-decoration: none;
+}
+
+.ledger-context-list a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ledger-context-list a:hover,
+.ledger-context-list a:focus-visible,
+.ledger-context-list a.is-active {
+  border-left-color: var(--text);
+  background: #f1ede8;
+  outline: none;
+}
+
+.ledger-context-list strong {
+  font-size: var(--ledger-body-text-size);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.ledger-context-list small,
+.ledger-context-list .initial-badge,
+.ledger-context-list .group-page-badge {
+  font-size: var(--ledger-meta-text-size);
+  line-height: 1.35;
+}
+
+.personal-group-panel .ledger-context-list a > span:first-child,
+.group-overview-page-list a > span:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.fund-member-list.ledger-context-list > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.payments-member-list.ledger-context-list > li {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.payments-member-list.ledger-context-list > li.is-selected {
+  border-left-color: var(--text);
+  background: #f1ede8;
+}
+
+.group-overview-pages-panel.ledger-context-panel .group-overview-page-list {
+  flex: 1 1 auto;
+}
+
+.group-overview-pages-panel.ledger-context-panel .group-overview-page-list a {
+  padding: 8px 10px;
+}
+
+/* All analysis actions use one exact button box and one header baseline. */
+.personal-insight-heading,
+.fund-insight-heading,
+.payments-insight-heading {
+  min-height: 40px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.personal-ai-analysis-button,
+.fund-ai-analysis-button,
+.payments-ai-analysis-button {
+  flex: 0 0 auto;
+  align-self: flex-start !important;
+  min-width: 72px;
+  min-height: 38px;
+  box-sizing: border-box;
+  padding: 7px 12px;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+/* Split-calculation and latest-result panels share the same outer panel header system. */
+.ledger-feature-panel {
+  padding: var(--ledger-panel-padding);
+}
+
+.ledger-feature-panel > .panel-heading {
+  min-height: 40px;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.ledger-feature-panel > .panel-heading > span {
+  padding-top: 2px;
+}
+
+.ledger-feature-panel > .panel-heading h2 {
+  margin: 0;
+  font-size: var(--ledger-panel-title-size);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.ledger-feature-panel > .panel-heading > span {
+  color: var(--muted);
+  font-size: var(--ledger-body-text-size);
+  line-height: 1.35;
+}
+
+/* Endpoint rows are fixed to the same history typography as ordinary rows. */
+.personal-ledger-summary-row > *,
+.fund-ledger-summary-row > * {
+  font-size: var(--ledger-body-text-size);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+@media (max-width: 820px) {
+  .ledger-context-panel {
+    padding: 13px 14px;
+    overflow: visible;
+  }
+
+  .ledger-context-list {
+    overflow: visible;
+  }
+}

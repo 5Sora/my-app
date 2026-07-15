@@ -484,7 +484,7 @@ function validateGroupPaymentInput(input: {
   if (!input.amount) return "金額は1円以上の整数で入力してください。";
   if (!input.rawText) return "内容を入力してください。";
   if (input.rawText.length > 500) return "内容は500文字以内で入力してください。";
-  if (!isGroupPaymentCategory(input.category)) return "グループ関連支出のカテゴリを選択してください。";
+  if (!isGroupPaymentCategory(input.category)) return "割り勘のカテゴリを選択してください。";
   return null;
 }
 
@@ -808,7 +808,7 @@ const calculationMethodOptions = [
   {
     value: "HISTORY_SAME_PARTICIPANTS",
     label: "過去の負担比率・同じ参加者",
-    description: "同じ参加者構成の過去batch比率を利用します。",
+    description: "同じ参加者構成の過去の確定済み割り勘比率を利用します。",
   },
   {
     value: "BALANCE_ADJUSTMENT",
@@ -1077,7 +1077,7 @@ async function calculateGroupPaymentPreview(input: {
       usedMethod = "EQUAL";
       fallbackReason =
         matchingBatchCount === 0
-          ? "同じ参加者構成の確定済みbatchがないため、均等割を使用しました。"
+          ? "同じ参加者構成の確定済み割り勘がないため、均等割を使用しました。"
           : "同じ参加者構成の過去負担額合計が0円のため、均等割を使用しました。";
       weights = selectedParticipants.map((participant) => ({ ...participant, weight: 1 }));
     }
@@ -2008,7 +2008,7 @@ app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, nex
 
     const membership = await findActiveGroupMembership(userId, groupId);
     if (!membership) {
-      res.status(403).send("このグループの関連支払いを表示する権限がありません。");
+      res.status(403).send("このグループの割り勘を表示する権限がありません。");
       return;
     }
 
@@ -2017,7 +2017,7 @@ app.get("/groups/:groupId/payments", requireAuthentication, async (req, res, nex
       parsePositiveInteger(req.query.pageId),
     );
     if (!pageData) {
-      res.status(500).send("関連支払いの表示ページが見つかりません。");
+      res.status(500).send("割り勘の表示ページが見つかりません。");
       return;
     }
 
@@ -2099,7 +2099,7 @@ app.post(
 
       const pageData = await loadGroupPaymentsPageData(groupId, currentPageId);
       if (!pageData) {
-        res.status(500).send("関連支払いの表示ページが見つかりません。");
+        res.status(500).send("割り勘の表示ページが見つかりません。");
         return;
       }
 
@@ -2229,7 +2229,7 @@ app.post(
 
       const pageData = await loadGroupPaymentsPageData(groupId, currentPageId);
       if (!pageData) {
-        res.status(500).send("関連支払いの表示ページが見つかりません。");
+        res.status(500).send("割り勘の表示ページが見つかりません。");
         return;
       }
 
@@ -2587,7 +2587,7 @@ app.post(
       );
 
       if (!adminMembership) {
-        res.status(403).send("関連支払いの表示ページを追加する権限がありません。");
+        res.status(403).send("割り勘の表示ページを追加する権限がありません。");
         return;
       }
 
@@ -2627,7 +2627,7 @@ app.post(
       res.redirect(
         buildGroupPaymentsUrl(groupId, {
           pageId: page.id,
-          success: "関連支払いの表示ページを追加しました。",
+          success: "割り勘の表示ページを追加しました。",
           contextState,
         }),
       );
@@ -2690,7 +2690,7 @@ app.post(
       );
 
       if (!adminMembership) {
-        res.status(403).send("関連支払いの表示ページを編集する権限がありません。");
+        res.status(403).send("割り勘の表示ページを編集する権限がありません。");
         return;
       }
 
@@ -2737,7 +2737,7 @@ app.post(
       res.redirect(
         buildGroupPaymentsUrl(groupId, {
           pageId,
-          success: "関連支払いの表示ページを更新しました。",
+          success: "割り勘の表示ページを更新しました。",
           contextState,
         }),
       );
@@ -2795,7 +2795,7 @@ app.post(
       );
 
       if (!adminMembership) {
-        res.status(403).send("関連支払いの表示ページを削除する権限がありません。");
+        res.status(403).send("割り勘の表示ページを削除する権限がありません。");
         return;
       }
 
@@ -2850,7 +2850,7 @@ app.post(
       res.redirect(
         buildGroupPaymentsUrl(groupId, {
           pageId: fallbackPage?.id,
-          success: "関連支払いの表示ページを削除しました。Transactionは削除されていません。",
+          success: "割り勘の表示ページを削除しました。Transactionは削除されていません。",
           contextState,
         }),
       );
@@ -2912,12 +2912,12 @@ app.post(
       const membership = await findActiveGroupMembership(operatorUserId, groupId);
 
       if (!membership) {
-        res.status(403).send("このグループへ関連支払いを登録する権限がありません。");
+        res.status(403).send("このグループへ個別支払いを登録する権限がありません。");
         return;
       }
 
       if (requestedUserId !== operatorUserId) {
-        res.status(403).send("他人名義の関連支払いは登録できません。");
+        res.status(403).send("他人名義の個別支払いは登録できません。");
         return;
       }
 
@@ -2967,7 +2967,7 @@ app.post(
       res.redirect(
         buildGroupPaymentsUrl(groupId, {
           pageId: currentPageId,
-          success: "個別の関連支払いを登録しました。個人家計簿にも反映されています。",
+          success: "個別支払いを登録しました。個人家計簿にも反映されています。",
           contextState,
         }),
       );
@@ -4882,11 +4882,11 @@ app.post(
         return;
       }
       if (!membership) {
-        res.status(403).json({ ok: false, message: "このグループの関連支払いを分析する権限がありません。" });
+        res.status(403).json({ ok: false, message: "このグループの割り勘を分析する権限がありません。" });
         return;
       }
       if (!page) {
-        res.status(404).json({ ok: false, message: "分析対象の関連支払いページが見つかりません。" });
+        res.status(404).json({ ok: false, message: "分析対象の割り勘ページが見つかりません。" });
         return;
       }
 
@@ -4936,7 +4936,7 @@ app.post(
       console.error("[AI] Group payment aggregate could not be calculated.");
       res.status(500).json({
         ok: false,
-        message: "関連支払い集計を作成できませんでした。時間をおいてお試しください。",
+        message: "割り勘集計を作成できませんでした。時間をおいてお試しください。",
       });
     }
   },

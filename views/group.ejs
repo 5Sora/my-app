@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= group.name %> - グループ概要</title>
+  <title>概要｜<%= group.name %></title>
   <link rel="stylesheet" href="/css/auth.css">
   <link rel="stylesheet" href="/css/ledger.css">
   <link rel="stylesheet" href="/css/group.css">
@@ -39,10 +39,7 @@
     <section class="group-overview-top" aria-label="グループ情報と台帳ページ">
       <article class="panel group-overview-info-panel">
         <div class="panel-heading compact group-overview-panel-heading">
-          <div>
-            <p class="eyebrow">基本情報</p>
-            <h2>グループ情報</h2>
-          </div>
+          <h2>グループ情報</h2>
           <% if (isAdmin) { %>
             <button
               type="button"
@@ -72,12 +69,9 @@
         </dl>
       </article>
 
-      <article class="panel group-overview-pages-panel group-fund-pages-panel">
+      <article class="panel group-overview-pages-panel group-fund-pages-panel ledger-context-panel">
         <div class="panel-heading compact group-overview-panel-heading">
-          <div>
-            <p class="eyebrow">基金</p>
-            <h2>基金ページ一覧</h2>
-          </div>
+          <h2>基金ページ</h2>
           <span><%= fundPages.length %> 件</span>
         </div>
 
@@ -86,7 +80,7 @@
         <% } else if (fundPages.length === 0) { %>
           <p class="empty-state group-overview-page-empty">基金ページがありません。</p>
         <% } else { %>
-          <nav class="group-overview-page-list" aria-label="基金ページ">
+          <nav class="group-overview-page-list ledger-context-list" aria-label="基金ページ">
             <% fundPages.forEach(page => { %>
               <a href="/groups/<%= group.id %>/fund?pageId=<%= page.id %>">
                 <span>
@@ -104,19 +98,16 @@
         <% } %>
       </article>
 
-      <article class="panel group-overview-pages-panel group-payment-pages-panel">
+      <article class="panel group-overview-pages-panel group-payment-pages-panel ledger-context-panel">
         <div class="panel-heading compact group-overview-panel-heading">
-          <div>
-            <p class="eyebrow">関連支払い</p>
-            <h2>関連支払いページ一覧</h2>
-          </div>
+          <h2>割り勘ページ</h2>
           <span><%= paymentPages.length %> 件</span>
         </div>
 
         <% if (paymentPages.length === 0) { %>
-          <p class="empty-state group-overview-page-empty">関連支払いページがありません。</p>
+          <p class="empty-state group-overview-page-empty">割り勘ページがありません。</p>
         <% } else { %>
-          <nav class="group-overview-page-list" aria-label="関連支払いページ">
+          <nav class="group-overview-page-list ledger-context-list" aria-label="割り勘ページ">
             <% paymentPages.forEach(page => { %>
               <a href="/groups/<%= group.id %>/payments?pageId=<%= page.id %>">
                 <span>
@@ -137,10 +128,7 @@
 
     <section class="panel group-members-panel" aria-labelledby="group-members-heading">
       <div class="panel-heading group-members-heading">
-        <div>
-          <p class="eyebrow">所属</p>
-          <h2 id="group-members-heading">メンバー一覧</h2>
-        </div>
+        <h2 id="group-members-heading">所属メンバー</h2>
         <div class="group-members-heading-actions">
           <span><%= activeMemberCount %> 人（管理者 <%= activeAdminCount %> 人）</span>
           <% if (isAdmin) { %>

@@ -25,7 +25,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= fund.name %> - <%= selectedPage.name %></title>
+  <title>基金｜<%= group.name %>｜<%= selectedPage.name %></title>
   <link rel="stylesheet" href="/css/auth.css">
   <link rel="stylesheet" href="/css/ledger.css">
   <link rel="stylesheet" href="/css/group.css">
@@ -58,28 +58,27 @@
 
   <main class="ledger-shell fund-shell" aria-label="グループ基金">
     <section class="ledger-shell-top fund-shell-top" aria-label="基金の概要">
-      <article class="panel fund-title-card">
-        <p class="eyebrow">グループ基金</p>
-        <h1><%= fund.name %></h1>
-        <p class="fund-title-page"><strong><%= selectedPage.name %></strong></p>
-        <p class="period-label">
+      <article class="panel fund-title-card" aria-labelledby="fund-ledger-title">
+        <h2 class="ledger-context-title"><%= group.name %> の基金</h2>
+        <h1 id="fund-ledger-title"><%= selectedPage.name %></h1>
+        <p class="ledger-period-title<%= selectedPage.startDate || selectedPage.endDate ? '' : ' is-empty' %>">
           <% if (selectedPage.startDate || selectedPage.endDate) { %>
             <%= selectedPage.startDate ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
             〜
             <%= selectedPage.endDate ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
           <% } else { %>
-            全期間
+            <span aria-hidden="true">&nbsp;</span>
           <% } %>
         </p>
       </article>
 
-      <article class="panel fund-summary-card" aria-label="基金収支サマリー">
-        <p class="eyebrow">期間収支</p>
+      <article class="panel fund-summary-card" aria-labelledby="fund-summary-title">
+        <h2 id="fund-summary-title">サマリー</h2>
         <div class="fund-summary-rows">
           <div><span>繰越金</span><strong><%= summary.carryover.toLocaleString("ja-JP") %> 円</strong></div>
-          <div><span>＋ 基金収入</span><strong class="income-text"><%= summary.incomeTotal.toLocaleString("ja-JP") %> 円</strong></div>
-          <div><span>－ 基金支出</span><strong class="expense-text"><%= summary.expenseTotal.toLocaleString("ja-JP") %> 円</strong></div>
-          <div class="fund-summary-total"><span>＝ 基金残高</span><strong><%= summary.balance.toLocaleString("ja-JP") %> 円</strong></div>
+          <div><span>＋ 収入</span><strong class="income-text"><%= summary.incomeTotal.toLocaleString("ja-JP") %> 円</strong></div>
+          <div><span>－ 支出</span><strong class="expense-text"><%= summary.expenseTotal.toLocaleString("ja-JP") %> 円</strong></div>
+          <div class="fund-summary-total"><span>＝ 残高</span><strong><%= summary.balance.toLocaleString("ja-JP") %> 円</strong></div>
         </div>
       </article>
 
@@ -90,10 +89,7 @@
         data-fund-composition-chart
       >
         <div class="fund-insight-heading">
-          <div class="fund-insight-heading__copy">
-            <p class="eyebrow" data-fund-chart-eyebrow>基金収入構成</p>
-            <h2 id="fund-composition-title" data-fund-chart-title>内部拠出・外部収入</h2>
-          </div>
+          <h2 id="fund-composition-title">カテゴリ</h2>
           <button
             type="button"
             class="secondary-button fund-ai-analysis-button"
@@ -112,13 +108,13 @@
             class="fund-chart-toggle__button is-active"
             data-fund-chart-mode="income"
             aria-pressed="true"
-          >収入構成</button>
+          >収入カテゴリ</button>
           <button
             type="button"
             class="fund-chart-toggle__button"
             data-fund-chart-mode="expense"
             aria-pressed="false"
-          >支出構成</button>
+          >支出カテゴリ</button>
         </div>
 
         <div class="fund-income-chart" data-fund-chart-content <%= fundVisualizationView.totals.income > 0 ? "" : "hidden" %>>
@@ -189,19 +185,16 @@
     <aside
       class="fund-context-column"
       id="fund-context-panel"
-      aria-label="基金ページと有効メンバー"
+      aria-label="基金ページと所属メンバー"
       aria-hidden="<%= String(!isContextOpen) %>"
     >
-      <section class="panel fund-page-panel">
+      <section class="panel fund-page-panel ledger-context-panel">
         <div class="panel-heading compact">
-          <div>
-            <p class="eyebrow">LedgerPage</p>
-            <h2>表示ページ</h2>
-          </div>
+          <h2>表示ページ</h2>
           <span><%= pages.length %> 件</span>
         </div>
 
-        <nav class="page-list" aria-label="グループ基金ページ">
+        <nav class="page-list ledger-context-list" aria-label="グループ基金ページ">
           <% pages.forEach(page => { %>
             <a
               href="<%= buildGroupFundUrl(group.id, { pageId: page.id, contextState }) %>"
@@ -222,24 +215,15 @@
         </p>
       </section>
 
-      <section class="panel fund-member-panel">
+      <section class="panel fund-member-panel ledger-context-panel">
         <div class="panel-heading compact">
-          <div>
-            <p class="eyebrow">閲覧専用</p>
-            <h2>有効メンバー</h2>
-          </div>
+          <h2>所属メンバー</h2>
           <span><%= activeMembers.length %> 人</span>
         </div>
 
-        <ul class="fund-member-list">
+        <ul class="fund-member-list ledger-context-list">
           <% activeMembers.forEach(member => { %>
-            <li>
-              <span>
-                <strong><%= member.user.displayName %></strong>
-                <% if (member.userId === currentUserId) { %><small>あなた</small><% } %>
-              </span>
-              <small><%= member.role === "ADMIN" ? "管理者" : "メンバー" %></small>
-            </li>
+            <li><strong><%= member.user.displayName %></strong></li>
           <% }) %>
         </ul>
       </section>
@@ -287,11 +271,7 @@
 
     <aside class="panel fund-collapsed-column">
       <div class="fund-bar-chart-heading">
-        <div>
-          <p class="eyebrow">期間比較</p>
-          <h2>収入・支出</h2>
-        </div>
-        <small>選択期間</small>
+        <h2>収入・支出</h2>
       </div>
 
       <% if (fundVisualizationView.totals.income > 0 || fundVisualizationView.totals.expense > 0) { %>
@@ -302,7 +282,6 @@
         >
           <div class="fund-bar-chart__plot" aria-hidden="true">
             <section class="fund-bar-chart__column">
-              <span class="fund-bar-chart__value income-text"><%= fundVisualizationView.totals.income.toLocaleString("ja-JP") %> 円</span>
               <div class="fund-bar-chart__track">
                 <div class="fund-bar-chart__income" style="height: <%= fundVisualizationView.barScale.incomePercent %>%">
                   <% if (fundVisualizationView.totals.internalContribution > 0) { %>
@@ -317,7 +296,6 @@
             </section>
 
             <section class="fund-bar-chart__column">
-              <span class="fund-bar-chart__value expense-text"><%= fundVisualizationView.totals.expense.toLocaleString("ja-JP") %> 円</span>
               <div class="fund-bar-chart__track">
                 <div class="fund-bar-chart__expense" style="height: <%= fundVisualizationView.barScale.expensePercent %>%"></div>
               </div>
@@ -351,16 +329,15 @@
       <% const balanceIsIncomeSide = summary.balance >= 0; %>
       <% const carryoverDateLabel = selectedPage.startDate
         ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP")
-        : "開始時"; %>
+        : "はじめ"; %>
       <% const balanceDateLabel = selectedPage.endDate
         ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP")
-        : "現在"; %>
+        : "おわり"; %>
+      <% const carryoverDateAriaLabel = selectedPage.startDate ? carryoverDateLabel : "選択期間の開始時点"; %>
+      <% const balanceDateAriaLabel = selectedPage.endDate ? balanceDateLabel : "選択期間の終了時点"; %>
 
       <div class="panel-heading fund-history-heading">
-        <div>
-          <p class="eyebrow">詳細</p>
-          <h2>基金取引履歴</h2>
-        </div>
+        <h2>履歴詳細</h2>
         <div class="fund-history-actions">
           <span><%= transactions.length %> 件</span>
           <button
@@ -377,15 +354,15 @@
       <div class="fund-ledger" aria-label="基金収入と基金支出の取引台帳">
         <div class="fund-ledger-column-heading" role="row">
           <span role="columnheader">日付</span>
-          <span role="columnheader">内容</span>
-          <span role="columnheader">金額</span>
-          <span role="columnheader">内容</span>
-          <span role="columnheader">金額</span>
+          <span role="columnheader">収入内容</span>
+          <span role="columnheader">収入金額</span>
+          <span role="columnheader">支出内容</span>
+          <span role="columnheader">支出金額</span>
         </div>
 
         <section class="fund-ledger-section fund-ledger-carryover" aria-label="繰越金">
           <div class="fund-ledger-row fund-ledger-summary-row <%= carryoverIsIncomeSide ? 'is-income-row' : 'is-expense-row' %>">
-            <time title="<%= carryoverDateLabel %>"><%= carryoverDateLabel %></time>
+            <time title="<%= carryoverDateLabel %>" aria-label="<%= carryoverDateAriaLabel %>"><%= carryoverDateLabel %></time>
             <% if (carryoverIsIncomeSide) { %>
               <div class="fund-ledger-content-cell"><strong>繰越金</strong></div>
               <strong class="fund-ledger-amount income-text">+<%= summary.carryover.toLocaleString("ja-JP") %> 円</strong>
@@ -449,7 +426,7 @@
 
         <section class="fund-ledger-section fund-ledger-balance" aria-label="残高">
           <div class="fund-ledger-row fund-ledger-summary-row <%= balanceIsIncomeSide ? 'is-income-row' : 'is-expense-row' %>">
-            <time title="<%= balanceDateLabel %>"><%= balanceDateLabel %></time>
+            <time title="<%= balanceDateLabel %>" aria-label="<%= balanceDateAriaLabel %>"><%= balanceDateLabel %></time>
             <% if (balanceIsIncomeSide) { %>
               <div class="fund-ledger-content-cell"><strong>残高</strong></div>
               <strong class="fund-ledger-amount income-text">+<%= summary.balance.toLocaleString("ja-JP") %> 円</strong>

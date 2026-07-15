@@ -136,7 +136,7 @@ export function buildPersonalLedgerAutomaticSummary(
 
   observations.push({
     title: "連動取引",
-    description: `グループ関連支出は${currency(aggregate.current.groupPaymentTotal)}、基金拠出は${currency(aggregate.current.fundContributionTotal)}です。`,
+    description: `割り勘は${currency(aggregate.current.groupPaymentTotal)}、基金拠出は${currency(aggregate.current.fundContributionTotal)}です。`,
     level: "INFO",
   });
 

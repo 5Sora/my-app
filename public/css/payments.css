@@ -225,7 +225,7 @@
 
 .payments-member-list li {
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
+  grid-template-columns: 42px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   min-height: 52px;
@@ -235,12 +235,34 @@
 
 .payments-member-action {
   display: grid;
-  place-items: center;
+  width: 42px;
+  min-width: 42px;
   min-height: 32px;
+  place-items: center;
   color: var(--muted);
-  background: #f4f1ed;
+  background: transparent;
   font-size: 11px;
   font-weight: 800;
+  pointer-events: none;
+}
+
+.payments-member-action::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1.5px solid #8d8882;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.is-calculation-mode .payments-member-action {
+  background: #f4f1ed;
+  pointer-events: auto;
+}
+
+.is-calculation-mode .payments-member-action::before {
+  display: none;
 }
 
 .payments-member-name {
@@ -250,12 +272,14 @@
 }
 
 .payments-member-name strong {
-  overflow-wrap: anywhere;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
-.payments-member-name small {
-  color: var(--muted);
-}
 
 .payments-history-heading {
   align-items: center;
@@ -703,8 +727,7 @@
   cursor: pointer;
 }
 
-.is-calculation-mode .payments-method-help,
-.is-calculation-mode .payments-member-history-label {
+.is-calculation-mode .payments-method-help {
   display: none;
 }
 
@@ -1907,4 +1930,68 @@
     margin: 0;
     border: 0;
   }
+}
+
+
+/* Final UI simplification: stable headings and guided split-calculation mode. */
+/* Keep member names at the same x-position before and during calculation. */
+.payments-member-list.ledger-context-list > li {
+  grid-template-columns: 42px minmax(0, 1fr);
+  column-gap: 10px;
+}
+
+.payments-title-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.payments-title-card h1 { margin: auto 0; text-align: center; }
+
+.payments-method-heading > h2,
+.payments-insight-heading > h2,
+.payments-page-panel .panel-heading > h2,
+.payments-member-panel .panel-heading > h2,
+.payments-latest-batch .panel-heading > h2,
+.payments-history-heading > h2 { margin: 0; }
+
+.payments-calculation-guide {
+  margin: 7px 0 0;
+  padding: 7px 9px;
+  border-left: 3px solid #36a96f;
+  color: #245c42;
+  background: #effbf4;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+.payments-calculation-guide[hidden] { display: none; }
+
+.is-calculation-mode .payments-context-column { overflow: visible; }
+
+.is-calculation-mode .payments-method-area,
+.is-calculation-mode .payments-member-panel {
+  position: relative;
+  z-index: 2;
+  overflow: visible;
+  border-color: #58d993;
+  outline: 0;
+  background: linear-gradient(180deg, #fbfffd 0%, #f2fff8 100%);
+  box-shadow:
+    0 0 0 2px rgb(88 217 147 / 82%),
+    0 0 24px rgb(75 225 145 / 42%),
+    0 0 46px rgb(75 225 145 / 18%);
+  animation: payments-guidance-pulse 900ms ease-out 1;
+}
+
+.is-calculation-mode .payments-member-panel .payments-member-list { overflow-y: auto; }
+
+@keyframes payments-guidance-pulse {
+  0% { box-shadow: 0 0 0 1px rgb(88 217 147 / 45%), 0 0 4px rgb(75 225 145 / 8%); }
+  55% { box-shadow: 0 0 0 3px rgb(88 217 147 / 95%), 0 0 32px rgb(75 225 145 / 58%), 0 0 58px rgb(75 225 145 / 24%); }
+  100% { box-shadow: 0 0 0 2px rgb(88 217 147 / 82%), 0 0 24px rgb(75 225 145 / 42%), 0 0 46px rgb(75 225 145 / 18%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-calculation-mode .payments-method-area,
+  .is-calculation-mode .payments-member-panel { animation: none; }
 }

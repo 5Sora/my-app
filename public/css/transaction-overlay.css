@@ -223,3 +223,7 @@
     min-width: 0;
   }
 }
+
+
+.transaction-overlay__notes { display: grid; gap: 8px; }
+.transaction-overlay__notes .transaction-overlay__note { margin: 0; }

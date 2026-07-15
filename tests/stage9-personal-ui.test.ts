@@ -40,3 +40,18 @@ test("Stage 9-3 transaction addition is exposed from the history heading and cat
   assert.match(ledgerCss, /\.personal-bar-chart__plot\s*\{[\s\S]*min-height: clamp\(230px, 32vh, 300px\)/);
   assert.match(ledgerCss, /@media \(max-width: 820px\) \{[\s\S]*\.personal-bar-chart__plot \{[\s\S]*min-height: 190px/);
 });
+
+
+test("final personal UI uses one visible title per panel and removes duplicated bar values", () => {
+  assert.match(dashboard, /<%= user\.displayName %> の家計簿/);
+  assert.match(dashboard, /id="personal-summary-title">サマリー/);
+  assert.match(dashboard, /id="personal-category-chart-title">カテゴリ/);
+  assert.match(dashboard, />表示ページ</);
+  assert.match(dashboard, />所属グループ</);
+  assert.doesNotMatch(dashboard, /groupMembership\.role === "ADMIN" \? "グループ管理者" : "メンバー"/);
+  assert.match(dashboard, />履歴詳細</);
+  assert.doesNotMatch(dashboard, /<p class="eyebrow">個人家計簿<\/p>/);
+  assert.doesNotMatch(dashboard, /personal-bar-chart__value/);
+  assert.match(ledgerCss, /personal-bar-chart__column > strong[\s\S]*font-size: 0\.9rem/);
+  assert.match(ledgerCss, /personal-ledger-summary-row[\s\S]*min-height: 52px/);
+});

@@ -15,7 +15,7 @@ test("Stage 9-8 fund chart toggles between income and expense compositions witho
   assert.match(view, /data-fund-chart-mode="expense"/);
   assert.match(view, /fundVisualizationView\.expenseComposition/);
   assert.match(view, /data-fund-chart-data/);
-  assert.match(view, /支出構成/);
+  assert.match(view, /支出カテゴリ/);
 
   assert.match(script, /const modes = \{/);
   assert.match(script, /expense: \{/);
@@ -107,5 +107,79 @@ test("Stage 9-8B aligns the fund chart switch structure and styling with the per
   assert.match(fundCss, /\.fund-chart-toggle__button \{[\s\S]*padding: 6px 8px;[\s\S]*background: #faf8f5/);
   assert.match(personalCss, /\.personal-chart-switch \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(personalCss, /\.personal-chart-switch button \{[\s\S]*padding: 6px 8px;[\s\S]*background: #faf8f5/);
+});
+
+
+
+test("cross-ledger visual normalization keeps titles, charts, icons and ledgers consistent", async () => {
+  const [shellCss, fundView] = await Promise.all([
+    read("public/css/app-shell.css"),
+    read("views/fund.ejs"),
+  ]);
+
+  assert.match(shellCss, /Cross-ledger visual normalization/);
+  assert.match(shellCss, /\.personal-title-card h1,[\s\S]*\.fund-title-card h1,[\s\S]*\.payments-title-card h1/);
+  assert.match(shellCss, /text-align: left/);
+  assert.match(shellCss, /--ledger-chart-size: 158px/);
+  assert.match(shellCss, /\.ledger-operation-button > span\[aria-hidden="true"\]/);
+  assert.match(shellCss, /\.personal-ledger-row,[\s\S]*\.fund-ledger-row,[\s\S]*\.payments-ledger-row/);
+  assert.match(fundView, />＋ 収入</);
+  assert.match(fundView, />－ 支出</);
+  assert.match(fundView, />＝ 残高</);
+  assert.doesNotMatch(fundView, />＋ 基金収入<|>－ 基金支出<|>＝ 基金残高</);
+});
+
+
+test("cross-ledger detail pass aligns history typography, summary rows and desktop operation spacing", async () => {
+  const shellCss = await read("public/css/app-shell.css");
+
+  assert.match(shellCss, /Final cross-ledger detail pass/);
+  assert.match(shellCss, /\.payments-ledger-heading > \* \{[\s\S]*font-size: 12px/);
+  assert.match(shellCss, /\.payments-ledger-text \{[\s\S]*font-size: var\(--ledger-body-text-size\);[\s\S]*font-weight: 800/);
+  assert.match(shellCss, /\.fund-ledger-summary-row > \* \{[\s\S]*align-items: center/);
+  assert.match(shellCss, /@media \(min-width: 821px\) \{[\s\S]*\.personal-operation-rail \{[\s\S]*gap: 8px;[\s\S]*border: 0/);
+  assert.match(shellCss, /\.personal-operation-rail button:last-child \{[\s\S]*border: 1px solid var\(--border\)/);
+});
+
+
+test("shared context lists and endpoint labels align ledger and overview panels", async () => {
+  const [shellCss, personal, fund, payments, group] = await Promise.all([
+    read("public/css/app-shell.css"),
+    read("views/dashboard.ejs"),
+    read("views/fund.ejs"),
+    read("views/payments.ejs"),
+    read("views/group.ejs"),
+  ]);
+
+  assert.match(shellCss, /Shared context-list and panel-header system/);
+  assert.match(shellCss, /\.ledger-context-panel > \.panel-heading h2,[\s\S]*font-size: var\(--ledger-panel-title-size\)/);
+  assert.match(shellCss, /\.personal-ai-analysis-button,[\s\S]*\.payments-ai-analysis-button \{[\s\S]*min-height: 38px/);
+  assert.match(shellCss, /\.ledger-feature-panel > \.panel-heading h2 \{[\s\S]*font-size: var\(--ledger-panel-title-size\)/);
+  assert.match(shellCss, /\.ledger-feature-panel > \.panel-heading \{[\s\S]*align-items: flex-start/);
+  assert.match(personal, /: "はじめ"/);
+  assert.match(personal, /: "おわり"/);
+  assert.match(personal, /aria-label="<%= carryoverDateAriaLabel %>"/);
+  assert.match(fund, /: "はじめ"/);
+  assert.match(fund, /: "おわり"/);
+  assert.match(payments, /payments-page-panel ledger-context-panel/);
+  assert.match(payments, /payments-latest-batch ledger-feature-panel/);
+  assert.match(group, /group-fund-pages-panel ledger-context-panel/);
+  assert.match(group, /group-payment-pages-panel ledger-context-panel/);
+  assert.match(group, /group-overview-page-list ledger-context-list/);
+  assert.match(shellCss, /\.payments-member-list\.ledger-context-list > li \{[\s\S]*grid-template-columns: 42px minmax\(0, 1fr\)/);
+});
+
+test("browser tab titles follow one page-type-first convention", async () => {
+  const [personal, fund, payments, group] = await Promise.all([
+    read("views/dashboard.ejs"),
+    read("views/fund.ejs"),
+    read("views/payments.ejs"),
+    read("views/group.ejs"),
+  ]);
+
+  assert.match(personal, /<title>家計簿｜<%= user\.displayName %>｜<%= selectedPage\.name %><\/title>/);
+  assert.match(fund, /<title>基金｜<%= group\.name %>｜<%= selectedPage\.name %><\/title>/);
+  assert.match(payments, /<title>割り勘｜<%= group\.name %>｜<%= selectedPage\.name %><\/title>/);
+  assert.match(group, /<title>概要｜<%= group\.name %><\/title>/);
 });
 

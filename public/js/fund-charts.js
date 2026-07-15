@@ -11,8 +11,6 @@
   const empty = chart.querySelector("[data-fund-chart-empty]");
   const emptyTitle = chart.querySelector("[data-fund-chart-empty-title]");
   const emptyDescription = chart.querySelector("[data-fund-chart-empty-description]");
-  const eyebrow = chart.querySelector("[data-fund-chart-eyebrow]");
-  const title = chart.querySelector("[data-fund-chart-title]");
   const centerLabel = chart.querySelector("[data-fund-chart-center-label]");
   const centerAmount = chart.querySelector("[data-fund-chart-center-amount]");
   const modeHelp = chart.querySelector("[data-fund-chart-mode-help]");
@@ -38,8 +36,6 @@
     income: {
       items: Array.isArray(payload?.income) ? payload.income : [],
       total: Number(payload?.totals?.income) || 0,
-      eyebrow: "基金収入構成",
-      title: "内部拠出・外部収入",
       centerLabel: "収入",
       ariaLabel: "基金収入構成",
       emptyTitle: "表示できる基金収入がありません",
@@ -49,8 +45,6 @@
     expense: {
       items: Array.isArray(payload?.expense) ? payload.expense : [],
       total: Number(payload?.totals?.expense) || 0,
-      eyebrow: "基金支出構成",
-      title: "基金支出・基金返金",
       centerLabel: "支出",
       ariaLabel: "基金支出構成",
       emptyTitle: "表示できる基金支出がありません",
@@ -155,8 +149,6 @@
       button.setAttribute("aria-pressed", String(selected));
     });
 
-    if (eyebrow instanceof HTMLElement) eyebrow.textContent = config.eyebrow;
-    if (title instanceof HTMLElement) title.textContent = config.title;
     if (centerLabel instanceof HTMLElement) centerLabel.textContent = config.centerLabel;
     if (centerAmount instanceof HTMLElement) centerAmount.textContent = config.total.toLocaleString("ja-JP");
     if (modeHelp instanceof HTMLElement) modeHelp.textContent = config.help;

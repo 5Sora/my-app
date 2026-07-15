@@ -35,9 +35,9 @@ test("Stage 9-1 uses one shared sticky header on personal and group pages", asyn
 
   assert.match(group, /class="group-overview-shell"/);
   assert.match(group, /class="group-overview-top"/);
-  assert.match(group, />基金ページ一覧</);
-  assert.match(group, />関連支払いページ一覧</);
-  assert.match(group, /id="group-members-heading">メンバー一覧</);
+  assert.match(group, />基金ページ</);
+  assert.match(group, />割り勘ページ</);
+  assert.match(group, /id="group-members-heading">所属メンバー</);
   assert.match(group, /activeMemberCount %> 人（管理者 <%= activeAdminCount %> 人）/);
   assert.doesNotMatch(group, /<dt>有効メンバー<\/dt>/);
   assert.doesNotMatch(group, /<dt>有効な管理者<\/dt>/);
@@ -61,7 +61,7 @@ test("personal header exposes logout only while group header exposes the confirm
   assert.doesNotMatch(personal, /テストの家計簿/);
   assert.doesNotMatch(personal, />概要</);
   assert.doesNotMatch(personal, />基金</);
-  assert.doesNotMatch(personal, />関連支払い</);
+  assert.doesNotMatch(personal, />割り勘</);
   assert.doesNotMatch(personal, />自分の家計簿</);
 
   const group = await renderHeader({
@@ -73,7 +73,7 @@ test("personal header exposes logout only while group header exposes the confirm
     active: "fund",
     fundHref: "/groups/group-1/fund?pageId=page-1",
   });
-  for (const label of ["自分の家計簿", "概要", "基金", "関連支払い", "ログアウト"]) {
+  for (const label of ["自分の家計簿", "概要", "基金", "割り勘", "ログアウト"]) {
     assert.match(group, new RegExp(`>${label}<`));
   }
   assert.doesNotMatch(group, /app-header__identity/);

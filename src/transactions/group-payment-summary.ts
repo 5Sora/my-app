@@ -120,10 +120,10 @@ export function calculateGroupPaymentWarningFlags(
   const warningReasons: string[] = [];
 
   if (totalIncreaseAtLeast20Percent) {
-    warningReasons.push("関連支払い総額が前期間より20%以上増加しています。");
+    warningReasons.push("割り勘総額が前期間より20%以上増加しています。");
   }
   if (singleCategoryAtLeast50Percent) {
-    warningReasons.push("単一カテゴリが関連支払い総額の50%以上です。");
+    warningReasons.push("単一カテゴリが割り勘総額の50%以上です。");
   }
 
   return {

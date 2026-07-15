@@ -14,7 +14,7 @@ test("Stage 9-2 fund page renders the integrated income pie, persistent legend, 
   assert.match(view, /data-fund-income-chart/);
   assert.match(view, /data-fund-pie-segments/);
   assert.match(view, /fundVisualizationView\.incomeComposition\.forEach/);
-  assert.match(view, /内部拠出・外部収入/);
+  assert.match(view, /id="fund-composition-title">カテゴリ/);
   assert.match(view, /表示できる基金収入がありません/);
   assert.doesNotMatch(view, /data-fund-chart-mode-help/);
   assert.match(view, /\/js\/fund-charts\.js/);
@@ -56,4 +56,24 @@ test("Stage 9-2 closed fund context shows a vertical two-column comparison with 
   assert.match(css, /\.fund-bar-chart__internal\s*\{[\s\S]*background: #9fbe8f/);
   assert.match(css, /\.fund-bar-chart__external\s*\{[\s\S]*background: #245a8d/);
   assert.match(css, /\.fund-bar-chart__expense\s*\{[\s\S]*background:/);
+});
+
+
+test("final fund UI mirrors the personal title, chart, bar, and five-column ledger language", async () => {
+  const [view, css] = await Promise.all([read("views/fund.ejs"), read("public/css/fund.css")]);
+  assert.match(view, /<%= group\.name %> の基金/);
+  assert.match(view, /id="fund-summary-title">サマリー/);
+  assert.match(view, />収入カテゴリ<\/button>/);
+  assert.match(view, />支出カテゴリ<\/button>/);
+  assert.match(view, />所属メンバー</);
+  assert.doesNotMatch(view, /member\.role === "ADMIN" \? "管理者" : "メンバー"/);
+  assert.doesNotMatch(view, /member\.userId === currentUserId/);
+  assert.match(view, />履歴詳細</);
+  assert.match(view, /収入内容/);
+  assert.match(view, /収入金額/);
+  assert.match(view, /支出内容/);
+  assert.match(view, /支出金額/);
+  assert.doesNotMatch(view, /fund-bar-chart__value/);
+  assert.match(css, /fund-bar-chart__category[\s\S]*font-size: 0\.9rem/);
+  assert.match(css, /--fund-ledger-columns: 12% 30% 14% 30% 14%/);
 });

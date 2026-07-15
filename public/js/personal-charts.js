@@ -9,7 +9,6 @@
   const content = chart.querySelector("[data-personal-chart-content]");
   const emptyState = chart.querySelector("[data-personal-chart-empty]");
   const emptyTitle = chart.querySelector("[data-personal-chart-empty-title]");
-  const title = chart.querySelector("#personal-category-chart-title");
   const centerLabel = chart.querySelector("[data-personal-chart-center-label]");
   const centerValue = chart.querySelector("[data-personal-chart-center-value]");
   const pie = chart.querySelector("[data-personal-pie]");
@@ -81,7 +80,6 @@
       button.setAttribute("aria-pressed", String(active));
     });
 
-    if (title instanceof HTMLElement) title.textContent = isIncome ? "収入カテゴリ" : "支出カテゴリ";
     if (centerLabel instanceof HTMLElement) centerLabel.textContent = isIncome ? "収入" : "支出";
     if (centerValue instanceof HTMLElement) centerValue.textContent = total.toLocaleString("ja-JP");
     if (pie instanceof SVGElement) pie.setAttribute("aria-label", `${isIncome ? "収入" : "支出"}カテゴリ構成。合計 ${formatAmount(total)}`);

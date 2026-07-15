@@ -20,8 +20,8 @@ test("Stage 9-5 payments page uses the shared three-card top shell and open/clos
 
 test("Stage 9-5 shows a selected-period member payment share chart and AI analysis in the upper-right card", async () => {
   const [view, script] = await Promise.all([read("views/payments.ejs"), read("public/js/payment-charts.js")]);
-  assert.match(view, /メンバー別支払額割合/);
-  assert.match(view, /選択期間に記録された支払額の割合/);
+  assert.match(view, /メンバー別支払い額割合/);
+  assert.doesNotMatch(view, /公平性の判定ではなく/);
   assert.match(view, /data-payment-share-chart/);
   assert.match(view, /data-payment-share-segments/);
   assert.match(view, /data-ai-analysis-button/);
@@ -34,10 +34,12 @@ test("Stage 9-5 shows a selected-period member payment share chart and AI analys
 test("Stage 9-5 moves the latest confirmed batch into the closed 3-of-12 card and keeps history in the right 8-of-12", async () => {
   const view = await read("views/payments.ejs");
   assert.match(view, /payments-latest-batch/);
-  assert.match(view, /最新の確定割り勘/);
+  assert.doesNotMatch(view, /最新の確定割り勘/);
   assert.match(view, /直近の割り勘/);
   assert.match(view, /payments-latest-allocation-list/);
   assert.match(view, /payments-history-panel/);
+  assert.match(view, /id="payment-history-heading">履歴詳細/);
+  assert.match(view, /<span>内容<\/span>/);
   assert.match(view, /時系列/);
   assert.match(view, /人ごと/);
 });
@@ -70,4 +72,34 @@ test("Stage 9-5 renders split preview in a large modal overlay instead of the no
   assert.match(css, /payments-preview-body[\s\S]*overflow-y: auto/);
   assert.match(script, /showModal\(\)/);
   assert.match(script, /dialog\.close\("edit"\)/);
+});
+
+
+test("final split-payment UI uses unified naming, panel titles, and a full-panel mint guide", async () => {
+  const [view, css, overlay] = await Promise.all([
+    read("views/payments.ejs"),
+    read("public/css/payments.css"),
+    read("views/partials/transaction-add-overlay.ejs"),
+  ]);
+  assert.match(view, /<%= group\.name %> の割り勘/);
+  assert.match(view, /id="calculation-method-heading">割り勘の算出/);
+  assert.doesNotMatch(view, /payments-member-history-label/);
+  assert.doesNotMatch(view, />履歴<\/span>/);
+  assert.match(view, />所属メンバー</);
+  assert.doesNotMatch(view, /member\.role === "ADMIN" \? "管理者" : "メンバー"/);
+  assert.doesNotMatch(view, /member\.userId === currentUserId \? "・あなた"/);
+  assert.match(view, /data-calculation-member-guide/);
+  assert.match(view, /data-calculation-method-guide/);
+  assert.match(view, /複数人で割り勘する場合は、「割り勘の算出」パネルの「割り勘を開始」から操作してください。/);
+  assert.match(overlay, /Array\.isArray\(overlay\.notes\)/);
+  assert.match(css, /is-calculation-mode \.payments-method-area,[\s\S]*\.is-calculation-mode \.payments-member-panel[\s\S]*border-color: #58d993/);
+  assert.match(css, /box-shadow:[\s\S]*rgb\(75 225 145 \/ 42%\)/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
+  assert.match(css, /\.payments-member-list li \{[\s\S]*grid-template-columns: 42px minmax\(0, 1fr\)/);
+  assert.match(css, /\.payments-member-action \{[\s\S]*width: 42px;[\s\S]*min-width: 42px;[\s\S]*background: transparent;[\s\S]*pointer-events: none/);
+  assert.match(css, /\.payments-member-action::before \{[\s\S]*width: 16px;[\s\S]*height: 16px;[\s\S]*border: 1\.5px solid #8d8882;[\s\S]*border-radius: 50%/);
+  assert.match(css, /\.is-calculation-mode \.payments-member-action \{[\s\S]*background: #f4f1ed;[\s\S]*pointer-events: auto/);
+  assert.match(css, /\.is-calculation-mode \.payments-member-action::before \{[\s\S]*display: none/);
+  assert.match(css, /\.payments-member-list\.ledger-context-list > li \{[\s\S]*grid-template-columns: 42px minmax\(0, 1fr\);[\s\S]*column-gap: 10px/);
+  assert.match(css, /\.payments-member-name strong \{[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap/);
 });

@@ -11,7 +11,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= group.name %> - 関連支払い - <%= selectedPage.name %></title>
+  <title>割り勘｜<%= group.name %>｜<%= selectedPage.name %></title>
   <link rel="stylesheet" href="/css/auth.css">
   <link rel="stylesheet" href="/css/ledger.css">
   <link rel="stylesheet" href="/css/group.css">
@@ -38,30 +38,25 @@
     </section>
   <% } %>
 
-  <main class="ledger-shell payments-shell" aria-label="グループ関連支払い">
-    <section class="ledger-shell-top payments-shell-top" aria-label="関連支払いの概要と割り勘操作">
-      <article class="panel payments-title-card">
-        <p class="eyebrow">関連支払い</p>
-        <h1><%= selectedPage.name %></h1>
-        <p class="payments-title-group"><strong><%= group.name %></strong></p>
-        <p class="period-label">
+  <main class="ledger-shell payments-shell" aria-label="グループ割り勘">
+    <section class="ledger-shell-top payments-shell-top" aria-label="割り勘の概要と算出操作">
+      <article class="panel payments-title-card" aria-labelledby="payments-ledger-title">
+        <h2 class="ledger-context-title"><%= group.name %> の割り勘</h2>
+        <h1 id="payments-ledger-title"><%= selectedPage.name %></h1>
+        <p class="ledger-period-title<%= selectedPage.startDate || selectedPage.endDate ? '' : ' is-empty' %>">
           <% if (selectedPage.startDate || selectedPage.endDate) { %>
             <%= selectedPage.startDate ? new Date(selectedPage.startDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
             〜
             <%= selectedPage.endDate ? new Date(selectedPage.endDate).toLocaleDateString("ja-JP") : "期間指定なし" %>
           <% } else { %>
-            全期間
+            <span aria-hidden="true">&nbsp;</span>
           <% } %>
         </p>
-        <dl class="payments-title-metrics">
-          <div><dt>期間内総額</dt><dd><strong><%= historyTotal.toLocaleString("ja-JP") %> 円</strong></dd></div>
-          <div><dt>記録件数</dt><dd><%= transactions.length.toLocaleString("ja-JP") %> 件</dd></div>
-        </dl>
       </article>
 
-      <article class="panel payments-method-area" aria-labelledby="calculation-method-heading">
+      <article class="panel payments-method-area ledger-feature-panel" aria-labelledby="calculation-method-heading">
         <div class="panel-heading compact payments-method-heading">
-          <div><p class="eyebrow">割り勘</p><h2 id="calculation-method-heading">算出方法</h2></div>
+          <h2 id="calculation-method-heading">割り勘の算出</h2>
           <span>4方式</span>
         </div>
 
@@ -91,6 +86,7 @@
           <%= selectedMethodOption ? selectedMethodOption.description : "？を押すと、この欄に算出方法の説明を表示します。" %>
         </div>
 
+        <p class="payments-calculation-guide" data-calculation-method-guide <%= isCalculationMode ? "" : "hidden" %> role="status">算出方法を選び、支払い条件を入力してください。</p>
         <button type="button" class="primary-button payments-start-button" data-start-split <%= isCalculationMode ? "hidden" : "" %>>割り勘を開始</button>
         <div class="payments-calculation-actions" <%= isCalculationMode ? "" : "hidden" %> data-calculation-actions>
           <button type="button" class="primary-button" data-open-payment-conditions disabled>支払い条件を入力</button>
@@ -100,13 +96,9 @@
 
       <article class="panel payments-insight-card" aria-labelledby="payment-share-chart-title" data-payment-share-chart>
         <div class="payments-insight-heading">
-          <div>
-            <p class="eyebrow">メンバー別支払額割合</p>
-            <h2 id="payment-share-chart-title">選択期間に記録された支払額</h2>
-          </div>
-          <button type="button" class="secondary-button payments-ai-analysis-button" data-ai-analysis-button data-endpoint="/api/ai/analyze-group-payments" data-group-id="<%= group.id %>" data-page-id="<%= selectedPage.id %>" data-page-name="<%= selectedPage.name %>" data-loading-message="選択中の関連支払いページを集計し、AIへ分析を依頼しています。">AI分析</button>
+          <h2 id="payment-share-chart-title">メンバー別支払い額割合</h2>
+          <button type="button" class="secondary-button payments-ai-analysis-button" data-ai-analysis-button data-endpoint="/api/ai/analyze-group-payments" data-group-id="<%= group.id %>" data-page-id="<%= selectedPage.id %>" data-page-name="<%= selectedPage.name %>" data-loading-message="選択中の割り勘ページを集計し、AIへ分析を依頼しています。">AI分析</button>
         </div>
-        <p class="payments-chart-note">公平性の判定ではなく、選択期間に記録された支払額の割合です。</p>
 
         <% if (paymentVisualizationView.totals.amount > 0) { %>
           <div class="payments-share-chart">
@@ -140,33 +132,33 @@
     </section>
 
     <section class="ledger-shell-lower payments-lower-area<%= !isCalculationMode && contextState !== 'open' ? ' is-context-closed' : '' %>" data-payment-lower data-context-state="<%= contextState ?? 'auto' %>">
-      <aside class="payments-context-column" id="payment-context-panel" aria-label="表示ページと有効メンバー" aria-hidden="<%= String(!isCalculationMode && contextState !== 'open') %>">
-        <section class="panel payments-page-panel">
-          <div class="panel-heading compact"><div><p class="eyebrow">LedgerPage</p><h2>表示ページ</h2></div><span><%= pages.length %> 件</span></div>
-          <nav class="page-list" aria-label="グループ関連支払いページ">
+      <aside class="payments-context-column" id="payment-context-panel" aria-label="表示ページと所属メンバー" aria-hidden="<%= String(!isCalculationMode && contextState !== 'open') %>">
+        <section class="panel payments-page-panel ledger-context-panel">
+          <div class="panel-heading compact"><h2>表示ページ</h2><span><%= pages.length %> 件</span></div>
+          <nav class="page-list ledger-context-list" aria-label="グループ割り勘ページ">
             <% pages.forEach(page => { %>
               <a href="<%= buildGroupPaymentsUrl(group.id, { pageId: page.id, contextState }) %>" class="<%= page.id === selectedPage.id ? 'is-active' : '' %>" data-payment-context-link <% if (page.id === selectedPage.id) { %>aria-current="page"<% } %>><span><strong><%= page.name %></strong></span><% if (page.isInitial) { %><small class="initial-badge">初期</small><% } %></a>
             <% }) %>
           </nav>
         </section>
 
-        <section class="panel payments-member-panel">
-          <div class="panel-heading compact"><div><p class="eyebrow">参加候補</p><h2>有効メンバー</h2></div><span><%= activeMembers.length %> 人</span></div>
+        <section class="panel payments-member-panel ledger-context-panel">
+          <div class="panel-heading compact"><h2>所属メンバー</h2><span><%= activeMembers.length %> 人</span></div>
           <% if (activeMembers.length === 0) { %><p class="empty-state">有効なメンバーがいません。</p><% } else { %>
-            <ul class="payments-member-list">
+            <ul class="payments-member-list ledger-context-list">
               <% activeMembers.forEach(member => { %>
                 <li class="<%= isCalculationMode && splitDraft.participantIds.includes(member.userId) ? 'is-selected' : '' %>" data-participant-row>
-                  <span class="payments-member-action"><span class="payments-member-history-label" aria-hidden="true">履歴</span><label class="payments-member-checkbox" aria-label="<%= member.user.displayName %>を今回の参加者に含める"><input type="checkbox" name="participantIds" value="<%= member.userId %>" form="split-preview-form" data-participant-input <%= splitDraft.participantIds.includes(member.userId) ? "checked" : "" %>></label></span>
-                  <span class="payments-member-name"><strong><%= member.user.displayName %></strong><small><%= member.role === "ADMIN" ? "管理者" : "メンバー" %><%= member.userId === currentUserId ? "・あなた" : "" %></small></span>
+                  <span class="payments-member-action"><label class="payments-member-checkbox" aria-label="<%= member.user.displayName %>を今回の参加者に含める"><input type="checkbox" name="participantIds" value="<%= member.userId %>" form="split-preview-form" data-participant-input <%= splitDraft.participantIds.includes(member.userId) ? "checked" : "" %>></label></span>
+                  <span class="payments-member-name"><strong><%= member.user.displayName %></strong></span>
                 </li>
               <% }) %>
             </ul>
           <% } %>
-          <p class="form-help">メンバー管理はグループ概要で行います。</p>
+          <p class="payments-calculation-guide" data-calculation-member-guide <%= isCalculationMode ? "" : "hidden" %> role="status">参加するメンバーを選択してください。</p>
         </section>
       </aside>
 
-      <aside class="payments-operation-rail" aria-label="関連支払いページ操作">
+      <aside class="payments-operation-rail" aria-label="割り勘ページ操作">
         <button class="ledger-operation-button" type="button" data-payment-context-toggle aria-controls="payment-context-panel" aria-expanded="<%= String(isCalculationMode || contextState === 'open') %>" aria-label="<%= isCalculationMode ? '算出中は参加者領域を閉じられません' : (contextState === 'open' ? '一覧を閉じる' : '一覧を開く') %>" title="<%= isCalculationMode ? '算出中は参加者領域を閉じられません' : (contextState === 'open' ? '一覧を閉じる' : '一覧を開く') %>" <%= isCalculationMode ? "disabled" : "" %> data-calculation-lock-toggle>
           <span class="ledger-operation-icon ledger-operation-icon--desktop" data-operation-desktop-icon aria-hidden="true"><%= isCalculationMode || contextState === "open" ? "←" : "→" %></span>
           <span class="ledger-operation-icon ledger-operation-icon--mobile" data-operation-mobile-icon aria-hidden="true"><%= isCalculationMode || contextState === "open" ? "↑" : "↓" %></span>
@@ -177,8 +169,8 @@
         <button class="ledger-operation-button" type="submit" form="payments-delete-page-form" <%= !isAdmin || selectedPage.isInitial ? "disabled" : "" %> aria-disabled="<%= String(!isAdmin || selectedPage.isInitial) %>" aria-label="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>" title="<%= !isAdmin ? 'LedgerPage削除はグループ管理者のみ可能です' : selectedPage.isInitial ? '初期LedgerPageは削除できません' : '選択中LedgerPageを削除' %>"><span aria-hidden="true">−</span><span class="ledger-operation-label">ページ削除</span></button>
       </aside>
 
-      <aside class="panel payments-latest-batch">
-        <div class="panel-heading compact"><div><p class="eyebrow">最新の確定割り勘</p><h2>直近の割り勘</h2></div><% if (latestBatch) { %><span><%= latestBatch.allocations.length %> 人</span><% } %></div>
+      <aside class="panel payments-latest-batch ledger-feature-panel">
+        <div class="panel-heading compact"><h2>直近の割り勘</h2><% if (latestBatch) { %><span><%= latestBatch.allocations.length %> 人</span><% } %></div>
         <% if (!latestBatch) { %>
           <div class="payments-result-empty"><strong>確定済みの割り勘はありません。</strong><p>割り勘を確定すると、直近結果をここに表示します。</p></div>
         <% } else { %>
@@ -199,7 +191,7 @@
 
       <section class="panel payments-history-panel" aria-labelledby="payment-history-heading">
         <div class="panel-heading payments-history-heading">
-          <div><p class="eyebrow">確定済みTransaction</p><h2 id="payment-history-heading">関連支払い履歴</h2></div>
+          <h2 id="payment-history-heading">履歴詳細</h2>
           <div class="payments-history-actions"><span><%= transactions.length %> 件</span><button type="button" class="payments-history-add" data-open-transaction-overlay="payments-transaction-overlay" aria-label="個別支払いを登録" title="個別支払いを登録">＋</button></div>
         </div>
         <div class="payments-history-tabs" role="tablist" aria-label="履歴表示方法">
@@ -207,10 +199,10 @@
           <button type="button" role="tab" id="payments-person-tab" aria-controls="payments-person-panel" aria-selected="false" tabindex="-1" data-payment-tab="person">人ごと</button>
         </div>
         <section id="payments-chronological-panel" role="tabpanel" aria-labelledby="payments-chronological-tab" data-payment-tab-panel="chronological">
-          <div class="payments-ledger payments-ledger-chronological" aria-label="時系列の関連支払い履歴">
-            <div class="payments-ledger-heading" aria-hidden="true"><span>日付</span><span>負担内容</span><span>金額</span><span>名前</span></div>
+          <div class="payments-ledger payments-ledger-chronological" aria-label="時系列の割り勘履歴">
+            <div class="payments-ledger-heading" aria-hidden="true"><span>日付</span><span>内容</span><span>金額</span><span>名前</span></div>
             <div class="payments-ledger-scroll" tabindex="0" aria-label="時系列履歴。上下にスクロールできます">
-              <% if (transactions.length === 0) { %><p class="empty-state payments-history-empty">この期間には、まだ関連支払いがありません。</p><% } else { %>
+              <% if (transactions.length === 0) { %><p class="empty-state payments-history-empty">この期間には、まだ割り勘の記録がありません。</p><% } else { %>
                 <% transactions.forEach(transaction => { %><article class="payments-ledger-row"><time datetime="<%= transaction.transactionDate.toISOString().slice(0, 10) %>"><%= new Date(transaction.transactionDate).toLocaleDateString("ja-JP") %></time><span class="payments-ledger-text" tabindex="0" data-payment-tooltip="<%= transaction.rawText %>"><%= transaction.rawText %><% if (transaction.amount === 0 && transaction.paymentBatchId) { %><small>参加・負担0円</small><% } %></span><strong><%= transaction.amount.toLocaleString("ja-JP") %> 円</strong><span><%= transaction.user?.displayName ?? "不明なユーザー" %></span></article><% }) %>
               <% } %>
             </div>
@@ -218,7 +210,7 @@
           </div>
         </section>
         <section id="payments-person-panel" role="tabpanel" aria-labelledby="payments-person-tab" data-payment-tab-panel="person" hidden>
-          <div class="payments-ledger payments-ledger-person" aria-label="人ごとの関連支払い集計">
+          <div class="payments-ledger payments-ledger-person" aria-label="人ごとの割り勘集計">
             <div class="payments-ledger-heading" aria-hidden="true"><span>名前</span><span>合計支払額</span><span>支払い件数</span></div>
             <div class="payments-ledger-scroll" tabindex="0" aria-label="人ごとの集計。上下にスクロールできます">
               <% if (perPersonRows.length === 0) { %><p class="empty-state payments-history-empty">この期間に集計できる支払いがありません。</p><% } else { %><% perPersonRows.forEach(row => { %><article class="payments-ledger-row"><strong><%= row.displayName %></strong><strong><%= row.totalAmount.toLocaleString("ja-JP") %> 円</strong><span><%= row.paymentCount.toLocaleString("ja-JP") %> 件</span></article><% }) %><% } %>
@@ -334,13 +326,16 @@
     overlay: {
       id: "payments-transaction-overlay",
       mode: "GROUP_PAYMENT",
-      eyebrow: "関連支払い",
+      eyebrow: "割り勘",
       title: "個別支払いを追加",
       action: `/groups/${group.id}/payments/transactions`,
       groupId: group.id,
       today,
       placeholder: "例：昨日部活動の会場利用料を3000円払った",
-      note: `${currentUserDisplayName}さん本人が、自分の財布から支払った金額として登録します。他人名義では登録できません。`,
+      notes: [
+        `${currentUserDisplayName}さん本人が、自分の財布から支払った金額として登録します。他人名義では登録できません。`,
+        `複数人で割り勘する場合は、「割り勘の算出」パネルの「割り勘を開始」から操作してください。`,
+      ],
       submitLabel: "個別支払いを登録",
       categories: groupPaymentCategories,
       hiddenFields: [
@@ -429,7 +424,7 @@
       action="/groups/<%= group.id %>/payments/pages/<%= selectedPage.id %>/delete"
       method="post"
       class="payments-hidden-form"
-      onsubmit="return confirm('選択中の表示ページを削除しますか？関連支払いTransaction自体は削除されません。');"
+      onsubmit="return confirm('選択中の表示ページを削除しますか？割り勘Transaction自体は削除されません。');"
     >
       <input type="hidden" name="contextState" value="<%= contextState ?? '' %>" data-payment-context-state>
     </form>
@@ -438,8 +433,8 @@
   <%- include("partials/ai-analysis-dialog", {
     analysisDialog: {
       id: "group-payment-ai-analysis-dialog",
-      eyebrow: "関連支払い",
-      title: "関連支払い分析",
+      eyebrow: "割り勘",
+      title: "割り勘分析",
       pageName: selectedPage.name,
     },
   }) %>
@@ -501,6 +496,8 @@
       const methodSummary = document.querySelector("[data-method-summary]");
       const previewConfirmButton = document.querySelector("[data-preview-confirm-button]");
       const previewStaleMessage = document.querySelector("[data-preview-stale-message]");
+      const memberGuide = document.querySelector("[data-calculation-member-guide]");
+      const methodGuide = document.querySelector("[data-calculation-method-guide]");
       const methodDescriptions = <%- JSON.stringify(Object.fromEntries(calculationMethodOptions.map(method => [method.value, method.description]))) %>;
       const methodLabels = <%- JSON.stringify(Object.fromEntries(calculationMethodOptions.map(method => [method.value, method.label]))) %>;
 
@@ -553,6 +550,8 @@
         body.dataset.calculationMode = "true";
         if (startSplitButton instanceof HTMLElement) startSplitButton.hidden = true;
         if (calculationActions instanceof HTMLElement) calculationActions.hidden = false;
+        if (memberGuide instanceof HTMLElement) memberGuide.hidden = false;
+        if (methodGuide instanceof HTMLElement) methodGuide.hidden = false;
         participantInputs.forEach((input) => { input.checked = true; });
         methodInputs.forEach((input) => { input.checked = false; });
         setContextOpen(true);
@@ -563,8 +562,8 @@
         }
         updateCalculationSelections();
         updatePreviewAvailability();
-        const firstMethod = methodInputs[0];
-        if (firstMethod instanceof HTMLElement) firstMethod.focus();
+        const firstParticipant = participantInputs[0];
+        if (firstParticipant instanceof HTMLElement) firstParticipant.focus();
       };
 
       startSplitButton?.addEventListener("click", enterCalculationMode);
@@ -586,6 +585,8 @@
         });
       });
       if (body.classList.contains("is-calculation-mode")) {
+        if (memberGuide instanceof HTMLElement) memberGuide.hidden = false;
+        if (methodGuide instanceof HTMLElement) methodGuide.hidden = false;
         setContextOpen(true);
         if (toggle instanceof HTMLButtonElement) {
           toggle.disabled = true;
