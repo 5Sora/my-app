@@ -1,5 +1,7 @@
 # my-app
 
+A personal and group accounting web application with period-based ledgers, group funds, history-aware split calculations, AI-assisted transaction classification, and aggregate financial analysis.
+
 ## Setup
 
 ```bash
@@ -8,115 +10,139 @@ npx prisma generate
 npm start
 ```
 
-Copy `.env.example` to `.env` and set the database and session values before starting the application.
+Copy `.env.example` to `.env`, then configure the database, session, and optional AI settings before starting the application.
 
-## Stage 8-1: common AI foundation
+## Testing
 
-The common AI foundation is implemented under `src/ai/`. Stage 8-1 does not add an AI HTTP route or change an existing transaction route. The classification and analysis routes will connect to this foundation in their respective later stages.
-
-The foundation provides:
-
-- OpenAI Responses API access through the official Node SDK
-- Structured Outputs through strict Zod-backed JSON Schema
-- server-only API key handling
-- separate classification and analysis models
-- global and feature-specific flags
-- `store: false`
-- an HMAC-SHA256 anonymous `safety_identifier`
-- total timeout and one limited retry
-- normalized provider, timeout, limit, lock, configuration and schema errors
-- per-user and global minute/daily in-memory limits
-- same-user/same-feature concurrent execution locking
-- structured logs that exclude natural-language input, names, login IDs, API keys, session IDs and full AI output
-
-Required AI variables and their default limits are documented in `.env.example`. `AI_SAFETY_SALT` must be a server-side secret independent of `SESSION_SECRET`.
-
-The in-memory counters are suitable only for the current single-instance instructional deployment. They reset on server restart and are not shared by multiple instances.
-
-### AI foundation tests
-
-The tests use a mock Responses API parser and do not call OpenAI.
+The automated test suite uses mocked AI responses and does not call the live OpenAI API.
 
 ```bash
 npm run test:ai
 ```
 
-The test suite covers feature flags, missing settings, strict structured output parameters, `store: false`, anonymous identifiers, user/global limits, concurrent locks, retry classification, timeout handling, schema validation and log redaction boundaries.
+The current suite contains 143 tests covering AI infrastructure, transaction classification, financial analysis, authorization boundaries, visualization aggregation, split calculations, responsive UI behavior, validation state, accessibility, and demo-data integrity.
 
-## Stage 8-2 and 8-3: transaction classification
+## AI Architecture
 
-AI classification is connected to the existing confirmation-first transaction forms. A classification response only fills editable form fields; it does not write a Transaction. The normal registration routes perform the existing authorization and validation before saving.
+### Stage 8-1: Common AI Foundation
 
-Stage 8-2 covers personal income and expense. Stage 8-3 extends the same foundation to:
+The shared AI infrastructure is implemented under `src/ai/`. It provides:
 
-- individual `GROUP_PAYMENT`
+- OpenAI Responses API access through the official Node SDK
+- Structured Outputs backed by strict Zod schemas
+- server-only API key handling
+- separate classification and analysis models
+- global and feature-specific flags
+- `store: false`
+- an HMAC-SHA256 anonymous `safety_identifier`
+- total request timeouts and one limited retry
+- normalized provider, timeout, limit, lock, configuration, and schema errors
+- per-user and global minute/daily in-memory limits
+- same-user, same-feature concurrency locks
+- structured logs that exclude natural-language input, names, login IDs, API keys, session IDs, and full AI output
+
+Required AI variables and their default limits are documented in `.env.example`. `AI_SAFETY_SALT` must be a server-side secret independent of `SESSION_SECRET`.
+
+The in-memory counters are appropriate only for the current single-instance instructional deployment. They reset when the server restarts and are not shared across multiple instances.
+
+### Stages 8-2 and 8-3: Transaction Classification
+
+AI classification is connected to confirmation-first transaction forms. A classification response only fills editable form fields; it never writes a `Transaction` directly. Existing registration routes still perform authorization and validation before saving.
+
+Classification supports:
+
+- personal income
+- personal expenses
+- individual `GROUP_PAYMENT` transactions
 - `FUND_INCOME`
 - `FUND_EXPENSE`
 
-`FUND_CONTRIBUTION`, `FUND_REFUND`, split-payment inputs, participants, calculation methods and allocation amounts are not AI classification targets.
+The following are not AI classification targets:
 
-The classification request sends only the natural-language text plus application-owned instructions such as the Asia/Tokyo reference date and the allowed category list. Names, login IDs, group names, database IDs, membership lists and transaction history are not sent to OpenAI.
+- `FUND_CONTRIBUTION`
+- `FUND_REFUND`
+- split-payment participant selection
+- calculation method selection
+- allocation amounts
 
-Signed suggestion tokens are bound to the user, classification target and group. They expire after 30 minutes. An invalid or mismatched token does not block normal registration; the saved source falls back to manual handling and no AI audit data is stored.
+Classification requests send only the natural-language input and application-controlled context, such as the Asia/Tokyo reference date and allowed category list. Names, login IDs, group names, database IDs, membership lists, and transaction history are not sent to OpenAI.
 
-## Stage 8-4: personal ledger AI analysis
+Signed suggestion tokens are bound to the user, classification target, and group. They expire after 30 minutes. Invalid or mismatched tokens do not block normal registration; the saved classification source falls back to manual handling and no AI audit data is stored.
 
-The selected personal LedgerPage can be analyzed through an explicit `AI分析` action. The server verifies that the page belongs to the authenticated active user, retrieves only the transaction fields required for aggregation, and calculates all totals in TypeScript before calling OpenAI.
+### Stage 8-4: Personal Ledger Analysis
+
+A selected personal `LedgerPage` can be analyzed through an explicit AI Analysis action. The server verifies that the page belongs to the authenticated active user, retrieves only the fields required for aggregation, and calculates all totals in TypeScript before calling OpenAI.
 
 The analysis input contains aggregate values only:
 
-- page period and optional immediately preceding equal-length comparison period
-- carryover, income, expense, net and closing balance
+- page period and an optional immediately preceding equal-length comparison period
+- carryover, income, expense, net change, and closing balance
 - income and expense counts
 - category totals and shares
 - `GROUP_PAYMENT` and `FUND_CONTRIBUTION` totals
-- application-calculated warning flags
+- application-calculated warning evidence
 
-Names, login IDs, user/page/transaction IDs, group names, transaction descriptions and individual transaction rows are not sent to OpenAI. The route uses the analysis model and strict Structured Outputs with `store: false`.
+Names, login IDs, user IDs, page IDs, transaction IDs, group names, transaction descriptions, and individual transaction rows are not sent to OpenAI.
 
-Analysis output is displayed temporarily in a dialog and is not written to the database, `Transaction.aiResult`, or the session. If analysis is disabled, rate-limited, times out, or fails validation/provider processing, the same dialog displays an application-generated summary clearly labeled `自動集計（AI分析ではありません）`.
+Analysis output is displayed temporarily in a dialog and is not written to the database, `Transaction.aiResult`, or the session. If AI analysis is disabled, rate-limited, times out, or fails provider/schema processing, the same dialog displays an application-generated automatic summary that is clearly distinguished from AI output.
 
-Application warning evidence is calculated before the AI call. The initial warning conditions are a negative period net, an expense increase of at least 20 percent from the comparison period, and a single expense category representing at least 50 percent of expenses. An AI `WARNING` without application evidence is downgraded to `NOTICE` before display.
+Application warning evidence is calculated before the AI call. Initial warning conditions include:
 
-## Stage 8-5: group payment AI analysis
+- a negative net result for the selected period
+- an expense increase of at least 20 percent compared with the previous period
+- a single expense category representing at least 50 percent of total expenses
 
-The selected `GROUP_PAYMENT` LedgerPage can be analyzed through an explicit `AI分析` action available to active group members. The server verifies the active user, membership, group and page before calculating the aggregate in TypeScript.
+An AI `WARNING` without matching application evidence is downgraded to `NOTICE` before display.
+
+### Stage 8-5: Group Payment Analysis
+
+A selected `GROUP_PAYMENT` `LedgerPage` can be analyzed by active group members. The server verifies the active user, membership, group, and page before calculating aggregates in TypeScript.
 
 The analysis input contains aggregate values only:
 
-- period and optional immediately preceding equal-length comparison period
-- total amount and Transaction row count
+- period and an optional immediately preceding equal-length comparison period
+- total amount and transaction-row count
 - individual payment count
-- distinct confirmed payment batch count
-- payment event count (`individual payments + distinct batches`)
-- average Transaction amount
+- distinct confirmed payment-batch count
+- payment-event count (`individual payments + distinct batches`)
+- average transaction amount
 - category totals and shares
-- application-calculated warning flags
+- application-calculated warning evidence
 
-Names, login IDs, user/group/page IDs, `paymentBatchId` values, transaction descriptions, participant lists, participant shares and individual member payment totals are not sent to OpenAI. Fairness, contribution, responsibility, relationships, payment ability and personal economic circumstances are explicitly outside the analysis scope.
+Names, login IDs, user IDs, group IDs, page IDs, `paymentBatchId` values, transaction descriptions, participant lists, participant shares, and individual member totals are not sent to OpenAI.
 
-The personal and group-payment analysis screens use the same temporary dialog renderer. Analysis output is not saved to the database, `Transaction.aiResult`, or the session. Provider failure, timeout, limits, configuration failure or feature disablement produces an application-generated aggregate summary clearly labeled `自動集計（AI分析ではありません）`.
+Fairness, responsibility, personal relationships, payment ability, and private economic circumstances are explicitly outside the analysis scope.
 
-Application warning evidence for group payments is limited to a total increase of at least 20 percent from the comparison period and a single category representing at least 50 percent of the total. An unsupported AI `WARNING` is downgraded to `NOTICE` before display.
+Provider failure, timeout, limits, configuration failure, or feature disablement produces an application-generated aggregate summary instead of blocking normal use.
 
+### Stage 8-6: Group Fund Analysis
 
-## 第8-6: 基金AI分析
+The selected group-fund `LedgerPage` can analyze:
 
-基金画面の選択中LedgerPageで、基金収支、内部拠出、外部収入、返金、支出カテゴリ、匿名化したメンバー別拠出構造を分析できます。OpenAIには実名・userId・rawText・個別Transactionを送らず、リクエストごとに生成した一時的な `MEMBER_n` を使用します。表示前にサーバー側で実名へ戻し、対応表はDB・Session・ログへ保存しません。AIが利用できない場合は自動集計を表示します。
+- total fund income and expenses
+- internal contributions
+- external income
+- refunds
+- expense categories
+- anonymized contribution structure by member
 
+Real names, `userId` values, raw descriptions, and individual transactions are not sent to OpenAI. Each request uses temporary identifiers such as `MEMBER_1`. The server restores display names before rendering the result, and the temporary mapping is not stored in the database, session, or logs.
 
-### 第8-6表示補足
+The interface also shows application-calculated metrics that remain visible even if the AI omits them from its explanation:
 
-基金AI分析では、AI文章とは別にアプリ計算の固定集計欄を表示します。
-拠出者数、有効メンバー数、内部拠出依存率、最大拠出割合、上位3名割合はAIが文章で省略しても必ず確認できます。
-AIには匿名化方式やmemberKey自体を説明させません。
+- contributor count
+- active member count
+- internal-contribution dependency ratio
+- largest contributor share
+- top-three contributor share
 
-## Stage 8-7: AI total verification
+The AI is not asked to explain the anonymization mechanism or the temporary member keys.
 
-Stage 8-7 adds cross-stage regression and failure-mode verification without changing the database schema, migrations, or package dependencies.
-The current mock/static suite contains 83 tests and does not call the real OpenAI API.
+### Stage 8-7: Total AI Verification
 
-The total AI test suite covers:
+Cross-stage regression and failure-mode verification is implemented without changing the Prisma schema, migrations, or package dependencies.
+
+The suite covers:
 
 - provider 400, 401, 403, 429, temporary 5xx, network failure, timeout, and schema mismatch
 - global and feature-specific flags and missing configuration
@@ -126,15 +152,15 @@ The total AI test suite covers:
 - restart-equivalent in-memory counter reset
 - safe public error messages
 - accurate `fallback` logging
-- provider token usage logging
+- provider token-usage logging
 - aggregate-only analysis routes with no database writes
 - suggestion-only classification routes
 - unchanged Prisma schema and migration hashes
 - fixed OpenAI SDK and Zod versions with public npm registry lock URLs
 
-All production classification and analysis calls declare their available fallback. Successful requests log `fallback:false`; a failed AI request that is replaced by keyword classification or an automatic aggregate summary logs `fallback:true`.
+All production classification and analysis calls declare their available fallback. Successful requests log `fallback:false`; failed AI requests replaced by keyword classification or an automatic aggregate summary log `fallback:true`.
 
-### Token and cost estimate helper
+## Token and Cost Estimate Helper
 
 Capture server output while performing one classification and the three analysis operations:
 
@@ -142,15 +168,43 @@ Capture server output while performing one classification and the three analysis
 npm start 2>&1 | tee stage8-7-ai.log
 ```
 
-Then calculate an approximate API cost from the structured `ai_request` lines:
+Then calculate an approximate API cost from the structured `ai_request` log entries:
 
 ```bash
 node scripts/stage8-7-log-cost.mjs stage8-7-ai.log
 ```
 
-The helper uses the standard short-context text token prices published on 2026-07-13:
+The estimate is informational. Recheck the current OpenAI pricing page before using it for budgeting.
 
-- `gpt-5.4-nano`: $0.20 / 1M input tokens and $1.25 / 1M output tokens
-- `gpt-5.4-mini`: $0.75 / 1M input tokens and $4.50 / 1M output tokens
+## Demo Database Reset and Seed
 
-The estimate is informational. Recheck the current OpenAI pricing page before relying on it for budgeting.
+`scripts/reset-demo-data.ts` deletes all current application data from the configured development database and replaces it with a fixed demonstration dataset for review.
+
+Safety conditions:
+
+- execution is rejected when `NODE_ENV=production`
+- both `--apply` and `ALLOW_DEMO_DATABASE_RESET=YES_DELETE_ALL_DATA` are required
+- deletion and regeneration run inside one Prisma transaction
+- any failure rolls back the entire operation
+- the Prisma schema, migrations, and database storage format are not changed
+
+Run a dry run first to inspect the target and expected record counts:
+
+```bash
+npx prisma generate
+npx tsx scripts/reset-demo-data.ts
+```
+
+After confirming the target database, explicitly apply the reset:
+
+```bash
+ALLOW_DEMO_DATABASE_RESET=YES_DELETE_ALL_DATA \
+npx tsx scripts/reset-demo-data.ts --apply
+```
+
+Demo credentials:
+
+```text
+Login ID: demo_a
+Password: Demo2026!
+```

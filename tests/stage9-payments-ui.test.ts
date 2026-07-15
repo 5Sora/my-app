@@ -42,6 +42,18 @@ test("Stage 9-5 moves the latest confirmed batch into the closed 3-of-12 card an
   assert.match(view, /人ごと/);
 });
 
+test("Stage 9-5 keeps chronological dates readable and gives content more room than names", async () => {
+  const css = await read("public/css/payments.css");
+  assert.match(
+    css,
+    /--chronological-columns: 104px minmax\(150px, 1\.3fr\) 108px minmax\(76px, \.55fr\)/,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 760px\) \{[\s\S]*--chronological-columns: 96px minmax\(128px, 1\.2fr\) 96px minmax\(68px, \.55fr\)/,
+  );
+});
+
 test("Stage 9-5 renders split preview in a large modal overlay instead of the normal page columns", async () => {
   const [view, css, script] = await Promise.all([
     read("views/payments.ejs"),

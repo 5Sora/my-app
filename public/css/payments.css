@@ -305,7 +305,7 @@
 }
 
 .payments-ledger {
-  --chronological-columns: 92px minmax(120px, 1fr) 100px minmax(90px, .75fr);
+  --chronological-columns: 104px minmax(150px, 1.3fr) 108px minmax(76px, .55fr);
   --person-columns: minmax(120px, 1fr) 120px 100px;
   border: 1px solid var(--border);
 }
@@ -485,7 +485,7 @@
   }
 
   .payments-ledger-chronological {
-    --chronological-columns: 78px minmax(100px, 1fr) 86px minmax(82px, .8fr);
+    --chronological-columns: 96px minmax(128px, 1.2fr) 96px minmax(68px, .55fr);
   }
 
   .payments-ledger-heading > *,

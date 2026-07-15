@@ -30,8 +30,11 @@ test("Stage 9-3 personal ledger is five columns with fixed carryover and balance
 test("Stage 9-3 transaction addition is exposed from the history heading and category charts switch between expense and income", () => {
   assert.match(dashboard, /personal-history-add/);
   assert.doesNotMatch(dashboard, /dashboard-contribution-panel/);
-  assert.match(dashboard, /data-personal-chart-mode="expense"/);
-  assert.match(dashboard, /data-personal-chart-mode="income"/);
+  assert.match(
+    dashboard,
+    /data-personal-chart-mode="income"[\s\S]*data-personal-chart-mode="expense"/,
+  );
+  assert.match(dashboard, /data-personal-chart-mode="expense" aria-pressed="true"/);
   assert.match(chartJs, /render\("expense"\)/);
   assert.match(dashboardJs, /data-personal-context-state/);
   assert.match(ledgerCss, /\.personal-bar-chart__plot\s*\{[\s\S]*min-height: clamp\(230px, 32vh, 300px\)/);
