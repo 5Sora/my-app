@@ -55,7 +55,7 @@
 
   const namespace = "http://www.w3.org/2000/svg";
   let pinnedKey = null;
-  let activeMode = "income";
+  let activeMode = "expense";
 
   const formatAmount = (amount) => `${Number(amount).toLocaleString("ja-JP")} 円`;
   const formatPercentage = (percentage) => `${Number(percentage).toFixed(1)}%`;

@@ -94,14 +94,16 @@
         </div>
       </article>
 
-      <article class="panel payments-insight-card" aria-labelledby="payment-share-chart-title" data-payment-share-chart>
-        <div class="payments-insight-heading">
+      <article class="panel payments-insight-card ledger-chart-panel" aria-labelledby="payment-share-chart-title" data-payment-share-chart>
+        <div class="payments-insight-heading ledger-chart-heading">
           <h2 id="payment-share-chart-title">メンバー別支払い額割合</h2>
           <button type="button" class="secondary-button payments-ai-analysis-button" data-ai-analysis-button data-endpoint="/api/ai/analyze-group-payments" data-group-id="<%= group.id %>" data-page-id="<%= selectedPage.id %>" data-page-name="<%= selectedPage.name %>" data-loading-message="選択中の割り勘ページを集計し、AIへ分析を依頼しています。">AI分析</button>
         </div>
 
+        <div class="ledger-chart-controls ledger-chart-controls--placeholder" aria-hidden="true"></div>
+
         <% if (paymentVisualizationView.totals.amount > 0) { %>
-          <div class="payments-share-chart">
+          <div class="payments-share-chart ledger-chart-content">
             <div class="payments-share-chart__visual">
               <svg class="payments-share-chart__pie" viewBox="0 0 100 100" role="img" aria-label="メンバー別支払額割合。合計 <%= paymentVisualizationView.totals.amount.toLocaleString("ja-JP") %> 円">
                 <circle class="payments-share-chart__track" cx="50" cy="50" r="38" pathLength="100"></circle>
@@ -125,7 +127,7 @@
           </div>
           <div class="payments-share-chart__tooltip" role="tooltip" hidden data-payment-share-tooltip></div>
         <% } else { %>
-          <div class="payments-chart-empty" role="status"><strong>表示できる支払額がありません</strong><span>0円参加者は履歴に残りますが、円グラフの面積は持ちません。</span></div>
+          <div class="payments-chart-empty ledger-chart-content" role="status"><strong>表示できる支払額がありません</strong><span>0円参加者は履歴に残りますが、円グラフの面積は持ちません。</span></div>
         <% } %>
         <script type="application/json" data-payment-share-chart-data><%- JSON.stringify(paymentVisualizationView.paymentComposition).replace(/</g, "\\u003c") %></script>
       </article>

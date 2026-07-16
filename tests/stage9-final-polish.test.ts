@@ -102,7 +102,7 @@ test("Stage 9-8B aligns the fund chart switch structure and styling with the per
     read("public/css/ledger.css"),
   ]);
 
-  assert.match(fundView, /<\/div>\s*<div class="fund-chart-toggle" role="group"/);
+  assert.match(fundView, /<\/div>\s*<div class="fund-chart-toggle ledger-chart-controls" role="group"/);
   assert.match(fundCss, /\.fund-chart-toggle \{[\s\S]*width: 100%;[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(fundCss, /\.fund-chart-toggle__button \{[\s\S]*padding: 6px 8px;[\s\S]*background: #faf8f5/);
   assert.match(personalCss, /\.personal-chart-switch \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
@@ -183,3 +183,57 @@ test("browser tab titles follow one page-type-first convention", async () => {
   assert.match(group, /<title>概要｜<%= group\.name %><\/title>/);
 });
 
+test("category charts use one responsive three-row panel grid without padding compensation", async () => {
+  const [shellCss, personal, fund, payments] = await Promise.all([
+    read("public/css/app-shell.css"),
+    read("views/dashboard.ejs"),
+    read("views/fund.ejs"),
+    read("views/payments.ejs"),
+  ]);
+
+  assert.match(shellCss, /\.ledger-chart-panel \{[\s\S]*grid-template-rows: auto var\(--ledger-chart-control-height\) minmax\(0, 1fr\)/);
+  assert.match(shellCss, /\.ledger-chart-panel > \.ledger-chart-controls \{[\s\S]*grid-row: 2;[\s\S]*height: var\(--ledger-chart-control-height\)/);
+  assert.match(shellCss, /\.ledger-chart-panel > \.ledger-chart-content \{[\s\S]*grid-row: 3/);
+  assert.doesNotMatch(shellCss, /\.payments-share-chart \{[\s\S]{0,180}padding-top:/);
+  assert.match(personal, /personal-insight-card ledger-chart-panel/);
+  assert.match(personal, /personal-chart-switch ledger-chart-controls/);
+  assert.match(fund, /fund-insight-card ledger-chart-panel/);
+  assert.match(fund, /fund-chart-toggle ledger-chart-controls/);
+  assert.match(payments, /payments-insight-card ledger-chart-panel/);
+  assert.match(payments, /ledger-chart-controls ledger-chart-controls--placeholder/);
+  assert.match(payments, /payments-share-chart ledger-chart-content/);
+  assert.match(payments, /payments-chart-empty ledger-chart-content/);
+});
+
+
+test("mobile ledger history uses compact endpoint cards and one page-level scroll", async () => {
+  const [shellCss, ledgerCss, fundCss, paymentsCss, personal, fund] = await Promise.all([
+    read("public/css/app-shell.css"),
+    read("public/css/ledger.css"),
+    read("public/css/fund.css"),
+    read("public/css/payments.css"),
+    read("views/dashboard.ejs"),
+    read("views/fund.ejs"),
+  ]);
+
+  assert.match(shellCss, /Mobile endpoint rows use the same compact two-column card as ordinary history rows/);
+  assert.match(shellCss, /\.personal-ledger-summary-row > \.personal-ledger-empty-cell,[\s\S]*display: none/);
+  assert.match(shellCss, /\.fund-ledger-summary-row > \.fund-ledger-empty-cell \{[\s\S]*display: none/);
+  assert.match(shellCss, /@media \(min-width: 821px\) \{[\s\S]*\.personal-ledger-summary-row > \*,[\s\S]*min-height: 52px/);
+
+  assert.match(ledgerCss, /\.personal-transaction-panel,[\s\S]*min-height: 0;[\s\S]*height: auto;[\s\S]*overflow: visible/);
+  assert.match(ledgerCss, /\.personal-ledger-scroll \{[\s\S]*max-height: none;[\s\S]*overflow: visible;[\s\S]*scrollbar-gutter: auto/);
+  assert.doesNotMatch(ledgerCss, /\.personal-ledger-scroll \{[\s\S]{0,180}max-height: 62dvh/);
+
+  assert.match(fundCss, /\.fund-transaction-panel,[\s\S]*min-height: 0;[\s\S]*height: auto;[\s\S]*overflow: visible/);
+  assert.match(fundCss, /\.fund-ledger-scroll \{[\s\S]*max-height: none;[\s\S]*overflow: visible;[\s\S]*scrollbar-gutter: auto/);
+  assert.doesNotMatch(fundCss, /\.fund-ledger-scroll \{[\s\S]{0,180}max-height: 62dvh/);
+
+  assert.match(paymentsCss, /\.payments-history-panel \{[\s\S]*min-height: 0;[\s\S]*height: auto;[\s\S]*overflow: visible/);
+  assert.match(paymentsCss, /\.payments-ledger-scroll \{[\s\S]*max-height: none;[\s\S]*overflow: visible;[\s\S]*scrollbar-gutter: auto/);
+
+  assert.doesNotMatch(personal, /<time title="<%= carryoverDateLabel %>"/);
+  assert.doesNotMatch(personal, /<time title="<%= balanceDateLabel %>"/);
+  assert.doesNotMatch(fund, /<time title="<%= carryoverDateLabel %>"/);
+  assert.doesNotMatch(fund, /<time title="<%= balanceDateLabel %>"/);
+});

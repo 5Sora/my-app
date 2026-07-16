@@ -76,8 +76,8 @@
         </div>
       </article>
 
-      <article class="panel personal-insight-card" aria-labelledby="personal-category-chart-title" data-personal-category-chart>
-        <div class="personal-insight-heading">
+      <article class="panel personal-insight-card ledger-chart-panel" aria-labelledby="personal-category-chart-title" data-personal-category-chart>
+        <div class="personal-insight-heading ledger-chart-heading">
           <h2 id="personal-category-chart-title">カテゴリ</h2>
           <button
             type="button"
@@ -89,12 +89,12 @@
           >AI分析</button>
         </div>
 
-        <div class="personal-chart-switch" role="group" aria-label="円グラフの表示対象">
+        <div class="personal-chart-switch ledger-chart-controls" role="group" aria-label="円グラフの表示対象">
           <button type="button" data-personal-chart-mode="income" aria-pressed="false">収入カテゴリ</button>
           <button type="button" class="is-active" data-personal-chart-mode="expense" aria-pressed="true">支出カテゴリ</button>
         </div>
 
-        <div class="personal-category-chart" data-personal-chart-content>
+        <div class="personal-category-chart ledger-chart-content" data-personal-chart-content>
           <div class="personal-category-chart__visual">
             <svg class="personal-category-chart__pie" viewBox="0 0 100 100" role="img" data-personal-pie>
               <circle class="personal-category-chart__track" cx="50" cy="50" r="38" pathLength="100"></circle>
@@ -110,7 +110,7 @@
             <ul data-personal-chart-legend></ul>
           </div>
         </div>
-        <div class="personal-chart-empty" role="status" hidden data-personal-chart-empty>
+        <div class="personal-chart-empty ledger-chart-content" role="status" hidden data-personal-chart-empty>
           <strong data-personal-chart-empty-title>表示できる支出がありません</strong>
           <span>選択期間に対象取引が登録されると、ここにカテゴリ構成を表示します。</span>
         </div>
@@ -217,7 +217,7 @@
 
           <section class="personal-ledger-section personal-ledger-carryover" aria-label="繰越金">
             <div class="personal-ledger-row personal-ledger-summary-row <%= carryoverIsIncomeSide ? 'is-income-row' : 'is-expense-row' %>">
-              <time title="<%= carryoverDateLabel %>" aria-label="<%= carryoverDateAriaLabel %>"><%= carryoverDateLabel %></time>
+              <time aria-label="<%= carryoverDateAriaLabel %>"><%= carryoverDateLabel %></time>
               <% if (carryoverIsIncomeSide) { %>
                 <div class="personal-ledger-content-cell"><strong>繰越金</strong></div><strong class="personal-ledger-amount income-text">+<%= summary.carryover.toLocaleString("ja-JP") %> 円</strong><div class="personal-ledger-empty-cell" aria-hidden="true"></div><div class="personal-ledger-empty-cell" aria-hidden="true"></div>
               <% } else { %>
@@ -254,7 +254,7 @@
 
           <section class="personal-ledger-section personal-ledger-balance" aria-label="残高">
             <div class="personal-ledger-row personal-ledger-summary-row <%= balanceIsIncomeSide ? 'is-income-row' : 'is-expense-row' %>">
-              <time title="<%= balanceDateLabel %>" aria-label="<%= balanceDateAriaLabel %>"><%= balanceDateLabel %></time>
+              <time aria-label="<%= balanceDateAriaLabel %>"><%= balanceDateLabel %></time>
               <% if (balanceIsIncomeSide) { %>
                 <div class="personal-ledger-content-cell"><strong>残高</strong></div><strong class="personal-ledger-amount income-text">+<%= summary.balance.toLocaleString("ja-JP") %> 円</strong><div class="personal-ledger-empty-cell" aria-hidden="true"></div><div class="personal-ledger-empty-cell" aria-hidden="true"></div>
               <% } else { %>

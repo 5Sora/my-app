@@ -1832,15 +1832,30 @@
 
   .payments-history-panel {
     order: 7;
-    min-height: 72dvh;
+    min-height: 0;
+    height: auto;
+    overflow: visible;
   }
 
   .payments-ledger-heading {
     display: none;
   }
 
+  .payments-history-panel [data-payment-tab-panel] {
+    min-height: 0;
+    flex: none;
+  }
+
+  .payments-ledger {
+    height: auto;
+    display: block;
+  }
+
   .payments-ledger-scroll {
-    max-height: 62dvh;
+    max-height: none;
+    overflow: visible;
+    overscroll-behavior: auto;
+    scrollbar-gutter: auto;
   }
 
   .payments-ledger-row {

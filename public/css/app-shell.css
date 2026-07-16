@@ -481,11 +481,35 @@
   padding-top: 6px !important;
 }
 
-/* Personal and fund category panels use the same controls and chart geometry. */
-.personal-insight-card,
-.fund-insight-card,
-.payments-insight-card {
-  gap: 10px;
+/* All three chart panels share the same three-row geometry.
+   Row 2 remains reserved on split-payment pages even though it has no switch. */
+.ledger-chart-panel {
+  display: grid;
+  grid-template-rows: auto var(--ledger-chart-control-height) minmax(0, 1fr);
+  row-gap: 10px;
+  align-content: stretch;
+}
+
+.ledger-chart-panel > .ledger-chart-heading {
+  grid-row: 1;
+}
+
+.ledger-chart-panel > .ledger-chart-controls {
+  grid-row: 2;
+  width: 100%;
+  min-height: var(--ledger-chart-control-height);
+  height: var(--ledger-chart-control-height);
+}
+
+.ledger-chart-panel > .ledger-chart-controls--placeholder {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.ledger-chart-panel > .ledger-chart-content {
+  grid-row: 3;
+  min-height: 0;
+  align-self: stretch;
 }
 
 .personal-chart-switch,
@@ -517,11 +541,6 @@
   aspect-ratio: 1;
   justify-self: center;
   margin: 0;
-}
-
-/* Split-payment has no chart switch; reserve the same vertical band without an empty control. */
-.payments-share-chart {
-  padding-top: calc(var(--ledger-chart-control-height) + 10px);
 }
 
 .personal-category-chart__center strong,
@@ -689,9 +708,6 @@
     --ledger-chart-size: 150px;
   }
 
-  .payments-share-chart {
-    padding-top: 0;
-  }
 }
 
 /* Final cross-ledger detail pass: history type, summary-row alignment and operation spacing. */
@@ -730,18 +746,20 @@
   line-height: 1.35;
 }
 
-.personal-ledger-summary-row > *,
-.fund-ledger-summary-row > * {
-  min-height: 52px;
-  display: flex;
-  align-items: center;
-}
+@media (min-width: 821px) {
+  .personal-ledger-summary-row > *,
+  .fund-ledger-summary-row > * {
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+  }
 
-.personal-ledger-summary-row > time,
-.fund-ledger-summary-row > time {
-  align-self: stretch;
-  justify-content: flex-start;
-  vertical-align: middle;
+  .personal-ledger-summary-row > time,
+  .fund-ledger-summary-row > time {
+    align-self: stretch;
+    justify-content: flex-start;
+    vertical-align: middle;
+  }
 }
 
 @media (min-width: 821px) {
@@ -958,5 +976,29 @@
 
   .ledger-context-list {
     overflow: visible;
+  }
+
+  /* Mobile endpoint rows use the same compact two-column card as ordinary history rows. */
+  .personal-ledger-summary-row > *,
+  .fund-ledger-summary-row > * {
+    min-height: 0;
+  }
+
+  .personal-ledger-summary-row > time,
+  .fund-ledger-summary-row > time {
+    display: block;
+    align-self: auto;
+  }
+
+  .personal-ledger-summary-row > .personal-ledger-empty-cell,
+  .fund-ledger-summary-row > .fund-ledger-empty-cell {
+    display: none;
+  }
+
+  .personal-ledger-summary-row > .personal-ledger-content-cell,
+  .personal-ledger-summary-row > .personal-ledger-amount,
+  .fund-ledger-summary-row > .fund-ledger-content-cell,
+  .fund-ledger-summary-row > .fund-ledger-amount {
+    min-height: 52px;
   }
 }

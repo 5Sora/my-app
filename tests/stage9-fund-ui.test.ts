@@ -4,7 +4,7 @@ import test from "node:test";
 
 const read = (path: string) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("Stage 9-2 fund page renders the integrated income pie, persistent legend, and accessible empty state", async () => {
+test("Stage 10 fund page defaults to the expense category pie with a persistent legend and accessible empty state", async () => {
   const [view, css, script] = await Promise.all([
     read("views/fund.ejs"),
     read("public/css/fund.css"),
@@ -13,11 +13,18 @@ test("Stage 9-2 fund page renders the integrated income pie, persistent legend, 
 
   assert.match(view, /data-fund-income-chart/);
   assert.match(view, /data-fund-pie-segments/);
-  assert.match(view, /fundVisualizationView\.incomeComposition\.forEach/);
+  assert.match(view, /fundVisualizationView\.expenseComposition\.forEach/);
   assert.match(view, /id="fund-composition-title">カテゴリ/);
-  assert.match(view, /表示できる基金収入がありません/);
+  assert.match(view, /表示できる基金支出がありません/);
   assert.doesNotMatch(view, /data-fund-chart-mode-help/);
   assert.match(view, /\/js\/fund-charts\.js/);
+
+  const incomeButtonIndex = view.indexOf('data-fund-chart-mode="income"');
+  const expenseButtonIndex = view.indexOf('data-fund-chart-mode="expense"');
+  assert.ok(incomeButtonIndex >= 0 && expenseButtonIndex > incomeButtonIndex);
+  assert.match(view, /class="fund-chart-toggle__button"\s+data-fund-chart-mode="income"\s+aria-pressed="false"/);
+  assert.match(view, /class="fund-chart-toggle__button is-active"\s+data-fund-chart-mode="expense"\s+aria-pressed="true"/);
+  assert.match(script, /let activeMode = "expense";/);
 
   assert.match(css, /\.fund-income-chart__legend\s*\{[\s\S]*overflow-y: auto/);
   assert.match(css, /\.fund-income-chart__legend-item:focus-visible/);

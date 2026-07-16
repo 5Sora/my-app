@@ -1338,11 +1338,19 @@
   .fund-transaction-panel,
   .fund-layout.is-context-closed .fund-transaction-panel {
     order: 7;
-    min-height: 72dvh;
+    min-height: 0;
+    height: auto;
+    overflow: visible;
   }
 
   .fund-ledger-column-heading {
     display: none;
+  }
+
+  .fund-ledger {
+    display: block;
+    min-height: 0;
+    overflow: visible;
   }
 
   .fund-ledger-row {
@@ -1409,8 +1417,12 @@
   }
 
   .fund-ledger-scroll {
-    max-height: 62dvh;
-    padding-right: 2px;
+    height: auto;
+    max-height: none;
+    padding-right: 0;
+    overflow: visible;
+    overscroll-behavior: auto;
+    scrollbar-gutter: auto;
   }
 
   .fund-ledger-carryover,

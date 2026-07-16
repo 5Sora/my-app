@@ -1719,7 +1719,9 @@
   .personal-transaction-panel,
   .personal-layout.is-context-closed .personal-transaction-panel {
     order: 7;
-    min-height: 72dvh;
+    min-height: 0;
+    height: auto;
+    overflow: visible;
   }
 
   .personal-page-panel .page-list,
@@ -1732,6 +1734,9 @@
   }
 
   .personal-ledger {
+    display: block;
+    min-height: 0;
+    overflow: visible;
     font-size: 0.82rem;
   }
 
@@ -1799,8 +1804,12 @@
   }
 
   .personal-ledger-scroll {
-    max-height: 62dvh;
-    padding-right: 2px;
+    height: auto;
+    max-height: none;
+    padding-right: 0;
+    overflow: visible;
+    overscroll-behavior: auto;
+    scrollbar-gutter: auto;
   }
 
   .personal-ledger-carryover,

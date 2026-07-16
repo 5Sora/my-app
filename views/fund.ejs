@@ -83,12 +83,12 @@
       </article>
 
       <article
-        class="panel fund-insight-card"
+        class="panel fund-insight-card ledger-chart-panel"
         aria-labelledby="fund-composition-title"
         data-fund-income-chart
         data-fund-composition-chart
       >
-        <div class="fund-insight-heading">
+        <div class="fund-insight-heading ledger-chart-heading">
           <h2 id="fund-composition-title">カテゴリ</h2>
           <button
             type="button"
@@ -102,43 +102,43 @@
           >AI分析</button>
         </div>
 
-        <div class="fund-chart-toggle" role="group" aria-label="基金円グラフの表示内容">
-          <button
-            type="button"
-            class="fund-chart-toggle__button is-active"
-            data-fund-chart-mode="income"
-            aria-pressed="true"
-          >収入カテゴリ</button>
+        <div class="fund-chart-toggle ledger-chart-controls" role="group" aria-label="基金円グラフの表示内容">
           <button
             type="button"
             class="fund-chart-toggle__button"
-            data-fund-chart-mode="expense"
+            data-fund-chart-mode="income"
             aria-pressed="false"
+          >収入カテゴリ</button>
+          <button
+            type="button"
+            class="fund-chart-toggle__button is-active"
+            data-fund-chart-mode="expense"
+            aria-pressed="true"
           >支出カテゴリ</button>
         </div>
 
-        <div class="fund-income-chart" data-fund-chart-content <%= fundVisualizationView.totals.income > 0 ? "" : "hidden" %>>
+        <div class="fund-income-chart ledger-chart-content" data-fund-chart-content <%= fundVisualizationView.totals.expense > 0 ? "" : "hidden" %>>
           <div class="fund-income-chart__visual">
             <svg
               class="fund-income-chart__pie"
               viewBox="0 0 100 100"
               role="img"
-              aria-label="選択期間の基金収入構成。合計 <%= fundVisualizationView.totals.income.toLocaleString("ja-JP") %> 円"
+              aria-label="選択期間の基金支出構成。合計 <%= fundVisualizationView.totals.expense.toLocaleString("ja-JP") %> 円"
               data-fund-pie
             >
               <circle class="fund-income-chart__track" cx="50" cy="50" r="38" pathLength="100"></circle>
               <g data-fund-pie-segments></g>
             </svg>
             <div class="fund-income-chart__center" aria-hidden="true">
-              <span data-fund-chart-center-label>収入</span>
-              <strong data-fund-chart-center-amount><%= fundVisualizationView.totals.income.toLocaleString("ja-JP") %></strong>
+              <span data-fund-chart-center-label>支出</span>
+              <strong data-fund-chart-center-amount><%= fundVisualizationView.totals.expense.toLocaleString("ja-JP") %></strong>
               <small>円</small>
             </div>
           </div>
 
-          <div class="fund-income-chart__legend" aria-label="基金収入構成の凡例" data-fund-chart-legend>
+          <div class="fund-income-chart__legend" aria-label="基金支出構成の凡例" data-fund-chart-legend>
             <ul>
-              <% fundVisualizationView.incomeComposition.forEach(item => { %>
+              <% fundVisualizationView.expenseComposition.forEach(item => { %>
                 <li>
                   <button
                     type="button"
@@ -163,9 +163,9 @@
           </div>
         </div>
 
-        <div class="fund-chart-empty" role="status" data-fund-chart-empty <%= fundVisualizationView.totals.income > 0 ? "hidden" : "" %>>
-          <strong data-fund-chart-empty-title>表示できる基金収入がありません</strong>
-          <span data-fund-chart-empty-description>選択期間に内部拠出または外部収入が登録されると、ここに構成を表示します。</span>
+        <div class="fund-chart-empty ledger-chart-content" role="status" data-fund-chart-empty <%= fundVisualizationView.totals.expense > 0 ? "hidden" : "" %>>
+          <strong data-fund-chart-empty-title>表示できる基金支出がありません</strong>
+          <span data-fund-chart-empty-description>選択期間に基金支出または基金返金が登録されると、ここに構成を表示します。</span>
         </div>
 
         <div class="fund-income-chart__tooltip" role="tooltip" hidden data-fund-chart-tooltip></div>
@@ -362,7 +362,7 @@
 
         <section class="fund-ledger-section fund-ledger-carryover" aria-label="繰越金">
           <div class="fund-ledger-row fund-ledger-summary-row <%= carryoverIsIncomeSide ? 'is-income-row' : 'is-expense-row' %>">
-            <time title="<%= carryoverDateLabel %>" aria-label="<%= carryoverDateAriaLabel %>"><%= carryoverDateLabel %></time>
+            <time aria-label="<%= carryoverDateAriaLabel %>"><%= carryoverDateLabel %></time>
             <% if (carryoverIsIncomeSide) { %>
               <div class="fund-ledger-content-cell"><strong>繰越金</strong></div>
               <strong class="fund-ledger-amount income-text">+<%= summary.carryover.toLocaleString("ja-JP") %> 円</strong>
@@ -426,7 +426,7 @@
 
         <section class="fund-ledger-section fund-ledger-balance" aria-label="残高">
           <div class="fund-ledger-row fund-ledger-summary-row <%= balanceIsIncomeSide ? 'is-income-row' : 'is-expense-row' %>">
-            <time title="<%= balanceDateLabel %>" aria-label="<%= balanceDateAriaLabel %>"><%= balanceDateLabel %></time>
+            <time aria-label="<%= balanceDateAriaLabel %>"><%= balanceDateLabel %></time>
             <% if (balanceIsIncomeSide) { %>
               <div class="fund-ledger-content-cell"><strong>残高</strong></div>
               <strong class="fund-ledger-amount income-text">+<%= summary.balance.toLocaleString("ja-JP") %> 円</strong>
